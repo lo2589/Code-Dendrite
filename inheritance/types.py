@@ -150,13 +150,15 @@ class ClassIndex:
     
     def __init__(self):
         self.classes: Dict[str, ClassEntry] = {}
+        self.classes_fq: Dict[str, ClassEntry] = {}  # "file::name" -> entry, collision-free
         self.file_imports: Dict[str, List[ImportInfo]] = {}
         self.file_classes: Dict[str, List[str]] = {}  # file -> [class_names]
-    
+
     def add_class(self, entry: ClassEntry):
         """添加类到索引"""
         self.classes[entry.name] = entry
-        
+        self.classes_fq["{}::{}".format(entry.file, entry.name)] = entry
+
         # 维护文件->类映射
         if entry.file not in self.file_classes:
             self.file_classes[entry.file] = []
@@ -170,7 +172,9 @@ class ClassIndex:
     def get_classes_in_file(self, file_path: str) -> List[ClassEntry]:
         """获取文件中的所有类"""
         class_names = self.file_classes.get(file_path, [])
-        return [self.classes[n] for n in class_names if n in self.classes]
+        return [self.classes_fq["{}::{}".format(file_path, n)]
+                for n in class_names
+                if "{}::{}".format(file_path, n) in self.classes_fq]
     
     def get_imports(self, file_path: str) -> List[ImportInfo]:
         """获取文件的导入信息"""

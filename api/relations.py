@@ -32,6 +32,25 @@ def _callee_seq(raw_callee) -> int:
     return 0
 
 
+def _callee_condition(raw_callee) -> Optional[str]:
+    if not isinstance(raw_callee, dict):
+        return None
+    conds = raw_callee.get("conds")
+    if conds and conds != ["nocond"]:
+        return json.dumps(conds, ensure_ascii=False, separators=(",", ":"))
+    return raw_callee.get("condition")
+
+
+def _iter_call_refs(anchor):
+    sites = list(getattr(anchor, "call_sites", []) or [])
+    if sites:
+        return sites
+    return [
+        {"target": _callee_target(raw), "seq": idx}
+        for idx, raw in enumerate(getattr(anchor, "callees", []) or [])
+    ]
+
+
 def _build_id_index(anchors: dict) -> dict:
     index = {}
     for anchor in anchors.values():
@@ -81,7 +100,7 @@ def _build_virtual_skip_pairs(anchors: dict) -> set[tuple[str, str]]:
         parent_id = getattr(anchor, "parent_anchor", None)
         if not parent_id:
             continue
-        for raw_callee in getattr(anchor, "callees", []):
+        for raw_callee in _iter_call_refs(anchor):
             target = _callee_target(raw_callee)
             if target:
                 skip_pairs.add((_norm(parent_id), _norm(target)))
@@ -124,15 +143,16 @@ def generate_relations(root: str = ".") -> dict:
         id_index = _build_id_index(anchors)
         skip_pairs = _build_virtual_skip_pairs(anchors)
 
-        # 预构建 (caller_id, callee_id) -> [seq, ...] 映射，用于 call 边的 seq
-        callee_seq_map: dict[tuple[str, str], list[int]] = defaultdict(list)
+        # Precompute (caller_id, callee_id) -> call-site refs for edge metadata.
+        callee_ref_map: dict[tuple[str, str], list[dict]] = defaultdict(list)
         for anchor in anchors.values():
             norm_anchor_id = _norm(anchor.id)
-            for raw_callee in anchor.callees:
+            for raw_callee in _iter_call_refs(anchor):
                 target = _callee_target(raw_callee)
                 if target:
-                    seq_val = _callee_seq(raw_callee)
-                    callee_seq_map[(_norm(norm_anchor_id), _norm(target))].append(seq_val)
+                    site = dict(raw_callee) if isinstance(raw_callee, dict) else {"target": target}
+                    site.setdefault("seq", _callee_seq(raw_callee))
+                    callee_ref_map[(_norm(norm_anchor_id), _norm(target))].append(site)
 
         # 1) Regular call edges from reverse callers.
         for anchor in anchors.values():
@@ -146,16 +166,22 @@ def generate_relations(root: str = ".") -> dict:
                 to_id = _norm(anchor.id)
                 if (from_id, to_id) in skip_pairs:
                     continue  # callee 通过虚拟块路由，不建直接边
-                seq_list = callee_seq_map.get((from_id, to_id), [])
-                _add_edge(Edge(
-                    from_id=from_id,
-                    to_id=to_id,
-                    edge_type="call",
-                    data_in=", ".join(i.get("type", "") for i in anchor.inputs if i.get("type")),
-                    data_out=", ".join(o.get("type", "") for o in anchor.outputs if o.get("type")),
-                    outer_hash=_edge_hash(from_id, to_id),
-                    seq=seq_list,
-                ))
+                refs = callee_ref_map.get((from_id, to_id), [])
+                if not refs:
+                    refs = [{"target": to_id, "seq": 0, "conds": ["nocond"]}]
+                for ref in refs:
+                    condition = _callee_condition(ref)
+                    _add_edge(Edge(
+                        from_id=from_id,
+                        to_id=to_id,
+                        edge_type="call",
+                        data_in=", ".join(i.get("type", "") for i in anchor.inputs if i.get("type")),
+                        data_out=", ".join(o.get("type", "") for o in anchor.outputs if o.get("type")),
+                        outer_hash=_edge_hash(from_id, to_id),
+                        condition=condition,
+                        is_conditional=bool(condition),
+                        seq=[_callee_seq(ref)],
+                    ))
 
         # 2) Inheritance edges.
         for anchor in anchors.values():
@@ -186,7 +212,7 @@ def generate_relations(root: str = ".") -> dict:
         for anchor in anchors.values():
             if anchor.is_virtual:
                 continue
-            for raw_callee in anchor.callees:
+            for raw_callee in _iter_call_refs(anchor):
                 callee_id = _callee_target(raw_callee)
                 if not callee_id:
                     continue
@@ -195,12 +221,16 @@ def generate_relations(root: str = ".") -> dict:
                     continue
                 if (_norm(anchor.id), _norm(callee.id)) in skip_pairs:
                     continue  # callee 通过虚拟块路由，不建直接数据流边
+                condition = _callee_condition(raw_callee)
                 _add_edge(Edge(
                     from_id=_norm(anchor.id),
                     to_id=_norm(callee.id),
                     edge_type="dataflow",
                     data_in=", ".join(o.get("type", "") for o in anchor.outputs if o.get("type")),
                     data_out=", ".join(i.get("type", "") for i in callee.inputs if i.get("type")),
+                    condition=condition,
+                    is_conditional=bool(condition),
+                    seq=[_callee_seq(raw_callee)],
                 ))
 
         # 4) Impact edges inferred from call/dataflow fan-in.
@@ -251,7 +281,8 @@ def generate_relations(root: str = ".") -> dict:
             if anchor.parent_anchor:
                 parent = _resolve_id(anchor.parent_anchor, id_index)
                 if parent and not parent.is_virtual:
-                    seq_list = callee_seq_map.get((_norm(anchor.parent_anchor), _norm(anchor.id)), [])
+                    refs = callee_ref_map.get((_norm(anchor.parent_anchor), _norm(anchor.id)), [])
+                    seq_list = [_callee_seq(ref) for ref in refs]
                     _add_edge(Edge(
                         from_id=_norm(anchor.parent_anchor),
                         to_id=_norm(anchor.id),
@@ -263,12 +294,12 @@ def generate_relations(root: str = ".") -> dict:
                     ))
 
             # vblock -> real_func：只加真实函数 callee，跳过嵌套 vblock
-            for raw_callee in anchor.callees:
+            for raw_callee in _iter_call_refs(anchor):
                 target_id = _callee_target(raw_callee)
                 target_anchor = _resolve_id(target_id, id_index)
                 if not target_anchor or target_anchor.is_virtual:
                     continue
-                _condition = raw_callee.get("condition") if isinstance(raw_callee, dict) else None
+                _condition = _callee_condition(raw_callee)
                 _scope = raw_callee.get("scope_label") if isinstance(raw_callee, dict) else None
                 _seq = _callee_seq(raw_callee)
                 _add_edge(Edge(

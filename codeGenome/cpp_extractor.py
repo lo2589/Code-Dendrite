@@ -189,10 +189,10 @@ class CppExtractor:
     def _extract_classes_and_structs(self, source: str):
         """提取类和结构体"""
         class_pattern = re.compile(
-            r'(?:template\s*<[^>]*>\s*)?'
+            r'(?:template\s*<[^>]{0,200}>\s*)?'
             r'(class|struct)\s+'
             r'([A-Za-z_][A-Za-z0-9_]*)'
-            r'(?:\s*:\s*([^{]+?))?'
+            r'(?:\s*:\s*([^{]{0,200}))?'
             r'\s*\{',
             re.DOTALL
         )
@@ -257,12 +257,11 @@ class CppExtractor:
     def _extract_class_methods(self, class_body: str, class_name: str, class_line: int):
         """提取类的方法"""
         method_pattern = re.compile(
-            r'((?:[\w_:]+(?:\s*\*|\s*&)?\s*)+?)'
-            r'\s+'
+            r'([\w_:*& \t]+?)\s+'
             r'([A-Za-z_][A-Za-z0-9_:]*)'
             r'\s*\('
-            r'[^)]*'
-            r'\)\s*(?:const|volatile|override|noexcept|final)?\s*;',
+            r'[^)]{0,500}'
+            r'\)\s*(?:const\s*|volatile\s*|override\s*|noexcept\s*|final\s*)?;',
             re.MULTILINE
         )
 
@@ -302,14 +301,13 @@ class CppExtractor:
     def _extract_functions(self, source: str):
         """提取普通函数"""
         function_pattern = re.compile(
-            r'(?:template\s*<[^>]*>\s*)?'
-            r'((?:[\w_:]+(?:\s*\*|\s*&)?\s*)+?)'
-            r'\s+'
+            r'(?:template\s*<[^>]{0,200}>\s*)?'
+            r'([\w_:*& \t]+?)\s+'
             r'([A-Za-z_][A-Za-z0-9_:]*)'
             r'\s*\('
-            r'[^)]*'
-            r'\)\s*(?:const|volatile|noexcept)?\s*\{',
-            re.MULTILINE | re.DOTALL
+            r'[^)]{0,500}'
+            r'\)\s*(?:const\s*|volatile\s*|noexcept\s*)?\{',
+            re.MULTILINE
         )
 
         ns_prefix = self._get_namespace_prefix()
@@ -345,12 +343,10 @@ class CppExtractor:
     def _extract_global_variables(self, source: str):
         """提取全局变量"""
         var_pattern = re.compile(
-            r'((?:const|static|extern)?\s*)'
-            r'((?:[\w_:]+(?:\s*\*|\s*&)?\s*)+?)'
-            r'\s+'
+            r'^((?:const|static|extern)\s+)'
+            r'([\w_:*& \t]+?)\s+'
             r'([A-Za-z_][A-Za-z0-9_:]*)'
-            r'\s*(?:=|[^;])*'
-            r';',
+            r'[^;]{0,200};',
             re.MULTILINE
         )
 

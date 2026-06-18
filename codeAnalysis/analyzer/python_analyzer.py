@@ -93,10 +93,11 @@ class PythonAnalyzer(BaseAnalyzer):
         module_info.functions.append(func_info)
 
     def _extract_calls(self, node) -> List[str]:
+        from shared.formula_skip import walk_skip_formula
         calls = []
         depth = 0
 
-        for child in ast.walk(node):
+        for child in walk_skip_formula(node):   # 跳公式子树：不收 sqrt/S 那种数据噪声
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 depth += 1
                 continue

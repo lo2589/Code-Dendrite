@@ -16,6 +16,12 @@ codeGenome/python_extractor.py - Python 代码提取器
 import ast
 import hashlib
 import os
+
+try:
+    # CPython 内部行切分（与 node.lineno 对齐）；用来按文件缓存切分，避免每个节点重切整文件
+    from ast import _splitlines_no_ff as _ast_splitlines
+except Exception:
+    _ast_splitlines = None
 from pathlib import Path
 from typing import List, Optional, Dict, Set
 
@@ -25,6 +31,151 @@ from .types import (
 )
 from .config_detector import ConfigDetector
 from shared.codedendrite_ignore import CodeDendriteIgnore
+import re as _re
+
+
+def _try_fix_python(source: str, e: SyntaxError):
+    """尝试修复一个 SyntaxError，返回 (fixed_source, True) 或 (source, False)。"""
+    msg = (e.msg or "").lower()
+    lineno = e.lineno
+    if not lineno:
+        return source, False
+    lines = source.splitlines(keepends=True)
+    if lineno > len(lines):
+        return source, False
+    line = lines[lineno - 1]
+
+    if 'missing parentheses in call to' in msg:
+        fixed = _re.sub(
+            r'^(\s*)print\s+(.+?)(\s*)$',
+            lambda m: m.group(1) + 'print(' + m.group(2).strip() + ')' + m.group(3),
+            line.rstrip('\n'),
+        )
+        if fixed != line.rstrip('\n'):
+            lines[lineno - 1] = fixed + '\n'
+            return ''.join(lines), True
+
+    if 'cannot assign to' in msg:
+        lines[lineno - 1] = '# ' + line
+        return ''.join(lines), True
+
+    if 'multiple exception types must be parenthesized' in msg:
+        fixed = _re.sub(
+            r'(except\s+[\w.]+(?:\s*,\s*[\w.]+)*)\s*,\s*(\w+)\s*:',
+            r'except (\1) as \2:',
+            line,
+        )
+        if fixed != line:
+            lines[lineno - 1] = fixed
+            return ''.join(lines), True
+
+    return source, False
+
+
+def _try_fix_python_loop(source: str, initial_err: SyntaxError):
+    """迭代修复，最多 10 轮。返回 (source, n_fixes, remaining_err_or_None)。"""
+    err = initial_err
+    n = 0
+    for _ in range(10):
+        new_src, fixed = _try_fix_python(source, err)
+        if not fixed:
+            return source, n, err
+        n += 1
+        source = new_src
+        try:
+            ast.parse(source)
+            return source, n, None
+        except SyntaxError as e2:
+            err = e2
+    return source, n, err
+
+
+def _regex_extract_python(source: str, file_path: str, module_name: str) -> 'AnchorIndex':
+    """AST 无法解析时的 regex 降级提取，带 metadata source=regex_fallback。"""
+    index = AnchorIndex()
+    lines = source.splitlines()
+    # (indent, class_name) 栈，跟踪当前类上下文
+    class_stack: list = []
+
+    for lineno, line in enumerate(lines, 1):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        indent = len(line) - len(stripped)
+        # 弹出缩进 >= 当前行的类（当前行与它们同级或更外层）
+        class_stack = [(i, n) for i, n in class_stack if i < indent]
+
+        # class 定义
+        m = _re.match(r'class\s+(\w+)(?:\s*\(([^)]*)\))?\s*:', stripped)
+        if m:
+            cls_name = m.group(1)
+            bases = [b.strip() for b in (m.group(2) or '').split(',') if b.strip()]
+            anchor = CodeAnchor(
+                id=f"py.{module_name}.classes.{cls_name}",
+                language="python",
+                category=AnchorCategory.CLASS.value,
+                file=file_path,
+                line_start=lineno, line_end=lineno,
+                name=cls_name,
+                code=line.rstrip(),
+                hash=hashlib.sha1(line.encode()).hexdigest()[:12],
+                metadata={"bases": bases, "source": "regex_fallback"},
+            )
+            index.add(anchor)
+            class_stack.append((indent, cls_name))
+            continue
+
+        # def 定义
+        m = _re.match(r'def\s+(\w+)\s*\(', stripped)
+        if m:
+            func_name = m.group(1)
+            if class_stack:
+                cls_name = class_stack[-1][1]
+                anchor = CodeAnchor(
+                    id=f"py.{module_name}.classes.{cls_name}.methods.{func_name}",
+                    language="python",
+                    category=AnchorCategory.METHOD.value,
+                    file=file_path,
+                    line_start=lineno, line_end=lineno,
+                    name=func_name,
+                    code=line.rstrip(),
+                    hash=hashlib.sha1(line.encode()).hexdigest()[:12],
+                    parent_id=f"py.{module_name}.classes.{cls_name}",
+                    metadata={"source": "regex_fallback"},
+                )
+            else:
+                anchor = CodeAnchor(
+                    id=f"py.{module_name}.functions.{func_name}",
+                    language="python",
+                    category=AnchorCategory.FUNCTION.value,
+                    file=file_path,
+                    line_start=lineno, line_end=lineno,
+                    name=func_name,
+                    code=line.rstrip(),
+                    hash=hashlib.sha1(line.encode()).hexdigest()[:12],
+                    metadata={"source": "regex_fallback"},
+                )
+            index.add(anchor)
+            continue
+
+        # 顶层 import
+        if indent == 0:
+            m = _re.match(r'(?:from\s+\S+\s+)?import\s+(\S+)', stripped)
+            if m:
+                anchor = CodeAnchor(
+                    id=f"py.{module_name}.imports.{m.group(1).replace('.','_').replace(',','_')}",
+                    language="python",
+                    category=AnchorCategory.IMPORT.value,
+                    file=file_path,
+                    line_start=lineno, line_end=lineno,
+                    name=stripped.rstrip()[:80],
+                    code=line.rstrip(),
+                    hash=hashlib.sha1(line.encode()).hexdigest()[:12],
+                    metadata={"source": "regex_fallback"},
+                )
+                index.add(anchor)
+
+    return index
 
 
 class PythonExtractor:
@@ -62,9 +213,32 @@ class PythonExtractor:
                 source = Path(file_path).read_text(encoding=enc)
                 tree = ast.parse(source)
                 break
-            except SyntaxError:
+            except SyntaxError as e:
                 if enc != 'latin-1':
                     continue
+                fixed_src, n_fixes, remaining_err = _try_fix_python_loop(source, e)
+                if remaining_err is None:
+                    source = fixed_src
+                    tree = ast.parse(source)
+                    temp_index.auto_fixed.append({
+                        "file": file_path,
+                        "language": "python",
+                        "fixes_applied": n_fixes,
+                    })
+                    break
+                temp_index.parse_failures.append({
+                    "file": file_path,
+                    "language": "python",
+                    "error_type": "SyntaxError",
+                    "message": remaining_err.msg or str(remaining_err),
+                    "lineno": remaining_err.lineno,
+                })
+                # regex 降级：尽力提取 class/def/import
+                regex_index = _regex_extract_python(
+                    source, self.current_file, self.current_module
+                )
+                for anchor in regex_index.anchors.values():
+                    temp_index.add(anchor)
                 return temp_index
             except OSError:
                 return temp_index
@@ -117,11 +291,12 @@ class PythonExtractor:
                 continue
             if self._should_exclude(py_file):
                 continue
-
             try:
                 file_index = self.extract_file(str(py_file))
                 for anchor in file_index.anchors.values():
                     self.index.add(anchor)
+                self.index.parse_failures.extend(file_index.parse_failures)
+                self.index.auto_fixed.extend(file_index.auto_fixed)
             except Exception:
                 continue
 
@@ -158,14 +333,7 @@ class PythonExtractor:
         if any(kw in name for kw in ['_config', '_base_', '_default', '_preset']):
             return True
             
-        # Level 3: 使用相似度检测（最准确）
-        try:
-            is_config, similarity, _ = self.config_detector.is_config_file(
-                path, threshold=0.85
-            )
-            return is_config
-        except Exception:
-            return False
+        return False
 
     def _get_module_name(self, file_path: str) -> str:
         """获取模块名"""
@@ -255,8 +423,35 @@ class PythonExtractor:
         return sorted(list(tags))
 
     def _get_source(self, node: ast.AST, source: str) -> str:
-        """获取 AST 节点对应的源代码"""
-        return ast.get_source_segment(source, node) or ""
+        """获取 AST 节点对应的源代码。
+
+        等价于 ast.get_source_segment，但【整文件只 splitlines 一次】（按 source 身份缓存）。
+        原实现每个 method/class/function 节点都 get_source_segment -> 内部重切整文件，
+        O(节点数 × 文件大小)；sympy/matplotlib 的超大文件直接平方爆炸卡死。
+        """
+        try:
+            if node.end_lineno is None or node.end_col_offset is None:
+                return ""
+            lineno = node.lineno - 1
+            end_lineno = node.end_lineno - 1
+            col = node.col_offset
+            end_col = node.end_col_offset
+        except AttributeError:
+            return ast.get_source_segment(source, node) or ""
+        if _ast_splitlines is None:
+            return ast.get_source_segment(source, node) or ""
+        if getattr(self, "_gss_src", None) is not source:   # 同一文件的所有节点共用一次切分
+            self._gss_src = source
+            self._gss_lines = _ast_splitlines(source)
+        lines = self._gss_lines
+        try:
+            if end_lineno == lineno:
+                return lines[lineno].encode()[col:end_col].decode()
+            first = lines[lineno].encode()[col:].decode()
+            last = lines[end_lineno].encode()[:end_col].decode()
+            return "".join([first, *lines[lineno + 1:end_lineno], last])
+        except (IndexError, UnicodeDecodeError):
+            return ast.get_source_segment(source, node) or ""
 
     def _compute_hash(self, content: str) -> str:
         """计算内容哈希"""

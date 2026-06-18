@@ -6,6 +6,7 @@ resolver.py - 继承链解析器 (Hard L3-003, L3-004, L3-008, L3-009)
 对应TS: inheritanceResolver.ts
 """
 
+from pathlib import PurePosixPath
 from typing import List, Optional, Union, Set, Dict, Any
 
 from .types import (
@@ -13,6 +14,24 @@ from .types import (
     ImportInfo, Location, MethodInfo
 )
 from .external_lib import resolve_external_class, get_builtin_class_info
+
+
+def _import_to_file_path(from_path: str, current_file: str) -> Optional[str]:
+    """Convert an import from_path to a relative .py file path."""
+    if not from_path:
+        return None
+    current = PurePosixPath(current_file.replace("\\", "/"))
+    if from_path.startswith('.'):
+        level = len(from_path) - len(from_path.lstrip('.'))
+        module_part = from_path.lstrip('.')
+        base = current.parent
+        for _ in range(level - 1):
+            base = base.parent
+        if module_part:
+            return str(base / module_part.replace('.', '/')) + '.py'
+        return None
+    else:
+        return from_path.replace('.', '/') + '.py'
 
 
 def resolve_inheritance(
@@ -193,35 +212,43 @@ def resolve_base_class(
     if builtin:
         return builtin
     
-    # 3. 从import解析
+    # 3. 从import解析（import-first：优先用文件路径精确定位，绕过 name collision）
     for imp in imports:
         # from module import ClassName 或 from module import ClassName as Alias
         if imp.from_path:
-            # 检查别名
             for original, alias in imp.aliases.items():
                 if alias == base_name or original == base_name:
-                    # 找到了导入
                     actual_name = original if original != '*' else base_name
-                    
-                    # 先在工作区查找
+
+                    # 优先：用 from_path 解析出文件路径，走 classes_fq 精确查找
+                    file_path = _import_to_file_path(imp.from_path, current_file)
+                    if file_path:
+                        fq_key = "{}::{}".format(file_path, actual_name)
+                        if fq_key in index.classes_fq:
+                            return index.classes_fq[fq_key]
+                        # 路径中 \ 与 / 混用时再试一次
+                        fq_key2 = "{}::{}".format(file_path.replace("/", "\\"), actual_name)
+                        if fq_key2 in index.classes_fq:
+                            return index.classes_fq[fq_key2]
+
+                    # 退而求其次：name-only（可能不准，但总比 None 好）
                     if actual_name in index.classes:
                         return index.classes[actual_name]
-                    
-                    # 尝试外部库
+
+                    # 外部库
                     external = resolve_external_class(actual_name, imp.from_path)
                     if external:
                         return external
-        
+
         # import module 或 import module as alias
         elif imp.module:
-            # 检查是否是 module.ClassName 形式
             for original, alias in imp.aliases.items():
                 if base_name.startswith(alias + "."):
                     class_name = base_name[len(alias) + 1:]
                     external = resolve_external_class(class_name, imp.module)
                     if external:
                         return external
-    
+
     return None
 
 

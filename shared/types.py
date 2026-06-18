@@ -143,6 +143,7 @@ class Anchor:
     # 调用关系（codeGenome + dataFlow）
     callers: List[str] = field(default_factory=list)
     callees: List[str] = field(default_factory=list)
+    call_sites: List[dict] = field(default_factory=list)
     inputs: List[dict] = field(default_factory=list)
     outputs: List[dict] = field(default_factory=list)
     # 继承关系（inheritance / cpp_inheritance）
@@ -150,6 +151,8 @@ class Anchor:
     overrides: Optional[str] = None
     overridden_by: List[str] = field(default_factory=list)
     mro: List[str] = field(default_factory=list)
+    own_methods: List[str] = field(default_factory=list)       # 自身方法 nid 列表（class anchor 专用）
+    effective_methods: Dict[str, str] = field(default_factory=dict)  # {method_name: nid}，含继承
     # AI 记忆（anchorMemory）
     observations: List[str] = field(default_factory=list)
     # 基础字段

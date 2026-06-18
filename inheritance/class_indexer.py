@@ -157,6 +157,9 @@ def rebuild_class_index(
             for class_name in index.file_classes[file_path]:
                 if class_name in index.classes:
                     del index.classes[class_name]
+                fq_key = "{}::{}".format(file_path, class_name)
+                if fq_key in index.classes_fq:
+                    del index.classes_fq[fq_key]
             del index.file_classes[file_path]
         
         # 重新解析

@@ -113,7 +113,7 @@ def trace_data(
 def on_files_changed(
     changed_files: List[str],
     root: str = ".",
-    include_virtual_blocks: bool = True,
+    include_virtual_blocks: bool = False,
 ) -> Dict:
     """
     处理文件变更 (Medium L5-005)

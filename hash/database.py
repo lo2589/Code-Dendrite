@@ -141,16 +141,25 @@ class HashDatabase:
         self.data["_meta"]["updated_at"] = datetime.now().isoformat()
         self.data["_meta"]["file_count"] = len(self.data["files"])
         
-        # 使用临时文件 + rename实现原子写入
-        fd, tmp_path = tempfile.mkstemp(dir=self.root, suffix=".json")
+        # Keep temp files out of the scanned project root; otherwise Windows can
+        # expose them to the incremental scanner before os.replace finishes.
+        tmp_dir = self.root / ".codedendrite"
+        tmp_dir.mkdir(exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(dir=tmp_dir, prefix="hashdb_", suffix=".json")
         try:
             with os.fdopen(fd, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, indent=2, ensure_ascii=False)
             os.replace(tmp_path, self.db_path)
         except Exception:
+            self.db_path.write_text(
+                json.dumps(self.data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
             if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            raise
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
     
     def update(self, file_paths: List[str]) -> int:
         """
@@ -169,9 +178,9 @@ class HashDatabase:
             # 处理路径
             if os.path.isabs(fp):
                 abs_path = Path(fp)
-                rel_path = str(abs_path.relative_to(self.root))
+                rel_path = abs_path.relative_to(self.root).as_posix()
             else:
-                rel_path = fp
+                rel_path = Path(fp).as_posix()
                 abs_path = self.root / fp
             
             if not abs_path.exists():
@@ -182,16 +191,20 @@ class HashDatabase:
             
             # 检测语言
             language = self._detect_language(abs_path)
+            if not language:
+                if rel_path in self.data["files"]:
+                    del self.data["files"][rel_path]
+                continue
             
             # 计算哈希
             file_hash = get_file_hash(str(abs_path))
-            ast_hash = get_ast_hash(str(abs_path), language) if language else ""
+            ast_hash = get_ast_hash(str(abs_path), language)
             
             if file_hash:
                 self.data["files"][rel_path] = {
                     "hash": file_hash,
                     "ast_hash": ast_hash,
-                    "language": language or "unknown",
+                    "language": language,
                     "updated_at": now
                 }
                 count += 1
@@ -256,7 +269,10 @@ class HashDatabase:
         root_path = Path(root)
         ignore = CodeDendriteIgnore(root)
         new_files = []
-        for dirpath, dirnames, filenames in os.walk(root_path):
+        def _on_walk_error(error):
+            return None
+
+        for dirpath, dirnames, filenames in os.walk(root_path, onerror=_on_walk_error):
             dp = Path(dirpath)
             dirnames[:] = [d for d in dirnames if ignore.should_scan(dp / d / "_x.py")]
             for fname in filenames:
@@ -264,8 +280,10 @@ class HashDatabase:
                 if not ignore.should_scan(fp):
                     continue
                 try:
-                    rel = str(fp.relative_to(root_path))
+                    rel = fp.relative_to(root_path).as_posix()
                 except ValueError:
+                    continue
+                if not self._detect_language(fp):
                     continue
                 if rel not in self.data["files"]:
                     new_files.append(rel)
@@ -286,9 +304,13 @@ class HashDatabase:
         ignore = CodeDendriteIgnore(str(self.root))
         stale = []
 
-        for rel_path, info in self.data["files"].items():
+        pruned = False
+
+        for rel_path, info in list(self.data["files"].items()):
             abs_path = self.root / rel_path
-            if not ignore.should_scan(abs_path):
+            if not ignore.should_scan(abs_path) or not self._detect_language(abs_path):
+                del self.data["files"][rel_path]
+                pruned = True
                 continue
 
             if not abs_path.exists():
@@ -298,6 +320,9 @@ class HashDatabase:
             current_hash = get_file_hash(str(abs_path))
             if current_hash != info.get("hash", ""):
                 stale.append(rel_path)
+
+        if pruned:
+            self.save()
 
         return stale
     

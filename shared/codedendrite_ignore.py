@@ -59,7 +59,15 @@ class CodeDendriteIgnore:
     # 默认完全不扫描的规则
     MINIMAL_CONFIG = """[scan_exclude]
 .codedendrite/
+**/.codedendrite/
 __pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+.code_genome_db.json
+.code_hash_db.json
+tmp*.json
+sandbox_test/hook_test_*/
 .git/
 """
     

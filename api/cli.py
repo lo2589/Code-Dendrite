@@ -42,7 +42,7 @@ def _print_relations(relations):
     )
 
 
-def rebuild(target: str, include_virtual_blocks: bool = True):
+def rebuild(target: str, include_virtual_blocks: bool = False):
     """Rebuild scan results, anchors, and relations from scratch."""
     import time as _time
     _t0 = _time.time()
@@ -105,7 +105,7 @@ def rebuild(target: str, include_virtual_blocks: bool = True):
     _db.save()
 
 
-def update(target: str, include_virtual_blocks: bool = True):
+def update(target: str, include_virtual_blocks: bool = False, exclude_dirs: list | None = None):
     # """Incrementally refresh anchors and relations from git diff."""  # 2026-05-08: 原 docstring
     """Incrementally refresh anchors and relations based on file content hash."""
     codedendrite_dir = os.path.join(target, ".codedendrite")
@@ -131,9 +131,13 @@ def update(target: str, include_virtual_blocks: bool = True):
         generate_module_tree,
         generate_module_summary,
     )
+    from pathlib import Path as _Path
 
     db = HashDatabase(target)
     changed = db.get_stale_files() + db.get_new_files(target)
+    if exclude_dirs:
+        _excl = set(exclude_dirs)
+        changed = [f for f in changed if not any(part in _excl for part in _Path(f).parts)]
     if not changed:
         print("No changed files detected; skipping anchor refresh.")
     else:
@@ -160,6 +164,12 @@ def update(target: str, include_virtual_blocks: bool = True):
             "hit" if summary.get("reused_cache") else "miss",
         )
     )
+
+    from tools.CodeDendrite.api.anchors import load_anchors
+    _anchors = load_anchors(target)
+    _files_with_anchors = list({a.file for a in _anchors.values()} | set(changed))
+    refreshed = db.update(_files_with_anchors)
+    print("HashDB refreshed: {} files".format(refreshed))
     print("Wrote results to: {}/.codedendrite/".format(target))
 
 
@@ -306,7 +316,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--module-graph", action="store_true", help="Render standard semantic module tree graph")
     parser.add_argument("--anchor-outline", action="store_true", help="Write a folder/file/symbol outline from anchors.json")
     parser.add_argument("--outline-output", help="Output path for --anchor-outline")
-    parser.add_argument("--no-virtual-blocks", action="store_true", help="Skip control-flow virtual block anchors")
+    parser.add_argument("--virtual-blocks", action="store_true", help="Include debug-only control-flow virtual block anchors")
+    parser.add_argument("--no-virtual-blocks", action="store_true", help="Deprecated compatibility flag; virtual blocks are off by default")
     parser.add_argument("--no-isolated", action="store_true", help="Hide isolated modules in --module-graph")
     parser.add_argument("--query", help="Free-text module query")
     parser.add_argument("--symbol", help="Find the module that owns this symbol")
@@ -398,11 +409,13 @@ def main(argv: list[str] | None = None) -> int:
         anchor_outline(target, output=args.outline_output)
         return 0
 
+    include_virtual_blocks = bool(args.virtual_blocks and not args.no_virtual_blocks)
+
     if args.update:
-        update(target, include_virtual_blocks=not args.no_virtual_blocks)
+        update(target, include_virtual_blocks=include_virtual_blocks)
         return 0
 
-    rebuild(target, include_virtual_blocks=not args.no_virtual_blocks)
+    rebuild(target, include_virtual_blocks=include_virtual_blocks)
     return 0
 
 

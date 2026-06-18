@@ -71,7 +71,13 @@ class ConfigDetector:
         }
         
         total_nodes = 0
-        
+
+        # Precompute parent map once: O(n) instead of O(n²) per-function traversal
+        parent_map = {}
+        for node in ast.walk(tree):
+            for child in ast.iter_child_nodes(node):
+                parent_map[id(child)] = node
+
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 stats['imports'] += 1
@@ -80,18 +86,14 @@ class ConfigDetector:
             elif isinstance(node, ast.ClassDef):
                 stats['classes'] += 1
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # 检查是否在类内部
-                is_method = any(
-                    isinstance(parent, ast.ClassDef) 
-                    for parent in self._get_parents(tree, node)
-                )
+                is_method = isinstance(parent_map.get(id(node)), ast.ClassDef)
                 if is_method:
                     stats['methods'] += 1
                 else:
                     stats['functions'] += 1
             elif isinstance(node, ast.Expr) and not isinstance(node.value, (ast.Constant, ast.Str)):
                 stats['statements'] += 1
-            
+
             total_nodes += 1
         
         # 统计源码文本特征

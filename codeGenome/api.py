@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from .types import CodeAnchor, AnchorIndex
-from .python_extractor import extract_python_file, extract_python_directory
+from .python_extractor import extract_python_file, extract_python_directory, PythonExtractor
 from .cpp_extractor import extract_cpp_file, extract_cpp_directory
 from .database import AnchorDatabase, ProjectGenome
 
@@ -39,9 +39,14 @@ class GenomeQuery:
     def scan(self):
         """扫描项目"""
         self.db.clear()
+        self.parse_failures = []
+        self.auto_fixed = []
 
-        py_index = extract_python_directory(str(self.project_root))
+        py_extractor = PythonExtractor()
+        py_index = py_extractor.extract_directory(str(self.project_root))
         self.db.add_index(py_index)
+        self.parse_failures.extend(py_index.parse_failures)
+        self.auto_fixed.extend(py_index.auto_fixed)
 
         cpp_dirs = ['src', 'include', '.']
         for cpp_dir in cpp_dirs:

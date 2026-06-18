@@ -141,6 +141,8 @@ class AnchorIndex:
     file_anchors: Dict[str, List[str]] = field(default_factory=lambda: {})
     category_anchors: Dict[str, List[str]] = field(default_factory=lambda: {})
     hash_to_id: Dict[str, str] = field(default_factory=dict)
+    parse_failures: List[dict] = field(default_factory=list)
+    auto_fixed: List[dict] = field(default_factory=list)
 
     def __post_init__(self):
         if self.anchors is None:
@@ -151,6 +153,10 @@ class AnchorIndex:
             self.category_anchors = {}
         if self.hash_to_id is None:
             self.hash_to_id = {}
+        if self.parse_failures is None:
+            self.parse_failures = []
+        if self.auto_fixed is None:
+            self.auto_fixed = []
 
     def add(self, anchor: CodeAnchor):
         self.anchors[anchor.id] = anchor
