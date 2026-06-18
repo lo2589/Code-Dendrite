@@ -656,79 +656,12 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
             )
     except Exception as e:
         failed.append("codeGenome: {}".format(e))
-    try:
-        from codeAnalysis.analyzer import get_analyzer
-        _alog(f"源2 codeAnalysis per-.py analyze START (phase elapsed {_time.perf_counter()-_phase0:.1f}s)")
-        def _iter_py(root_p):
-            for dirpath, dirnames, filenames in os.walk(root_p):
-                dp = Path(dirpath)
-                dirnames[:] = [d for d in dirnames if ignore.should_scan(dp / d / "_x.py")]
-                for fname in filenames:
-                    if fname.endswith(".py"):
-                        yield dp / fname
+    # ── 源2 codeAnalysis(Python 补漏)已删除 ──
+    # 实测 源1 codeGenome 与 源2 符号集完全相同(源2 独有=0,漏=0)：
+    # inheritance(93)/codeGenome(141)/api(315)/dataFlow(27)。纯冗余,且多一次整库 parse+walk。
+    # 见 _refactor/diff_sources.py。
 
-        for py_file in _iter_py(root):
-            if not ignore.should_scan(py_file):
-                continue
-            if any(p in exclude for p in py_file.parts):
-                continue
-            try:
-                rel = str(py_file.relative_to(root)).replace("\\", "/")
-            except ValueError:
-                rel = str(py_file).replace("\\", "/")
-            try:
-                analyzer = get_analyzer(str(root), language="python")
-                _t0 = _time.perf_counter()
-                module = analyzer.analyze_file(str(py_file))
-                _slow_warn("py.analyze", rel, _time.perf_counter() - _t0)
-
-                for cls in module.classes:
-                    cls_name = cls.name if hasattr(cls, "name") else str(cls)
-                    cls_line = getattr(cls, "line_number", 1)
-                    key_cls = "{}::{}".format(rel, cls_name)
-                    if key_cls not in anchors:
-                        anchors[key_cls] = Anchor(
-                            id=key_cls, symbol=cls_name, file=rel,
-                            line_start=cls_line, line_end=cls_line,
-                            hash="", language="python", symbol_type="class",
-                        )
-                    for method in getattr(cls, "methods", []):
-                        # symbol 格式统一为 ClassName.method_name，便于 override 检测
-                        if not hasattr(method, "name"):
-                            continue
-                        qualified = "{}.{}".format(cls_name, method.name)
-                        mkey = "{}::{}".format(rel, qualified)
-                        if mkey not in anchors:
-                            anchors[mkey] = Anchor(
-                                id=mkey, symbol=qualified, file=rel,
-                                line_start=method.line_number, line_end=method.line_number,
-                                hash="", language="python", symbol_type="method",
-                            )
-
-                for func in module.functions:
-                    if getattr(func, "is_method", False) and getattr(func, "class_name", None):
-                        qualified = "{}.{}".format(func.class_name, func.name)
-                        fkey = "{}::{}".format(rel, qualified)
-                        if fkey not in anchors:
-                            anchors[fkey] = Anchor(
-                                id=fkey, symbol=qualified, file=rel,
-                                line_start=func.line_number, line_end=func.line_number,
-                                hash="", language="python", symbol_type="method",
-                            )
-                    else:
-                        key_f = "{}::{}".format(rel, func.name)
-                        if key_f not in anchors:
-                            anchors[key_f] = Anchor(
-                                id=key_f, symbol=func.name, file=rel,
-                                line_start=func.line_number, line_end=func.line_number,
-                                hash="", language="python", symbol_type="function",
-                            )
-            except Exception:
-                pass
-    except Exception as e:
-        failed.append("codeAnalysis: {}".format(e))
-
-    # ── 源 2: codeAnalysis（补 codeGenome 缺失的 Python 符号）──
+    # ── 源 2b: codeAnalysis TypeScript/JavaScript ──
     _TS_EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
     try:
         ts_analyzer = get_analyzer(str(root), language="typescript")
