@@ -116,21 +116,37 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
     # super::method_name → MRO-aware 解析
     if target.startswith("super::") and caller_anchor is not None:
         return _resolve_super_call(target[len("super::"):], caller_anchor, anchors)
-    if target in BUILTIN_NOISE:
-        return None
     if "::" in target:
         return target if target in anchors else None
-    if caller_file:
-        cf = caller_file.replace("\\", "/")
-        candidate = "{}::{}".format(cf, target)
-        if candidate in anchors:                 # ① 同文件定义，最优先
-            return candidate
-        if import_res is not None:               # ② import 解析：名字是 import 进来的就按 import 走
-            m = import_res.get(cf)
-            if m is not None and target in m:
-                tgt = m[target]                  # 命中 import：解到目标文件::原名（外部/解不出则不瞎猜）
-                return tgt if (tgt and tgt in anchors) else None
-    return unique_symbol_ids.get(target)         # ③ 兜底：全局唯一名
+
+    cf = caller_file.replace("\\", "/") if caller_file else None
+    finfo = import_res.get(cf) if (import_res and cf) else None
+
+    # 模块限定调用 obj.attr：obj 是 import 进来的模块 -> 模块文件::attr
+    if "." in target:
+        base, rest = target.split(".", 1)
+        name = rest.split(".")[-1]                    # a.b.c -> c
+        if finfo:
+            modfile = finfo.get("modules", {}).get(base)
+            if modfile:
+                cand = "{}::{}".format(modfile, name)
+                return cand if cand in anchors else None
+        # base 不是模块（self/实例/其它）-> 退化成解末段名字
+    else:
+        name = target
+
+    if name in BUILTIN_NOISE:
+        return None
+    if cf:
+        cand = "{}::{}".format(cf, name)              # ① 同文件定义，最优先
+        if cand in anchors:
+            return cand
+        if finfo:                                     # ② import 表（from-import 符号，含 re-export 追链）
+            names = finfo.get("names", {})
+            if name in names:
+                t = names[name]
+                return t if (t and t in anchors) else None
+    return unique_symbol_ids.get(name)                # ③ 兜底：全局唯一名
 
 
 ANCHOR_DEFAULTS = {
@@ -198,7 +214,9 @@ def _call_name(node: ast.AST) -> str:
     if isinstance(node, ast.Name):
         return node.id
     if isinstance(node, ast.Attribute):
-        return node.attr
+        if isinstance(node.value, ast.Name):
+            return "{}.{}".format(node.value.id, node.attr)   # mo.add / self.method（保前缀）
+        return node.attr                                       # a.b.c() / call().x() -> 裸 attr
     return ""
 
 
@@ -915,7 +933,8 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     try:
         from api.import_resolver import build_import_resolution
         anchor_files = {a.file for a in anchors.values() if getattr(a, "file", None)}
-        import_res = build_import_resolution(import_anchors, anchor_files, root=root)
+        import_res = build_import_resolution(import_anchors, anchor_files, root=root,
+                                             anchor_ids=set(anchors.keys()))
     except Exception as e:
         failed.append("import_resolver: {}".format(e))
 

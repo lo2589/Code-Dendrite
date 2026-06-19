@@ -1,17 +1,19 @@
 """import 解析：照 Python 那套——import 把"名字→来源模块"钉死，模块再映射到仓库文件。
-让跨文件、重名的调用(sympy 里 sqrt/eval 满仓库)能 O(1) 解到正确的那个，而不是丢边。
+让跨文件、重名、模块限定的调用都能 O(1) 解到正确目标。
 
-只解【from Y import f; f()】这类（call-site 记的是裸名 f，能查 import 表）。
-【import X; X.f()】call-site 丢了 X 前缀，暂不解。
+每文件输出两张表：
+  names   : from Y import f [as g]  -> {本地名: 目标anchor_id}（含追 __init__ re-export 链）
+  modules : import X [as m]         -> {本地名: 模块文件rel}（供 m.f() 解析）
 """
+from pathlib import Path as _Path
 
 
 def _module_to_file_index(anchor_files) -> dict:
-    """{点路径模块: 文件rel}。sympy/core/add.py -> sympy.core.add;
+    """{点路径模块: 文件rel}。sympy/core/add.py -> sympy.core.add；
     sympy/core/__init__.py -> sympy.core。"""
     idx = {}
     for f in anchor_files:
-        f = f.replace("\\", "/")
+        f = str(f).replace("\\", "/")
         if not f.endswith(".py"):
             continue
         rel = f[:-3]
@@ -37,12 +39,9 @@ def _resolve_module(module: str, level: int, importing_file: str) -> str:
     return module
 
 
-def build_import_resolution(import_anchors, anchor_files, root=None) -> dict:
-    """返回 {导入方文件rel: {本地名: 目标anchor_id 或 None}}。
-    目标在仓库里 -> '文件rel::原名'；外部/解不出 -> None（调用端据此不再瞎猜唯一名）。
-    root: import 锚点的 file 是绝对路径，要转成和最终 anchor 一致的 root-相对。"""
-    from pathlib import Path as _Path
-    mod_index = _module_to_file_index(anchor_files)
+def build_import_resolution(import_anchors, anchor_files, root=None, anchor_ids=None) -> dict:
+    """返回 {导入方文件rel: {"names": {本地名: 目标id或None}, "modules": {本地名: 模块文件rel}}}。"""
+    anchor_ids = anchor_ids or set()
 
     def _rel(fp):
         fp = str(fp).replace("\\", "/")
@@ -53,7 +52,16 @@ def build_import_resolution(import_anchors, anchor_files, root=None) -> dict:
                 pass
         return fp
 
-    result: dict = {}
+    # 模块索引要含【只有 import 的 __init__.py】这类文件（无代码 anchor，但要能被 from pkg import 解析）
+    all_files = {str(f).replace("\\", "/") for f in anchor_files}
+    for ia in import_anchors:
+        rf = _rel(getattr(ia, "file", ""))
+        if rf:
+            all_files.add(rf)
+    mod_index = _module_to_file_index(all_files)
+
+    # 第一遍：每文件 local -> 记录
+    raw: dict = {}
     for ia in import_anchors:
         f = _rel(getattr(ia, "file", ""))
         if not f:
@@ -63,7 +71,7 @@ def build_import_resolution(import_anchors, anchor_files, root=None) -> dict:
         if not local:
             continue
         kind = meta.get("import_kind") or ("from" if meta.get("from_module") else "import")
-        m = result.setdefault(f, {})
+        m = raw.setdefault(f, {})
         if kind == "from":
             module = meta.get("module") or meta.get("from_module") or ""
             level = int(meta.get("level") or 0)
@@ -71,9 +79,33 @@ def build_import_resolution(import_anchors, anchor_files, root=None) -> dict:
             mod = _resolve_module(module, level, f)
             tgt_file = mod_index.get(mod)
             if tgt_file:
-                m[local] = "{}::{}".format(tgt_file, orig)     # from Y import f -> Yfile::f
+                m[local] = {"kind": "sym", "tgt_file": tgt_file, "orig": orig}
             else:
-                sub = mod_index.get((mod + "." + orig) if mod else orig)   # from pkg import submod
-                m[local] = "{}::__module__".format(sub) if sub else None
-        # 'import X' 暂不解（call-site 丢了 X. 前缀）
+                sub = mod_index.get((mod + "." + orig) if mod else orig)  # from pkg import submod
+                m[local] = {"kind": "mod", "modfile": sub} if sub else {"kind": "ext"}
+        else:  # import X[.Y] [as Z]
+            module = meta.get("module") or ""
+            modfile = mod_index.get(module) or (mod_index.get(module.split(".")[0]) if module else None)
+            m[local] = {"kind": "mod", "modfile": modfile} if modfile else {"kind": "ext"}
+
+    # 第二遍：sym 目标若在目标文件里仍是 import（re-export），追到真定义
+    def chase(tgt_file, name, seen):
+        tid = "{}::{}".format(tgt_file, name)
+        if tid in anchor_ids:
+            return tid
+        rec = raw.get(tgt_file, {}).get(name)
+        if rec and rec.get("kind") == "sym" and (tgt_file, name) not in seen:
+            seen.add((tgt_file, name))
+            return chase(rec["tgt_file"], rec["orig"], seen)
+        return tid if tid in anchor_ids else None
+
+    result: dict = {}
+    for f, m in raw.items():
+        rf = result.setdefault(f, {"names": {}, "modules": {}})
+        for local, rec in m.items():
+            k = rec.get("kind")
+            if k == "sym":
+                rf["names"][local] = chase(rec["tgt_file"], rec["orig"], set())
+            elif k == "mod" and rec.get("modfile"):
+                rf["modules"][local] = rec["modfile"]
     return result
