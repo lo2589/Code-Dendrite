@@ -107,7 +107,8 @@ def _resolve_super_call(method_name: str, caller_anchor, anchors: dict) -> Optio
 
 def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
                      caller_file: str | None = None,
-                     caller_anchor=None) -> str | None:
+                     caller_anchor=None,
+                     import_res: dict | None = None) -> str | None:
     target = _call_target(raw_callee)
     if not target:
         return None
@@ -120,10 +121,16 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
     if "::" in target:
         return target if target in anchors else None
     if caller_file:
-        candidate = "{}::{}".format(caller_file.replace("\\", "/"), target)
-        if candidate in anchors:
+        cf = caller_file.replace("\\", "/")
+        candidate = "{}::{}".format(cf, target)
+        if candidate in anchors:                 # ① 同文件定义，最优先
             return candidate
-    return unique_symbol_ids.get(target)
+        if import_res is not None:               # ② import 解析：名字是 import 进来的就按 import 走
+            m = import_res.get(cf)
+            if m is not None and target in m:
+                tgt = m[target]                  # 命中 import：解到目标文件::原名（外部/解不出则不瞎猜）
+                return tgt if (tgt and tgt in anchors) else None
+    return unique_symbol_ids.get(target)         # ③ 兜底：全局唯一名
 
 
 ANCHOR_DEFAULTS = {
@@ -519,7 +526,7 @@ def _apply_inheritance_refs(anchors: dict, index, compute_mro, find_subclasses) 
             pass
 
 
-def _finalize_anchor_graph(anchors: dict) -> None:
+def _finalize_anchor_graph(anchors: dict, import_res: dict | None = None) -> None:
     unique_symbol_ids = _build_unique_symbol_ids(anchors)
     for anchor in anchors.values():
         normalized_callees = []
@@ -527,7 +534,8 @@ def _finalize_anchor_graph(anchors: dict) -> None:
         sites = list(getattr(anchor, "call_sites", []) or [])
         for idx, raw_callee in enumerate(anchor.callees):
             target_id = _resolve_call_id(raw_callee, anchors, unique_symbol_ids,
-                                         caller_file=anchor.file, caller_anchor=anchor)
+                                         caller_file=anchor.file, caller_anchor=anchor,
+                                         import_res=import_res)
             if not target_id:
                 continue
             if idx < len(sites) and isinstance(sites[idx], dict):
@@ -601,6 +609,7 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     _alog(f"BEGIN generate_all_anchors root={root}")
     _phase0 = _time.perf_counter()
 
+    import_anchors = []
     # ── 源 1: codeGenome ──────────────────────────────────────
     try:
         from codeGenome import scan_project as genome_scan
@@ -608,6 +617,7 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
         _g0 = _time.perf_counter()
         query = genome_scan(str(root))
         _alog(f"源1 codeGenome.scan_project DONE {_time.perf_counter()-_g0:.1f}s")
+        import_anchors = list(query.find_imports())   # 留着建 import 解析表
         parse_failures.extend(getattr(query, 'parse_failures', []))
         auto_fixed.extend(getattr(query, 'auto_fixed', []))
 
@@ -900,8 +910,17 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
         except Exception as e:
             failed.append("control_flow_blocks: {}".format(e))
 
+    # ── import 解析：建每文件 import 表，让跨文件重名调用解到正确目标 ──
+    import_res = None
+    try:
+        from api.import_resolver import build_import_resolution
+        anchor_files = {a.file for a in anchors.values() if getattr(a, "file", None)}
+        import_res = build_import_resolution(import_anchors, anchor_files, root=root)
+    except Exception as e:
+        failed.append("import_resolver: {}".format(e))
+
     # ── 反向构建 callers ──────────────────────────────────────
-    _finalize_anchor_graph(anchors)
+    _finalize_anchor_graph(anchors, import_res=import_res)
 
     # ── 写入 anchors.json ──────────────────────────────────────
     data = {k: _anchor_to_storage(v) for k, v in anchors.items()}

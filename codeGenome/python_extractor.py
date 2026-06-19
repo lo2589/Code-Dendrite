@@ -463,55 +463,45 @@ class PythonExtractor:
 
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
-                import_anchor = self._create_import_anchor(node, source, module_id)
-                if import_anchor:
+                for import_anchor in self._create_import_anchor(node, source, module_id):
                     target_index.add(import_anchor)
 
-    def _create_import_anchor(self, node: ast.AST, source: str, module_id: str) -> Optional[CodeAnchor]:
-        """创建 import 锚点"""
+    def _create_import_anchor(self, node: ast.AST, source: str, module_id: str) -> list:
+        """创建 import 锚点（每个 alias 一个，元数据存全：本地名/原名/模块/level，供 import 解析用）。"""
+        out = []
+        code = self._get_source(node, source)
+        h = self._compute_hash(code)
+        line_start = node.lineno
+        line_end = node.end_lineno or node.lineno
+
+        def mk(local, meta):
+            return CodeAnchor(
+                id=f"py.{module_id}.imports.{local}",
+                language="py", category=AnchorCategory.IMPORT.value,
+                file=self.current_file, line_start=line_start, line_end=line_end,
+                name=local, code=code, hash=h, metadata=meta,
+            )
+
         if isinstance(node, ast.Import):
+            # import a.b.c as x  ->  local=x（或 a，无 as 时绑顶层名 a）; 模块=a.b.c
             for alias in node.names:
-                name = alias.asname or alias.name
-                anchor_id = f"py.{module_id}.imports.{name}"
-
-                code = self._get_source(node, source)
-                lines = (node.col_offset + 1, node.end_lineno or node.col_offset + 1)
-
-                return CodeAnchor(
-                    id=anchor_id,
-                    language="py",
-                    category=AnchorCategory.IMPORT.value,
-                    file=self.current_file,
-                    line_start=lines[0],
-                    line_end=lines[1],
-                    name=name,
-                    code=code,
-                    hash=self._compute_hash(code)
-                )
-
+                local = alias.asname or alias.name.split(".")[0]
+                out.append(mk(local, {
+                    "import_kind": "import", "module": alias.name,
+                    "orig": alias.name, "level": 0, "local": local,
+                    "from_module": "",
+                }))
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
+            level = node.level or 0
             for alias in node.names:
-                name = alias.asname or alias.name
-                anchor_id = f"py.{module_id}.imports.{name}"
-
-                code = self._get_source(node, source)
-                lines = (node.col_offset + 1, node.end_lineno or node.col_offset + 1)
-
-                return CodeAnchor(
-                    id=anchor_id,
-                    language="py",
-                    category=AnchorCategory.IMPORT.value,
-                    file=self.current_file,
-                    line_start=lines[0],
-                    line_end=lines[1],
-                    name=name,
-                    code=code,
-                    hash=self._compute_hash(code),
-                    metadata={"from_module": module}
-                )
-
-        return None
+                local = alias.asname or alias.name
+                out.append(mk(local, {
+                    "import_kind": "from", "module": module,
+                    "orig": alias.name, "level": level, "local": local,
+                    "from_module": module,
+                }))
+        return out
 
     def _extract_top_level_assigns(self, tree: ast.AST, source: str, target_index: AnchorIndex):
         """
