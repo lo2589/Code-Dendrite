@@ -149,12 +149,13 @@ def extract_dispatches_from_function(
 
 
 def _find_enclosing_class(tree: ast.AST, target_node: ast.AST) -> Optional[str]:
-    """查找目标节点所在的类名。"""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
-            for child in ast.iter_child_nodes(node):
-                if child is target_node:
-                    return node.name
+    """查找目标节点所在的类名。
+    原实现对每个函数都 walk 整棵文件树找它的 ClassDef -> O(函数数 × 节点数) 平方，
+    大文件(sine.py 42万节点)上炸成小时级。父指针已由 _attach_parents 挂好：
+    方法的直接父亲就是 ClassDef，看一眼即可，O(1)，行为与原实现等价。"""
+    parent = getattr(target_node, "_codedendrite_parent", None)
+    if isinstance(parent, ast.ClassDef):
+        return parent.name
     return None
 
 
