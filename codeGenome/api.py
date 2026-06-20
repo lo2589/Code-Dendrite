@@ -36,14 +36,14 @@ class GenomeQuery:
         self.db = AnchorDatabase(str(self.project_root / ".code_genome_db.json"))
         self._loaded = False
 
-    def scan(self):
-        """扫描项目"""
+    def scan(self, tree_cache: dict = None):
+        """扫描项目。tree_cache 若提供，收集每文件 (source, tree) 供源2c/源3 复用。"""
         self.db.clear()
         self.parse_failures = []
         self.auto_fixed = []
 
         py_extractor = PythonExtractor()
-        py_index = py_extractor.extract_directory(str(self.project_root))
+        py_index = py_extractor.extract_directory(str(self.project_root), tree_cache=tree_cache)
         self.db.add_index(py_index)
         self.parse_failures.extend(py_index.parse_failures)
         self.auto_fixed.extend(py_index.auto_fixed)
@@ -291,8 +291,8 @@ def create_query(project_root: str) -> GenomeQuery:
     return GenomeQuery(project_root)
 
 
-def scan_project(project_root: str) -> GenomeQuery:
-    """扫描项目并返回查询接口"""
+def scan_project(project_root: str, tree_cache: dict = None) -> GenomeQuery:
+    """扫描项目并返回查询接口。tree_cache 收集每文件 (source, tree) 供后续源复用。"""
     query = GenomeQuery(project_root)
-    query.scan()
+    query.scan(tree_cache=tree_cache)
     return query

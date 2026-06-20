@@ -13,10 +13,10 @@ from typing import List, Optional
 from .types import ClassInfo, MethodInfo, ImportInfo, PythonFileInfo
 
 
-def parse_python_file(file_path: str) -> PythonFileInfo:
+def parse_python_file(file_path: str, tree: "ast.AST" = None) -> PythonFileInfo:
     """
     解析Python文件，提取类和导入信息
-    
+
     参数:
         file_path: 文件路径
     
@@ -29,16 +29,17 @@ def parse_python_file(file_path: str) -> PythonFileInfo:
         - TS使用tree-sitter，Python使用内置ast模块
         - ast模块原生支持，无需额外依赖
     """
-    path = Path(file_path)
-    if not path.exists():
-        return PythonFileInfo(classes=[], imports=[])
-    
-    try:
-        source = path.read_text(encoding='utf-8')
-        tree = ast.parse(source, filename=file_path)
-    except (OSError, SyntaxError, UnicodeDecodeError):
-        return PythonFileInfo(classes=[], imports=[])
-    
+    if tree is None:
+        path = Path(file_path)
+        if not path.exists():
+            return PythonFileInfo(classes=[], imports=[])
+
+        try:
+            source = path.read_text(encoding='utf-8')
+            tree = ast.parse(source, filename=file_path)
+        except (OSError, SyntaxError, UnicodeDecodeError):
+            return PythonFileInfo(classes=[], imports=[])
+
     classes = []
     imports = []
     

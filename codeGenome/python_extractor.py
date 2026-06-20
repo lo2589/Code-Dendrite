@@ -191,13 +191,15 @@ class PythonExtractor:
         self.current_module = ""
         self.config_detector = ConfigDetector()  # 新增：配置检测器
 
-    def extract_file(self, file_path: str) -> AnchorIndex:
+    def extract_file(self, file_path: str, tree_cache: dict = None) -> AnchorIndex:
         """
         提取单个文件的锚点
-            
+
         参数:
             file_path: Python 文件路径
-            
+            tree_cache: 若提供，把本文件最终 (source, tree) 存进去，供源2c/源3 复用，
+                        实现"每文件只 parse 一次"。键 = normcase(abspath(file))。
+
         返回:
             AnchorIndex: 锚点索引（单个文件的）
         """
@@ -244,7 +246,11 @@ class PythonExtractor:
                 return temp_index
         if tree is None:
             return temp_index
-            
+
+        # parse-once: 把最终 (source, tree) 存入共享缓存，源2c/源3 命中即复用、不再重 parse
+        if tree_cache is not None:
+            tree_cache[os.path.normcase(os.path.abspath(file_path))] = (source, tree)
+
         # 判断是否为配置文件
         is_config = self._is_config_file(Path(file_path))
             
@@ -263,12 +269,13 @@ class PythonExtractor:
             
         return temp_index
 
-    def extract_directory(self, dir_path: str) -> AnchorIndex:
+    def extract_directory(self, dir_path: str, tree_cache: dict = None) -> AnchorIndex:
         """
         提取目录下所有 Python 文件的锚点
 
         参数:
             dir_path: 目录路径
+            tree_cache: 透传给 extract_file，收集每文件 (source, tree) 供后续源复用。
 
         返回:
             AnchorIndex: 锚点索引
@@ -292,7 +299,7 @@ class PythonExtractor:
             if self._should_exclude(py_file):
                 continue
             try:
-                file_index = self.extract_file(str(py_file))
+                file_index = self.extract_file(str(py_file), tree_cache=tree_cache)
                 for anchor in file_index.anchors.values():
                     self.index.add(anchor)
                 self.index.parse_failures.extend(file_index.parse_failures)

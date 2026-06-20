@@ -628,12 +628,15 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     _phase0 = _time.perf_counter()
 
     import_anchors = []
+    # parse-once: 源1 parse 每个文件时把 (source, tree) 存进这里，源2c/源3 命中即复用，不再重 parse。
+    # 键 = normcase(abspath(file))。
+    tree_cache: dict = {}
     # ── 源 1: codeGenome ──────────────────────────────────────
     try:
         from codeGenome import scan_project as genome_scan
         _alog("源1 codeGenome.scan_project START (whole project)")
         _g0 = _time.perf_counter()
-        query = genome_scan(str(root))
+        query = genome_scan(str(root), tree_cache=tree_cache)
         _alog(f"源1 codeGenome.scan_project DONE {_time.perf_counter()-_g0:.1f}s")
         import_anchors = list(query.find_imports())   # 留着建 import 解析表
         parse_failures.extend(getattr(query, 'parse_failures', []))
@@ -854,11 +857,16 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     _alog(f"源2c embedded/call-site per-file START ({len(_by_file)} files, phase elapsed {_time.perf_counter()-_phase0:.1f}s)")
     for _rel_file, _file_anchors in _by_file.items():
         _t2c = _time.perf_counter()
-        try:
-            _source = (root / _rel_file).read_text(encoding="utf-8", errors="replace")
-            _tree = ast.parse(_source)
-        except Exception:
-            continue
+        # parse-once: 先查源1缓存命中即复用；未命中（极少：过滤集合差异）回退原 parse
+        _cached = tree_cache.get(os.path.normcase(os.path.abspath(str(root / _rel_file))))
+        if _cached is not None:
+            _tree = _cached[1]
+        else:
+            try:
+                _source = (root / _rel_file).read_text(encoding="utf-8", errors="replace")
+                _tree = ast.parse(_source)
+            except Exception:
+                continue
         for _anchor in _file_anchors:
             try:
                 _call_sites = _extract_call_sites_from_tree(_tree, _anchor.symbol)
@@ -882,7 +890,7 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
         from inheritance.override_analyzer import build_override_chain
 
         _t3 = _time.perf_counter()
-        index = build_class_index(str(root))
+        index = build_class_index(str(root), tree_cache=tree_cache)
         _alog(f"源3 build_class_index DONE {_time.perf_counter()-_t3:.1f}s")
 
         _t3b = _time.perf_counter()

@@ -42,7 +42,8 @@ DEFAULT_EXCLUDE_DIRS = {
 def build_class_index(
     root: str,
     exclude_dirs: Set[str] = None,
-    include_patterns: List[str] = None
+    include_patterns: List[str] = None,
+    tree_cache: dict = None
 ) -> ClassIndex:
     """
     构建项目类索引 (Medium L3-001)
@@ -86,8 +87,9 @@ def build_class_index(
             continue
         
         try:
-            file_info = parse_python_file(str(py_file))
-            
+            _cached = tree_cache.get(os.path.normcase(os.path.abspath(str(py_file)))) if tree_cache else None
+            file_info = parse_python_file(str(py_file), tree=_cached[1] if _cached else None)
+
             # 计算相对路径
             try:
                 rel_path = str(py_file.relative_to(root_path))
