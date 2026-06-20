@@ -766,13 +766,20 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
                     _e_rel = str(_e_file.relative_to(root)).replace("\\", "/")
                 except ValueError:
                     _e_rel = str(_e_file).replace("\\", "/")
-                try:
-                    _e_src = _e_file.read_text(encoding="utf-8", errors="replace")
-                    if "<" not in _e_src:
+                # parse-once: 复用源1缓存的 (source, tree)，未命中才 read+parse
+                _cached_e = tree_cache.get(os.path.normcase(os.path.abspath(str(_e_file))))
+                if _cached_e is not None:
+                    _e_src, _e_tree = _cached_e
+                    if _e_src is None or "<" not in _e_src:
                         continue
-                    _e_tree = ast.parse(_e_src)
-                except Exception:
-                    continue
+                else:
+                    try:
+                        _e_src = _e_file.read_text(encoding="utf-8", errors="replace")
+                        if "<" not in _e_src:
+                            continue
+                        _e_tree = ast.parse(_e_src)
+                    except Exception:
+                        continue
                 _e_pmap = {}
                 for _e_pn in ast.walk(_e_tree):
                     for _e_ch in ast.iter_child_nodes(_e_pn):
