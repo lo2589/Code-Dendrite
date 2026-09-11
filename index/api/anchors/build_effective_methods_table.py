@@ -166,7 +166,30 @@ def _code_anchor_symbol(ca) -> tuple[str, str] | None:
         return symbol, "method"
     if ca.category == "functions":
         return ca.name, "function"
+    if ca.category == "__main__":
+        # A Python main guard is executable structure with its own call edges,
+        # not anonymous module noise. Its extractor id carries an asset suffix;
+        # the public graph uses the stable symbol users actually see in code.
+        return "__main__", "entrypoint"
     return None
+
+
+def _is_main_guard(node: ast.AST) -> bool:
+    """Whether *node* is ``if __name__ == '__main__'`` (either operand order)."""
+    if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
+        return False
+    test = node.test
+    if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq) or len(test.comparators) != 1:
+        return False
+
+    def is_name(value: ast.AST) -> bool:
+        return isinstance(value, ast.Name) and value.id == "__name__"
+
+    def is_main(value: ast.AST) -> bool:
+        return isinstance(value, ast.Constant) and value.value == "__main__"
+
+    return ((is_name(test.left) and is_main(test.comparators[0]))
+            or (is_main(test.left) and is_name(test.comparators[0])))
 
 def _collect_import_aliases(tree: ast.AST, function_node: ast.AST) -> dict:
     aliases = {}
@@ -201,6 +224,11 @@ def _collect_import_aliases(tree: ast.AST, function_node: ast.AST) -> dict:
     return aliases
 
 def _find_function_node(tree: ast.AST, symbol: str):
+    if symbol == "__main__":
+        for node in getattr(tree, "body", []):
+            if _is_main_guard(node):
+                return node
+        return None
     parts = symbol.split(".")
     if len(parts) == 1:
         for node in getattr(tree, "body", []):
@@ -234,7 +262,7 @@ def _extract_call_sites(file_path: Path, symbol: str) -> list[dict]:
 
 def _extract_function_io_from_tree(tree: ast.AST, symbol: str) -> tuple:
     node = _find_function_node(tree, symbol)
-    if not node:
+    if not node or not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         return [], []
     all_args = (
         getattr(node.args, "posonlyargs", []) +
@@ -294,7 +322,7 @@ def _extract_module_call_sites(tree: ast.AST) -> list[dict]:
     collector = _CallSiteCollector(aliases)
     for statement in getattr(tree, "body", []):
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
-                                  ast.Import, ast.ImportFrom)):
+                                  ast.Import, ast.ImportFrom)) or _is_main_guard(statement):
             continue
         collector.visit(statement)
     return collector.call_sites

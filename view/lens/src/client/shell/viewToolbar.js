@@ -40,8 +40,6 @@ window.__ModuleLoader__.load({
      * The control strip above the canvas.
      */
     function renderToolbar(props, view) {
-      var canvasRef = view.canvasRef
-      var centerOn = view.centerOn
       var context = view.context
       var ctx = view.ctx
       var engine = view.engine
@@ -133,18 +131,6 @@ window.__ModuleLoader__.load({
             key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
             onClick: function () { fit(shared.selected || shared.graph.rootId, .35) },
           }, '适配'),
-          h('button', {
-            key: 'w', className: 'cddl-btn', title: '按宽度铺满，纵向滚动',
-            onClick: function () {
-              var el = canvasRef.current
-              if (el === null || model.width === 0) return
-              var next = Math.round(Math.min(1.4, Math.max(.5, (el.clientWidth - 32) / model.width)) * 100) / 100
-              setZoom(next)
-              window.requestAnimationFrame(function () {
-                window.requestAnimationFrame(function () { centerOn(shared.selected || shared.graph.rootId, next) })
-              })
-            },
-          }, '铺满宽度'),
           // No "收进浮窗" any more. The floating panel it fed is gone, so the
           // button did nothing a user could see — and a graph that can pop
           // itself out over the page is the mess this view is supposed to
@@ -158,7 +144,7 @@ window.__ModuleLoader__.load({
             onClick: function () { engine.reindex() },
           }, shared.reindexing ? '建索引…' : '↻ 重建索引'),
           h('button', {
-            key: 'w', className: 'cddl-btn' + (shared.wireMode === 'all' ? ' on' : ''),
+            key: 'wire-mode', className: 'cddl-btn' + (shared.wireMode === 'all' ? ' on' : ''),
             title: shared.wireStats
               ? (shared.wireMode === 'all'
                 ? '正在画全部 ' + shared.wireStats.total + ' 条关系'

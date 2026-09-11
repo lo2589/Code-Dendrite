@@ -59,7 +59,8 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
         parse_failures.extend(getattr(query, 'parse_failures', []))
         auto_fixed.extend(getattr(query, 'auto_fixed', []))
 
-        for ca in query.find_functions() + query.find_classes() + query.find_methods():
+        for ca in (query.find_functions() + query.find_classes()
+                   + query.find_methods() + query.find_main_blocks()):
             if not ignore.should_scan(Path(ca.file)):
                 continue
             if any(p in exclude for p in Path(ca.file).parts):

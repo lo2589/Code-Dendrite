@@ -1,3 +1,30 @@
+# ── 运行时缓存 ────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.lock
+view/lens-pcb/*
+# ── 文档不进仓 ────────────────────────────────────────────────
+# 文件保留在本地，只是不跟踪。唯一进仓的文档是根 README。
+# 注意：pattern 后面不能跟行尾注释，会连注释一起当 pattern。
+*.md
+!/README.md
+
+# 测试夹具不是文档；缺了 test_issue_evidence_packet 会挂
+!/tests/fixtures/*.md
+
+*.txt
+
+# 依赖清单不是文档
+!/parse/codeAnalysis/requirements.txt
+
+# 设计/验收/实验文档与配套数据
+/doc/
+./doc/*
+# 内部管线分析页
+/synth/codeTree/*.html
+
+# ── 临时产物 ──────────────────────────────────────────────────
+.cache/
+.screenshot/
+.*
+CLAUDE.md

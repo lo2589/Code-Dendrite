@@ -60,6 +60,25 @@ console.log((broken.length ? '✗ ' : '✓ ') + '模块实例化'.padEnd(10) + (
 const shared = require_('dsh-cdd-lens/state/store').shared
 const model = require_('dsh-cdd-lens/graph/model')
 const count = n => (!n || typeof n !== 'object') ? 0 : 1 + (n.kids || []).reduce((s, k) => s + count(k), 0)
+const textOf = n => {
+  if (n === null || n === undefined) return ''
+  if (typeof n === 'string' || typeof n === 'number') return String(n)
+  if (typeof n !== 'object') return ''
+  return (n.kids || []).map(textOf).join('')
+}
+const assertUniqueSiblingKeys = (node, path = 'root') => {
+  if (!node || typeof node !== 'object') return
+  const kids = (node.kids || []).filter(k => k && typeof k === 'object')
+  const seen = new Set()
+  for (const kid of kids) {
+    const key = kid.props && kid.props.key
+    if (key !== undefined && key !== null) {
+      assert(!seen.has(key), `duplicate sibling key ${String(key)} at ${path}`)
+      seen.add(key)
+    }
+  }
+  kids.forEach((kid, index) => assertUniqueSiblingKeys(kid, `${path}/${String(kid.type)}[${index}]`))
+}
 const engine = { outline: () => {}, fileSymbols: () => {}, focus: () => {}, params: () => ({ root: '/x' }) }
 
 const render = (name, fn, floor) => {
@@ -80,7 +99,11 @@ const render = (name, fn, floor) => {
 
 // 空图：工具栏和空态都要在
 shared.graph = model.emptyGraph(); shared.trace = {}; shared.outline = undefined
-render('LensView', () => require_('dsh-cdd-lens/shell/graphView').LensView({ ctx: { on: () => () => {} } }), 3)
+const lensView = render('LensView', () => require_('dsh-cdd-lens/shell/graphView').LensView({ ctx: { on: () => () => {} } }), 3)
+assertUniqueSiblingKeys(lensView)
+console.log('✓ ' + 'React keys'.padEnd(10) + '每组同级节点的 key 唯一')
+assert(!textOf(lensView).includes('铺满宽度'), '不可用的铺满宽度按钮必须从工具栏移除')
+console.log('✓ ' + '工具栏'.padEnd(10) + '不再渲染铺满宽度按钮')
 
 // 目录：真实规模。4566 个目录一次性进 DOM 就是一个卡死的标签页。
 const many = []
@@ -115,11 +138,28 @@ shared.outline = undefined
   si = 0; states = []
   try {
     const out = require_('dsh-cdd-lens/view/outline').Draw({ engine: real })
+    assert.equal(out.type, 'iframe', 'Draw must mount its paged shell on the first render')
     console.log('✓ ' + 'Draw'.padEnd(10) + '用真 engine 渲染出 ' + count(out) + ' 个节点')
   } catch (e) {
     bad += 1
     console.log('✗ ' + 'Draw'.padEnd(10) + '用真 engine 抛: ' + e.message.split('\n')[0])
   }
+})()
+
+// A steady draw-status response is not a state change. The poller used to
+// compare against the first render captured by its effect, manufacture a new
+// object on every 8-second poll, and repaint the toolbar forever.
+;(function stableDrawStatusDoesNotRepaint() {
+  const { drawStampAfter } = require_('dsh-cdd-lens/view/outline')
+  const ready = { stamp: 123 }
+  assert.strictEqual(drawStampAfter(ready, { ready: true, stamp: 123, building: false }), ready,
+    'unchanged ready response must preserve state identity')
+  assert.strictEqual(drawStampAfter(ready, { ready: false, stamp: 124, building: true }), ready,
+    'a building response must leave the current shell mounted')
+  const rebuilt = drawStampAfter(ready, { ready: true, stamp: 124, building: false })
+  assert.notStrictEqual(rebuilt, ready, 'a new drawing stamp must repaint')
+  assert.deepEqual(rebuilt, { stamp: 124 })
+  console.log('✓ ' + 'Draw 轮询'.padEnd(10) + '稳定响应不再触发重渲染')
 })()
 
 // 错误边界：抛出去的东西必须变成看得见的字，而不是一块白。

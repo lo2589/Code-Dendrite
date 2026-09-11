@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-11T15:20:11.474025Z",
+  "generated_at": "2026-09-11T21:39:34.677144Z",
   "phase": 1,
-  "call_structure_hash": "fe42cb64563d66ad69b85176c8139f1ed241924560e0a6f7eaeac579c9940e39",
+  "call_structure_hash": "7a1f1565ad8fa5201b969b2d0a063bdec289e0d3edcfc83397a60cd3a5a071ce",
   "semantic_modules": [
     {
       "id": "sm_001",
@@ -120,26 +120,26 @@
         {
           "to_module": "sm_007",
           "edge_type": "call",
-          "count": 10,
+          "count": 11,
           "top_pairs": [
             [
               "serve/api/inspector/get_downward_chain.py::get_anchor_source",
               "index/api/anchors/anchors_list.py::get_anchor"
             ],
             [
-              "serve/api/inspector/get_upward_chain.py::get_upward_chain",
-              "index/api/anchors/anchors_list.py::get_anchor"
-            ],
-            [
-              "serve/api/inspector/get_upward_chain.py::get_upward_chain",
-              "index/api/anchors/anchors_list.py::get_anchor"
-            ],
-            [
               "serve/api/inspector/find_anchor.py::get_anchor_relations",
               "index/api/anchors/anchors_list.py::get_anchor"
             ],
             [
               "serve/api/inspector/find_anchor.py::get_anchor_relations",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ],
+            [
+              "serve/api/inspector/get_upward_chain.py::get_upward_chain",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ],
+            [
+              "serve/api/inspector/get_upward_chain.py::get_upward_chain",
               "index/api/anchors/anchors_list.py::get_anchor"
             ]
           ]

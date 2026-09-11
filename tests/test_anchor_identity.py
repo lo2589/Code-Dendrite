@@ -74,10 +74,10 @@ class AnchorIdentityTests(unittest.TestCase):
             generate_all_anchors(str(tmp_path))
             anchors = load_anchors(str(tmp_path))
 
-            entry_id = "main.py::<module>"
+            entry_id = "main.py::__main__"
             target_id = "runtime.py::build_runtime"
             self.assertIn(entry_id, anchors)
-            self.assertEqual(anchors[entry_id].symbol_type, "module")
+            self.assertEqual(anchors[entry_id].symbol_type, "entrypoint")
             self.assertEqual(anchors[entry_id].callees, [target_id])
             self.assertIn(entry_id, anchors[target_id].callers)
 

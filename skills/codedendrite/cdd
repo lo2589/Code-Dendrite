@@ -241,6 +241,19 @@ def peek_file(target: Path, raw_path: str) -> int:
     functions = list(getattr(module, "functions", None) or [])
     classes = list(getattr(module, "classes", None) or [])
     imports = list(getattr(module, "imports", None) or [])
+    entry_lines: list[int] = []
+    if spec.name == "python":
+        try:
+            from parse.codeGenome.python_extractor import PythonExtractor
+            extractor = PythonExtractor()
+            extractor.project_root = target
+            extracted = extractor.extract_file(str(candidate))
+            entry_lines = [
+                anchor.line_start
+                for anchor in extracted.get_by_category("__main__")
+            ]
+        except Exception:
+            entry_lines = []
 
     try:
         shown = candidate.relative_to(target)
@@ -253,16 +266,18 @@ def peek_file(target: Path, raw_path: str) -> int:
     if imports:
         print(f"import：{', '.join(str(i) for i in imports[:12])}"
               + (f" …共 {len(imports)}" if len(imports) > 12 else ""))
-    if not functions:
+    if not functions and not entry_lines:
         print("没有解析出函数或方法。")
     else:
-        print(f"符号 {len(functions)} 个：")
+        print(f"符号 {len(functions) + len(entry_lines)} 个：")
         for fn in functions:
             name = getattr(fn, "name", "?")
             line = getattr(fn, "line_number", None)
             owner = getattr(fn, "class_name", None) or getattr(fn, "parent", None)
             label = f"{owner}.{name}" if owner else name
             print(f"  {label:<48s} {line if line else ''}")
+        for line in entry_lines:
+            print(f"  {'__main__':<48s} {line}")
     print("现算的，只有这个文件里的东西。谁调用它、它调用谁，要有索引才知道"
           "（cdd update）。")
     return 0

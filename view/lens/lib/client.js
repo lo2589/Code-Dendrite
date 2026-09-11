@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_24_EXPAND_TRUTH_001
+// build: V1_24_DRAW_SHELL_IMMEDIATE_006
 // parts: 57
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -2259,13 +2259,18 @@ window.__ModuleLoader__.load({
      * browser with its data inlined. Replacing it with a tree of my own lost a
      * working tool, so it is shown as itself. Same-origin, so it needs no bridge.
      */
+    function drawStampAfter(before, body) {
+      if (body.ready !== true || !body.stamp || body.stamp === before.stamp) return before
+      return { stamp: body.stamp }
+    }
+
     function Draw(props) {
       var engine = props.engine
-      // `stamp` is the drawing's own mtime. The old page goes up straight away
-      // and the rebuild happens behind it; when the stamp moves, the frame is
-      // pointed at the new one. Without this the stale picture simply stayed —
-      // the rebuild finished and nothing ever asked again.
-      var state = useState({ status: 'loading', stamp: 0 })
+      // The iframe goes up on the first render. `/draw` always answers with a
+      // page: the paged browser shell when it exists, or the server-owned build
+      // shell while it is being regenerated. Client-side loading/error cards
+      // only hid that real shell and could get stuck in front of it.
+      var state = useState({ stamp: 0 })
       var query = new URLSearchParams(engine.params()).toString()
       var src = ROUTE + '/draw?' + query
         + (state[0].stamp ? '&v=' + state[0].stamp : '')
@@ -2277,29 +2282,19 @@ window.__ModuleLoader__.load({
             .then(function (res) { return res.json() })
             .then(function (body) {
               if (stop) return
-              var next = body.ready === true ? 'ready' : 'building'
-              var known = state[0].stamp
-              if (next !== state[0].status || (body.stamp && body.stamp !== known)) {
-                state[1]({ status: next, stamp: body.stamp || known, building: body.building === true })
-              }
-              // Keep asking while something is being rebuilt, and slowly the
-              // rest of the time so an index rebuilt elsewhere still lands.
-              timer = setTimeout(ask, body.building === true || next !== 'ready' ? 1500 : 8000)
+              state[1](function (before) { return drawStampAfter(before, body) })
+              timer = setTimeout(ask, body.building === true || body.ready !== true ? 1500 : 8000)
             })
-            .catch(function (error) {
-              if (!stop) state[1]({ status: 'error', error: String(error.message), stamp: 0 })
+            .catch(function () {
+              if (stop) return
+              // The iframe remains mounted with its last real page. A transient
+              // status failure only delays the next stamp check.
+              timer = setTimeout(ask, 1500)
             })
         }
         ask()
         return function () { stop = true; if (timer !== null) clearTimeout(timer) }
       }, [query])
-      if (state[0].status === 'building') {
-        return h('div', { className: 'cddl-empty' }, '正在生成 cdd draw 全图…')
-      }
-      if (state[0].status === 'error') {
-        return h('div', { className: 'cddl-empty' }, ['cdd draw 生成失败：', state[0].error])
-      }
-      if (state[0].status === 'loading') return h('div', { className: 'cddl-empty' }, '载入中…')
       return h('iframe', {
         // Keyed on the stamp: a new drawing is a new frame, not a frame asked
         // nicely to reload.
@@ -2308,7 +2303,7 @@ window.__ModuleLoader__.load({
       })
     }
 
-    module.exports = { Outline, Draw }
+    module.exports = { Outline, Draw, drawStampAfter }
     return module.exports
   },
 })
@@ -7543,8 +7538,6 @@ window.__ModuleLoader__.load({
      * The control strip above the canvas.
      */
     function renderToolbar(props, view) {
-      var canvasRef = view.canvasRef
-      var centerOn = view.centerOn
       var context = view.context
       var ctx = view.ctx
       var engine = view.engine
@@ -7636,18 +7629,6 @@ window.__ModuleLoader__.load({
             key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
             onClick: function () { fit(shared.selected || shared.graph.rootId, .35) },
           }, '适配'),
-          h('button', {
-            key: 'w', className: 'cddl-btn', title: '按宽度铺满，纵向滚动',
-            onClick: function () {
-              var el = canvasRef.current
-              if (el === null || model.width === 0) return
-              var next = Math.round(Math.min(1.4, Math.max(.5, (el.clientWidth - 32) / model.width)) * 100) / 100
-              setZoom(next)
-              window.requestAnimationFrame(function () {
-                window.requestAnimationFrame(function () { centerOn(shared.selected || shared.graph.rootId, next) })
-              })
-            },
-          }, '铺满宽度'),
           // No "收进浮窗" any more. The floating panel it fed is gone, so the
           // button did nothing a user could see — and a graph that can pop
           // itself out over the page is the mess this view is supposed to
@@ -7661,7 +7642,7 @@ window.__ModuleLoader__.load({
             onClick: function () { engine.reindex() },
           }, shared.reindexing ? '建索引…' : '↻ 重建索引'),
           h('button', {
-            key: 'w', className: 'cddl-btn' + (shared.wireMode === 'all' ? ' on' : ''),
+            key: 'wire-mode', className: 'cddl-btn' + (shared.wireMode === 'all' ? ' on' : ''),
             title: shared.wireStats
               ? (shared.wireMode === 'all'
                 ? '正在画全部 ' + shared.wireStats.total + ' 条关系'

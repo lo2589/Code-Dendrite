@@ -59,7 +59,11 @@ def _merge_code_anchor(anchors: dict, ca, root: Path) -> None:
         language=lang,
         symbol_type=sym_type,
         registered_as=_extract_registered_as(dec_meta),
-        block_metadata={"decorators": dec_meta} if dec_meta else {},
+        block_metadata=(
+            {"main_entry": True}
+            if ca.category == "__main__"
+            else ({"decorators": dec_meta} if dec_meta else {})
+        ),
     )
 
 def _merge_parsed_anchor(anchors: dict, parsed) -> None:

@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-11T11:06:10.765717Z",
+  "generated_at": "2026-09-11T20:26:05.503826Z",
   "summary_version": 3,
-  "call_structure_hash": "fe42cb64563d66ad69b85176c8139f1ed241924560e0a6f7eaeac579c9940e39",
+  "call_structure_hash": "7a1f1565ad8fa5201b969b2d0a063bdec289e0d3edcfc83397a60cd3a5a071ce",
   "project_name": "CodeDendrite_refactor",
   "project_one_line": "Coordinate analyze project structur, create analyzer workflows",
   "modules": [

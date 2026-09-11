@@ -130,47 +130,59 @@ module.exports = {
     const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (ch) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))
     /**
-     * The page that goes out while the real drawing is being built.
+     * A real browser shell for the short interval before the first format-4
+     * index exists. The draw is paged, so its chrome never depends on a file
+     * page being ready. Showing the chrome immediately also means there is no
+     * client- or server-side loading screen to get stuck on.
      *
-     * Real HTML, because this route feeds an iframe and whatever comes back is
-     * what the user is looking at. It watches /draw-status and reloads itself
-     * the moment there is something better, so nothing anywhere has to poll on
-     * its behalf and no thread waits on the build.
-     * @param root - the workspace, shown so it is obvious which one is meant.
-     * @param format - what was on disk: 0 for a drawing from before the split.
+     * It watches /draw-status silently and swaps itself for the populated shell
+     * when that file lands.
+     * @param root - the workspace represented by this shell.
      * @returns a complete document.
      */
-    const buildingPage = (root, format) => [
-      '<!doctype html><meta charset="utf-8"><title>cdd draw</title>',
+    const buildingPage = (root) => [
+      '<!doctype html><html><head><meta charset="utf-8"><title>cdd draw</title>',
       '<style>',
-      ':root{color-scheme:light dark}',
-      'body{margin:0;height:100vh;display:grid;place-content:center;gap:.75rem;',
-      'font:14px ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center}',
-      '.d{opacity:.6;font-size:12px;word-break:break-all;max-width:80vw}',
-      '.b{width:12rem;height:3px;border-radius:2px;background:currentColor;opacity:.15;',
-      'position:relative;overflow:hidden;margin:0 auto}',
-      '.b::after{content:"";position:absolute;inset:0;width:40%;border-radius:2px;',
-      'background:currentColor;opacity:.6;animation:s 1.1s ease-in-out infinite}',
-      '@keyframes s{0%{transform:translateX(-110%)}100%{transform:translateX(310%)}}',
-      '</style>',
-      '<div><div>正在生成 cdd draw 全图…</div>',
-      '<div class="b"></div>',
-      '<div class="d">' + escapeHtml(root) + '</div>',
-      format === 0
-        ? '<div class="d">磁盘上那份是分页之前的格式，不再直接送进浏览器</div>'
-        : '<div class="d">磁盘上那份是格式 ' + format + '，当前需要 ' + DRAW_FORMAT + '</div>',
-      '</div>',
+      '*{box-sizing:border-box}body{margin:0;height:100vh;display:flex;overflow:hidden;',
+      'font:13px Consolas,Menlo,monospace;background:#1e1e1e;color:#d4d4d4}',
+      '#sidebar{width:210px;min-width:120px;display:flex;flex-direction:column;',
+      'border-right:1px solid #3e3e42;background:#252526}',
+      '.hdr{padding:7px 10px;font-size:11px;font-weight:bold;color:#bbb;',
+      'letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid #3e3e42}',
+      '.filter{margin:5px 7px;padding:3px 6px;background:#3c3c3c;border:1px solid #555;',
+      'color:#d4d4d4;font-size:12px;border-radius:2px}',
+      '.root{padding:5px 8px;color:#e2c08d;white-space:nowrap;overflow:hidden;',
+      'text-overflow:ellipsis}',
+      '#graph{flex:1;display:flex;flex-direction:column;min-width:0}',
+      '#bar{height:32px;padding:5px 10px;border-bottom:1px solid #3e3e42;',
+      'display:flex;align-items:center;gap:6px;background:#2d2d30}',
+      '#title{flex:1;color:#9cdcfe;font-size:12px}',
+      '.tag{padding:1px 7px;border-radius:2px;font-size:10px}',
+      '.toggle{padding:2px 8px;border:1px solid #007acc;background:#264f78;',
+      'color:#9cdcfe;font-size:11px;border-radius:2px}',
+      '#canvas{flex:1;display:grid;place-items:center;background:#16161c;color:#3a3a3a}',
+      '#detail{width:420px;min-width:200px;border-left:1px solid #3e3e42;',
+      'background:#1c1c1c}.empty{padding:28px 14px;color:#3a3a3a;text-align:center}',
+      '</style></head><body>',
+      '<aside id="sidebar"><div class="hdr">Files</div>',
+      '<input class="filter" placeholder="Filter files…" disabled>',
+      '<div class="root" title="' + escapeHtml(root) + '">▸ ' +
+        escapeHtml(path.basename(root) || root) + '</div></aside>',
+      '<main id="graph"><div id="bar"><div id="title">Select a file</div>',
+      '<span class="toggle">external</span>',
+      '<span class="tag" style="background:#1e1535;color:#c586c0">class</span>',
+      '<span class="tag" style="background:#1a4a2a;color:#4ec9b0">method</span>',
+      '<span class="tag" style="background:#1a3060;color:#9cdcfe">function</span>',
+      '<span class="tag" style="background:#1a2030;color:#3a5a7a">ext</span>',
+      '</div><div id="canvas">← select a file</div></main>',
+      '<aside id="detail"><div class="hdr">Detail</div>',
+      '<div class="empty">Click a node<br>in the graph</div></aside>',
       '<script>',
       'const q=new URLSearchParams(location.search);q.delete("page");',
-      'let n=0;',
       'const tick=()=>fetch("draw-status?"+q.toString(),{cache:"no-store"})',
-      '.then(r=>r.json()).then(b=>{n+=1;',
-      'if(b.ready===true){location.reload();return}',
-      'document.querySelector(".d").textContent=' +
-        '(b.building?"正在生成…":"排队中…")+" 第 "+n+" 次询问";',
-      'setTimeout(tick,1500)}).catch(()=>setTimeout(tick,3000));',
-      'tick();',
-      '</script>',
+      '.then(r=>r.json()).then(b=>{if(b.ready===true){location.reload();return}',
+      'setTimeout(tick,1500)}).catch(()=>setTimeout(tick,3000));tick();',
+      '</script></body></html>',
     ].join('')
 
     // Kept in step with DRAW_FORMAT in visualize/anchor_browser.py.
@@ -563,7 +575,7 @@ module.exports = {
         // than the freeze it replaced. Something renderable goes out now and
         // the real drawing arrives behind it.
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
-        res.end(buildingPage(root, format))
+        res.end(buildingPage(root))
         return
       }
       if (!fs.existsSync(page)) {

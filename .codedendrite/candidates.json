@@ -1,14 +1,14 @@
 {
   "names": {
     "Boundary": [
-      "view/lens/lib/client.js::factory#53.makeBoundary.Boundary",
-      "view/lens/src/client/shell/boundary.js::factory.makeBoundary.Boundary"
+      "view/lens/src/client/shell/boundary.js::factory.makeBoundary.Boundary",
+      "view/lens/lib/client.js::factory#53.makeBoundary.Boundary"
     ],
     "Draw": [
       "view/lens-pcb/lib/client.js::factory.Draw",
       "view/lens/tests/client.golden.js::factory#15.Draw",
-      "view/lens/lib/client.js::factory#16.Draw",
-      "view/lens/src/client/view/outline.js::factory.Draw"
+      "view/lens/src/client/view/outline.js::factory.Draw",
+      "view/lens/lib/client.js::factory#16.Draw"
     ],
     "_anchor_attr": [
       "synth/api/capability_candidates/build_capability_candidates.py::_anchor_attr",
@@ -43,11 +43,11 @@
     ],
     "ask": [
       "view/lens-pcb/src/index_store.js::IndexStore.ask",
-      "view/lens/lib/client.js::factory#16.Draw.useEffect.ask",
-      "view/lens/lib/client.js::factory#42.routeFlow.ask",
       "view/lens/src/index_store.js::IndexStore.ask",
       "view/lens/src/client/skins/flow/route.js::factory.routeFlow.ask",
-      "view/lens/src/client/view/outline.js::factory.Draw.useEffect.ask"
+      "view/lens/src/client/view/outline.js::factory.Draw.useEffect.ask",
+      "view/lens/lib/client.js::factory#16.Draw.useEffect.ask",
+      "view/lens/lib/client.js::factory#42.routeFlow.ask"
     ],
     "build_class_index": [
       "index/inheritance/class_indexer.py::build_class_index",
@@ -56,20 +56,20 @@
     "centerOn": [
       "view/lens-pcb/lib/client.js::factory.LensView.centerOn",
       "view/lens/tests/client.golden.js::factory#40.useViewState.centerOn",
-      "view/lens/lib/client.js::factory#50.useViewState.centerOn",
-      "view/lens/src/client/shell/viewState.js::factory.useViewState.centerOn"
+      "view/lens/src/client/shell/viewState.js::factory.useViewState.centerOn",
+      "view/lens/lib/client.js::factory#50.useViewState.centerOn"
     ],
     "check_all_anchors": [
-      "index/api/anchors/core_anchor.py::check_all_anchors",
-      "synth/anchorRepair/batch_check.py::check_all_anchors"
+      "synth/anchorRepair/batch_check.py::check_all_anchors",
+      "index/api/anchors/core_anchor.py::check_all_anchors"
     ],
     "clearInterval": [
-      "view/lens/tests/render-smoke.js::clearInterval",
-      "view/lens/tests/sidebar-contract.js::clearInterval"
+      "view/lens/tests/sidebar-contract.js::clearInterval",
+      "view/lens/tests/render-smoke.js::clearInterval"
     ],
     "cmd_edges": [
-      "serve/api/query/cmd_chain.py::cmd_edges",
-      "relate/dynamic/trace_cli.py::cmd_edges"
+      "relate/dynamic/trace_cli.py::cmd_edges",
+      "serve/api/query/cmd_chain.py::cmd_edges"
     ],
     "collect": [
       "view/lens-pcb/src/session_trace.js::collect",
@@ -82,14 +82,14 @@
       "relate/cpp_inheritance/cpp_tracker/cpp_inheritance_tracker.py::CppInheritanceTracker.compute_mro"
     ],
     "create_anchor": [
+      "index/api/anchors/core_anchor.py::create_anchor",
       "index/codeTree/anchor_engine/anchor.py::create_anchor",
-      "index/codeTree/anchor_engine_v2/load_db.py::create_anchor",
-      "index/api/anchors/core_anchor.py::create_anchor"
+      "index/codeTree/anchor_engine_v2/load_db.py::create_anchor"
     ],
     "emitWires": [
       "view/lens/tests/client.golden.js::factory#32.emitWires",
-      "view/lens/lib/client.js::factory#37.emitWires",
-      "view/lens/src/client/routing/emit.js::factory.emitWires"
+      "view/lens/src/client/routing/emit.js::factory.emitWires",
+      "view/lens/lib/client.js::factory#37.emitWires"
     ],
     "end_headers": [
       "view/codeTree/view_html.py::Handler.end_headers"
@@ -97,8 +97,8 @@
     "exitChannel": [
       "view/lens-pcb/lib/client.js::factory.layout.exitChannel",
       "view/lens/tests/client.golden.js::factory#26.buildChannels.exitChannel",
-      "view/lens/lib/client.js::factory#30.buildChannels.exitChannel",
-      "view/lens/src/client/layout/channels.js::factory.buildChannels.exitChannel"
+      "view/lens/src/client/layout/channels.js::factory.buildChannels.exitChannel",
+      "view/lens/lib/client.js::factory#30.buildChannels.exitChannel"
     ],
     "find_method_origin": [
       "relate/inheritance/resolver/find_method.py::find_method_origin",
@@ -114,23 +114,23 @@
     "fit": [
       "view/lens-pcb/lib/client.js::factory.LensView.fit",
       "view/lens/tests/client.golden.js::factory#40.useViewState.fit",
-      "view/lens/lib/client.js::factory#50.useViewState.fit",
-      "view/lens/src/client/shell/viewState.js::factory.useViewState.fit"
+      "view/lens/src/client/shell/viewState.js::factory.useViewState.fit",
+      "view/lens/lib/client.js::factory#50.useViewState.fit"
     ],
     "fitExtent": [
       "view/lens/tests/client.golden.js::factory#34.fitExtent",
-      "view/lens/lib/client.js::factory#45.fitExtent",
-      "view/lens/src/client/layout/space.js::factory.fitExtent"
+      "view/lens/src/client/layout/space.js::factory.fitExtent",
+      "view/lens/lib/client.js::factory#45.fitExtent"
     ],
     "fn": [
       "view/lens-pcb/lib/client.js::factory.useShared.useEffect.fn",
       "view/lens/tests/client.golden.js::factory#3.useShared.useEffect.fn",
-      "view/lens/lib/client.js::factory#3.useShared.useEffect.fn",
-      "view/lens/src/client/state/store.js::factory.useShared.useEffect.fn"
+      "view/lens/src/client/state/store.js::factory.useShared.useEffect.fn",
+      "view/lens/lib/client.js::factory#3.useShared.useEffect.fn"
     ],
     "generate_all_anchors": [
-      "index/codeTree/anchor_engine_v2/load_db.py::generate_all_anchors",
-      "index/api/anchors/generate_all_anchors.py::generate_all_anchors"
+      "index/api/anchors/generate_all_anchors.py::generate_all_anchors",
+      "index/codeTree/anchor_engine_v2/load_db.py::generate_all_anchors"
     ],
     "get": [
       "parse/hash/database/hash_database.py::HashDatabase.get",
@@ -148,18 +148,23 @@
     "innerLane": [
       "view/lens-pcb/lib/client.js::factory.layout.innerLane",
       "view/lens/tests/client.golden.js::factory#26.buildChannels.innerLane",
-      "view/lens/lib/client.js::factory#30.buildChannels.innerLane",
-      "view/lens/src/client/layout/channels.js::factory.buildChannels.innerLane"
+      "view/lens/src/client/layout/channels.js::factory.buildChannels.innerLane",
+      "view/lens/lib/client.js::factory#30.buildChannels.innerLane"
     ],
     "layoutScope": [
       "view/lens/tests/client.golden.js::factory#21.layoutScope",
-      "view/lens/lib/client.js::factory#22.layoutScope",
-      "view/lens/src/client/layout/prep.js::factory.layoutScope"
+      "view/lens/src/client/layout/prep.js::factory.layoutScope",
+      "view/lens/lib/client.js::factory#22.layoutScope"
     ],
     "list_anchors": [
+      "index/api/anchors/anchors_list.py::list_anchors",
       "index/codeTree/anchor_engine/anchor.py::list_anchors",
-      "index/codeTree/anchor_engine_v2/load_db.py::list_anchors",
-      "index/api/anchors/anchors_list.py::list_anchors"
+      "index/codeTree/anchor_engine_v2/load_db.py::list_anchors"
+    ],
+    "load_config": [
+      "_smoke_fixture/pkg/flow.py::load_config",
+      "synth/codeTree/anchor_cli/load_config.py::load_config",
+      ".cache/fixture/pkg/flow.py::load_config"
     ],
     "main": [
       "parse/codeGenome/calls_extractor.py::main",
@@ -171,7 +176,6 @@
       "synth/api/action_session.py::main",
       "synth/api/issue_evidence_packet/issue_evidence.py::main",
       "view/codeAnalysis/bind_core_anchors.py::main",
-      "view/codeAnalysis/main.py::main",
       "view/visualize/module_tree_graph.py::main",
       "view/visualize/anchor_browser/build_file_index.py::main",
       "serve/api/yaml_profile_worker.py::main",
@@ -180,45 +184,48 @@
       "relate/dynamic/test_trace_target.py::main",
       "relate/dynamic/trace_cli.py::main",
       "relate/codeTree/dataflow_analyzer/main.py::main",
-      "view/lens/tests/worker-accuracy.js::main"
+      "view/lens/tests/worker-accuracy.js::main",
+      ".cache/smoke_public_api.py::main",
+      ".cache/smoke_subsystems.py::main",
+      "view/codeAnalysis/main.py::main"
     ],
     "makeBoundary": [
-      "view/lens/lib/client.js::factory#53.makeBoundary",
-      "view/lens/src/client/shell/boundary.js::factory.makeBoundary"
+      "view/lens/src/client/shell/boundary.js::factory.makeBoundary",
+      "view/lens/lib/client.js::factory#53.makeBoundary"
     ],
     "makeEngine": [
       "view/lens-pcb/lib/client.js::factory.makeEngine",
       "view/lens/tests/client.golden.js::factory#11.makeEngine",
-      "view/lens/lib/client.js::factory#12.makeEngine",
-      "view/lens/src/client/engine/engine.js::factory.makeEngine"
+      "view/lens/src/client/engine/engine.js::factory.makeEngine",
+      "view/lens/lib/client.js::factory#12.makeEngine"
     ],
     "markHops": [
       "view/lens/tests/client.golden.js::factory#31.markHops",
-      "view/lens/lib/client.js::factory#36.markHops",
-      "view/lens/src/client/routing/hops.js::factory.markHops"
+      "view/lens/src/client/routing/hops.js::factory.markHops",
+      "view/lens/lib/client.js::factory#36.markHops"
     ],
     "nearest": [
       "view/lens-pcb/lib/client.js::factory.layout.nearest",
       "view/lens/tests/client.golden.js::factory#26.buildChannels.nearest",
-      "view/lens/lib/client.js::factory#30.buildChannels.nearest",
-      "view/lens/src/client/layout/channels.js::factory.buildChannels.nearest"
+      "view/lens/src/client/layout/channels.js::factory.buildChannels.nearest",
+      "view/lens/lib/client.js::factory#30.buildChannels.nearest"
     ],
     "on_files_changed": [
       "synth/smartAnalyzer/orchestrator.py::on_files_changed",
+      "synth/anchorRepair/repair.py::on_files_changed",
       "synth/smartAnalyzer/smart_analyzer_patch.py::SmartCodeAnalyzerV2.on_files_changed",
-      "synth/smartAnalyzer/smart_analyzer.py::SmartCodeAnalyzer.on_files_changed",
-      "synth/anchorRepair/repair.py::on_files_changed"
+      "synth/smartAnalyzer/smart_analyzer.py::SmartCodeAnalyzer.on_files_changed"
     ],
     "orientFlow": [
       "view/lens/tests/client.golden.js::factory#25.orientFlow",
-      "view/lens/lib/client.js::factory#22.orientFlow",
-      "view/lens/src/client/layout/prep.js::factory.orientFlow"
+      "view/lens/src/client/layout/prep.js::factory.orientFlow",
+      "view/lens/lib/client.js::factory#22.orientFlow"
     ],
     "params": [
       "view/lens-pcb/lib/client.js::factory.makeEngine.params",
       "view/lens/tests/client.golden.js::factory#11.makeEngine.params",
-      "view/lens/lib/client.js::factory#12.makeEngine.params",
-      "view/lens/src/client/engine/engine.js::factory.makeEngine.params"
+      "view/lens/src/client/engine/engine.js::factory.makeEngine.params",
+      "view/lens/lib/client.js::factory#12.makeEngine.params"
     ],
     "parse_anchors_from_text": [
       "index/codeTree/anchor_engine/anchor.py::parse_anchors_from_text",
@@ -226,17 +233,17 @@
     ],
     "placeBoxes": [
       "view/lens/tests/client.golden.js::factory#24.placeBoxes",
-      "view/lens/lib/client.js::factory#27.placeBoxes",
-      "view/lens/src/client/skins/pcb/group.js::factory.placeBoxes"
+      "view/lens/src/client/skins/pcb/group.js::factory.placeBoxes",
+      "view/lens/lib/client.js::factory#27.placeBoxes"
     ],
     "placeTiers": [
       "view/lens/tests/client.golden.js::factory#35.placeTiers",
-      "view/lens/lib/client.js::factory#28.placeTiers",
-      "view/lens/src/client/skins/tiers/group.js::factory.placeTiers"
+      "view/lens/src/client/skins/tiers/group.js::factory.placeTiers",
+      "view/lens/lib/client.js::factory#28.placeTiers"
     ],
     "pop": [
-      "view/lens/lib/client.js::factory#39.searchPath.pop",
-      "view/lens/src/client/routing/avoid.js::factory.searchPath.pop"
+      "view/lens/src/client/routing/avoid.js::factory.searchPath.pop",
+      "view/lens/lib/client.js::factory#39.searchPath.pop"
     ],
     "push": [
       "view/lens-pcb/lib/client.js::factory.foldTrajectory.push",
@@ -245,36 +252,36 @@
       "view/lens/tests/client.golden.js::factory#6.foldTrajectory.push",
       "view/lens/tests/client.golden.js::factory#12.useConversationTrace.useEffect.bind.push",
       "view/lens/tests/extent.js::points.push",
-      "view/lens/lib/client.js::factory#6.foldTrajectory.push",
-      "view/lens/lib/client.js::factory#13.useConversationTrace.useEffect.bind.push",
-      "view/lens/lib/client.js::factory#39.searchPath.push",
       "view/lens/src/index_worker.js::push",
       "view/lens/src/client/routing/avoid.js::factory.searchPath.push",
       "view/lens/src/client/session/trajectory.js::factory.foldTrajectory.push",
-      "view/lens/src/client/session/trace.js::factory.useConversationTrace.useEffect.bind.push"
+      "view/lens/src/client/session/trace.js::factory.useConversationTrace.useEffect.bind.push",
+      "view/lens/lib/client.js::factory#6.foldTrajectory.push",
+      "view/lens/lib/client.js::factory#13.useConversationTrace.useEffect.bind.push",
+      "view/lens/lib/client.js::factory#39.searchPath.push"
     ],
     "rankFiles": [
       "view/lens/tests/client.golden.js::factory#22.rankFiles",
-      "view/lens/lib/client.js::factory#22.rankFiles",
-      "view/lens/src/client/layout/prep.js::factory.rankFiles"
+      "view/lens/src/client/layout/prep.js::factory.rankFiles",
+      "view/lens/lib/client.js::factory#22.rankFiles"
     ],
     "read": [
       "view/lens-pcb/lib/client.js::factory.HScroll.useEffect.read",
       "view/lens-pcb/lib/client.js::factory.LensView.useEffect#3.read",
       "view/lens/tests/client.golden.js::factory#19.HScroll.useEffect.read",
       "view/lens/tests/client.golden.js::factory#40.useViewState.useEffect#4.read",
-      "view/lens/lib/client.js::factory#20.HScroll.useEffect.read",
-      "view/lens/lib/client.js::factory#50.useViewState.useEffect#6.read",
       "view/lens/src/client/shell/viewState.js::factory.useViewState.useEffect#6.read",
-      "view/lens/src/client/view/hscroll.js::factory.HScroll.useEffect.read"
+      "view/lens/src/client/view/hscroll.js::factory.HScroll.useEffect.read",
+      "view/lens/lib/client.js::factory#20.HScroll.useEffect.read",
+      "view/lens/lib/client.js::factory#50.useViewState.useEffect#6.read"
     ],
     "refresh_anchor": [
       "index/codeTree/anchor_engine/anchor.py::refresh_anchor",
       "index/codeTree/anchor_engine_v2/load_db.py::refresh_anchor"
     ],
     "repairCrossings": [
-      "view/lens/lib/client.js::factory#39.repairCrossings",
-      "view/lens/src/client/routing/avoid.js::factory.repairCrossings"
+      "view/lens/src/client/routing/avoid.js::factory.repairCrossings",
+      "view/lens/lib/client.js::factory#39.repairCrossings"
     ],
     "resolve_inheritance": [
       "relate/inheritance/resolver/find_method.py::resolve_inheritance",
@@ -300,27 +307,27 @@
     "setInterval": [
       "view/lens-pcb/lib/client.js::factory.NeedIndex.useEffect.setInterval",
       "view/lens/tests/client.golden.js::factory#17.NeedIndex.useEffect.setInterval",
-      "view/lens/lib/client.js::factory#18.NeedIndex.useEffect.setInterval",
-      "view/lens/lib/client.js::factory#47.jumpToChatTurn.setInterval",
       "view/lens/src/client/view/stream.js::factory.jumpToChatTurn.setInterval",
-      "view/lens/src/client/view/needIndex.js::factory.NeedIndex.useEffect.setInterval"
+      "view/lens/src/client/view/needIndex.js::factory.NeedIndex.useEffect.setInterval",
+      "view/lens/lib/client.js::factory#18.NeedIndex.useEffect.setInterval",
+      "view/lens/lib/client.js::factory#47.jumpToChatTurn.setInterval"
     ],
     "setZoom": [
       "view/lens-pcb/lib/client.js::factory.LensView.setZoom",
       "view/lens/tests/client.golden.js::factory#40.useViewState.setZoom",
-      "view/lens/lib/client.js::factory#50.useViewState.setZoom",
-      "view/lens/src/client/shell/viewState.js::factory.useViewState.setZoom"
+      "view/lens/src/client/shell/viewState.js::factory.useViewState.setZoom",
+      "view/lens/lib/client.js::factory#50.useViewState.setZoom"
     ],
     "shiftDrawing": [
       "view/lens/tests/client.golden.js::factory#34.shiftDrawing",
-      "view/lens/lib/client.js::factory#45.shiftDrawing",
-      "view/lens/src/client/layout/space.js::factory.shiftDrawing"
+      "view/lens/src/client/layout/space.js::factory.shiftDrawing",
+      "view/lens/lib/client.js::factory#45.shiftDrawing"
     ],
     "sizeOf": [
       "view/lens-pcb/lib/client.js::factory.layout.sizeOf",
       "view/lens/tests/client.golden.js::factory#23.boxMetrics.sizeOf",
-      "view/lens/lib/client.js::factory#25.boxMetrics.sizeOf",
-      "view/lens/src/client/layout/metrics.js::factory.boxMetrics.sizeOf"
+      "view/lens/src/client/layout/metrics.js::factory.boxMetrics.sizeOf",
+      "view/lens/lib/client.js::factory#25.boxMetrics.sizeOf"
     ],
     "then": [
       "view/lens-pcb/lib/client.js::factory.api.then",
@@ -337,16 +344,6 @@
       "view/lens/tests/client.golden.js::factory#15.Draw.useEffect.poll.then",
       "view/lens/tests/client.golden.js::factory#15.Draw.useEffect.poll.then.then",
       "view/lens/tests/client.golden.js::factory#39.LensPanel.useEffect#3.then",
-      "view/lens/lib/client.js::factory#1.api.then",
-      "view/lens/lib/client.js::factory#1.api.then.then",
-      "view/lens/lib/client.js::factory#1.apiPost.then",
-      "view/lens/lib/client.js::factory#1.apiPost.then.then",
-      "view/lens/lib/client.js::factory#7.fetchMethods.then#3.then",
-      "view/lens/lib/client.js::factory#7.fetchMethods.then#10.poll.then",
-      "view/lens/lib/client.js::factory#10.ingestMethods.after.then",
-      "view/lens/lib/client.js::factory#11.gatherMethods.then",
-      "view/lens/lib/client.js::factory#47.locateInGraph.then",
-      "view/lens/lib/client.js::factory#49.LensPanel.useEffect#3.then",
       "view/lens/src/client/shell/panel.js::factory.LensPanel.useEffect#3.then",
       "view/lens/src/client/runtime/api.js::factory.api.then",
       "view/lens/src/client/runtime/api.js::factory.api.then.then",
@@ -356,18 +353,28 @@
       "view/lens/src/client/engine/gather.js::factory.gatherMethods.then",
       "view/lens/src/client/engine/ingest.js::factory.ingestMethods.after.then",
       "view/lens/src/client/engine/fetch.js::factory.fetchMethods.then#3.then",
-      "view/lens/src/client/engine/fetch.js::factory.fetchMethods.then#10.poll.then"
+      "view/lens/src/client/engine/fetch.js::factory.fetchMethods.then#10.poll.then",
+      "view/lens/lib/client.js::factory#1.api.then",
+      "view/lens/lib/client.js::factory#1.api.then.then",
+      "view/lens/lib/client.js::factory#1.apiPost.then",
+      "view/lens/lib/client.js::factory#1.apiPost.then.then",
+      "view/lens/lib/client.js::factory#7.fetchMethods.then#3.then",
+      "view/lens/lib/client.js::factory#7.fetchMethods.then#10.poll.then",
+      "view/lens/lib/client.js::factory#10.ingestMethods.after.then",
+      "view/lens/lib/client.js::factory#11.gatherMethods.then",
+      "view/lens/lib/client.js::factory#47.locateInGraph.then",
+      "view/lens/lib/client.js::factory#49.LensPanel.useEffect#3.then"
     ],
     "tiered": [
       "view/lens/tests/client.golden.js::factory#35.tiered",
-      "view/lens/lib/client.js::factory#28.tiered",
-      "view/lens/src/client/skins/tiers/group.js::factory.tiered"
+      "view/lens/src/client/skins/tiers/group.js::factory.tiered",
+      "view/lens/lib/client.js::factory#28.tiered"
     ],
     "toggleRelation": [
       "view/lens-pcb/lib/client.js::factory.LensView.toggleRelation",
       "view/lens/tests/client.golden.js::factory#40.useViewState.toggleRelation",
-      "view/lens/lib/client.js::factory#50.useViewState.toggleRelation",
-      "view/lens/src/client/shell/viewState.js::factory.useViewState.toggleRelation"
+      "view/lens/src/client/shell/viewState.js::factory.useViewState.toggleRelation",
+      "view/lens/lib/client.js::factory#50.useViewState.toggleRelation"
     ],
     "update": [
       "serve/api/cli/ensure_path.py::update",
