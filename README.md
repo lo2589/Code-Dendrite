@@ -1,325 +1,292 @@
 # CodeDendrite: 基于 AST 的代码因果导航系统
 
-**用静态分析替代向量搜索，让 7B 小模型也能精确理解项目结构。**
+**用静态分析替代向量搜索。**
 
-## V1.20：JS/TS真实作用域与异步调用链
-
-V1.20修复了JS/TS链路中四类会直接误导读图的问题：注释/字符串被识别成类、嵌套函数只有一行、重复调用导致`call_sites`与`callees`错位、接收者方法被模糊绑定到同名测试函数。对象回调现在挂在所属函数下；相对`import/require`、本地工厂方法、静态HTTP路由和Worker消息均生成可追踪的精确边。
-
-```bash
-cdd rebuild /path/to/project --virtual
-cdd chain src/client.js::factory.LensPanel /path/to/project --depth 12
-```
-
-插件实链已能贯通：`LensPanel → loadState → HTTP handler → projector.schedule → launch → Worker message handler → project → buildGraph`。HTTP/Worker跳转在`relations.json`中标记为`dispatch`。详见[CDD V1.20 JS/TS链路修复](doc/CDD_V1_20_JSTS_SCOPE_CALL_CHAIN.md)。
+检索找的是「长得像的代码」，导航要的是「连得上的代码」。一个调用你函数的函数，跟你的函数在文本上一点都不像——这正是相似度在调用链问题上必然失手的地方。CodeDendrite 不猜相似度，它把仓库解析成一张有因果边的图，然后让你顺着边走。
 
 ---
 
-## 总体架构
+## 当前版本
 
-```mermaid
-graph TB
-    SRC["源代码<br/>157 文件 · 12 语言"]
+**七桶分层 + DSH Session Lens V1.24**
 
-    subgraph EXTRACT["提取层 (codeGenome)"]
-        PY["Python AST"]
-        CPP["C++ AST"]
-        JAVA["Java AST"]
-        TS["TypeScript AST"]
-        OTHER["Go / Rust / Swift / ..."]
-    end
-
-    subgraph FOUNDATION["基础数据层"]
-        ANCHORS["anchors.json<br/>1312 锚点"]
-        RELATIONS["relations.json<br/>1794 边"]
-    end
-
-    subgraph ANALYSIS["分析层"]
-        PP["路径策略"]
-        CC["能力候选提取"]
-        MT["模块树 V2"]
-        TCP["任务上下文包"]
-    end
-
-    subgraph OUTPUT["输出层"]
-        JSON_OUT["JSON"]
-        HTML_OUT["HTML"]
-        COMPACT["compact 文本<br/>≤500 tokens"]
-    end
-
-    SRC --> EXTRACT
-    PY --> ANCHORS
-    CPP --> ANCHORS
-    JAVA --> ANCHORS
-    TS --> ANCHORS
-    OTHER --> ANCHORS
-    ANCHORS --> RELATIONS
-    RELATIONS --> PP
-    PP --> CC
-    CC --> MT
-    MT --> TCP
-    MT --> JSON_OUT
-    MT --> HTML_OUT
-    TCP --> COMPACT
-    TCP --> JSON_OUT
-```
+- 代码按职责切成七层，依赖单向：`base`（类型与纯数据）→ `parse`（AST 提取）→ `index`（索引与锚点身份）/ `relate`（因果边）→ `synth`（上层合成）→ `serve`（对外接口）、`view`（呈现）。
+- 上行链遇到**基础节点**就标注停住：扇入 ≥ 20 的 anchor（`load_anchors` 这类，被几十上百处调用）是公共底座，不是某条业务链的中间环节，再往上没有增量。结果里照常出现，标 `is_base` 并写明被多少处调用。
+- DSH Session Lens V1.24：成功修改事件携带精确项目相对路径，只对改动文件跑 `cdd update --files ... --topology-only`；只读、展开、折叠、Pin、看源码都不触发重索引。
 
 ---
 
 ## 核心思路
 
-传统 AI 编程工具用 **RAG + 向量搜索**：把代码切块 → 嵌入向量 → 相似度检索。问题是：
+| | RAG + 向量搜索 | CodeDendrite |
+|---|---|---|
+| 粒度 | 文本块 | 函数 / 类 / 方法 |
+| 关系 | 无 | 5 种因果边 |
+| 可解释性 | 相似度分数 | 证据链 + 置信度 |
+| 增量更新 | 全量重建 | 内容哈希增量检测 |
+| 小模型投喂 | 原始代码片段 | 分层预算的紧凑文本 |
+| 模型依赖 | 需要 embedding 模型 | 纯静态分析，零模型依赖 |
 
-- 丢失了函数间的调用关系
-- 检索结果没有因果解释
-- 小模型拿到碎片后仍然在猜
-
-CodeDendrite 用 **AST 静态分析**：
-
-- 精确到函数/类/方法级别（不是文本块）
-- 自动派生 5 种因果关系（call · dataflow · inherit · impact · dispatch）
-- 按 token 预算分层投喂（不是塞一堆代码进去）
-
-**结果：7B 模型拿到 400 tokens 的任务包，就能定位到正确的入口和候选。**
+三件事一起做到才有用：**精确到函数级别的锚点**、**从 AST 派生的因果关系**、**按 token 预算分层的投喂**。少任何一件，小模型拿到的东西都还是碎片。
 
 ---
 
 ## 五种因果关系
 
+本仓库自身实测（`cdd count`）：
+
 | 类型 | 数量 | 含义 | 用途 |
-|------|------|------|------|
-| `call` | 631 | A 函数调用 B 函数 | 追踪执行路径 |
-| `dataflow` | 924 | A 的输出流入 B 的输入 | 追踪数据来源 |
-| `inherit` | 75 | 子类继承父类 | 理解类层级 |
-| `impact` | 127 | 修改 A 会影响 B | 评估改动影响 |
-| `dispatch` | 37 | A 分发/路由到 B | 追踪动态调度 |
+|------|------:|------|------|
+| `dataflow` | 7069 | A 的输出流入 B 的输入 | 追数据来源 |
+| `call` | 4033 | A 调用 B | 追执行路径 |
+| `impact` | 407 | 改 A 会影响 B | 评估改动影响面 |
+| `inherit` | 96 | 子类继承父类 | 理解类层级 |
+| `dispatch` | 61 | 注册表 / 装饰器 / HTTP 路由分发 | 追动态调度 |
+
+边一律**静态可解析才建**。解析不到的不会编一个出来——`cdd callers` 对方法零结果时会提示未解析的候选调用点，而不是报告「没人用」。**「没找到调用者」不等于「没被调用」**，这句话写在输出里。
 
 ---
 
 ## 数据流水线
 
 ```
-源代码 → AST 解析 → 锚点提取 → 关系派生 → 路径策略 → 高层锚点检测 → 模块核生成 → 贪心合并 → 模块树 V2 → 任务上下文包
+源代码
+  │
+  ├─ parse/     11 种语言的 AST 适配器 → 符号、行号、导入
+  │
+  ├─ index/     锚点身份：结构哈希（raw / struct）+ 漂移检测
+  │             产物 .codedendrite/anchors.json
+  │
+  ├─ relate/    从锚点派生 5 种因果边
+  │             产物 .codedendrite/relations.json
+  │
+  └─ serve/     对外接口（78 个导出）+ CLI
+                └─ view/   HTML 图、关系图、调用时间线、DSH Lens
 ```
 
-五个阶段：
+`rebuild` 全量、`update` 增量，两者共用同一套语言适配层。增量靠内容哈希判定哪些文件真的变了，并把 `resolved` / `failed` 逐文件报出来——解析不了的文件是报告里的一行，不是静默消失。
 
-| 阶段 | 输入 | 输出 | 说明 |
-|------|------|------|------|
-| 提取 | 源代码文件 | 符号 + 哈希 | AST 解析，精确到行号 |
-| 索引 | 锚点 | anchors.json + relations.json | 1312 锚点，1794 边 |
-| 分析 | 锚点 + 关系 | 282 能力候选 | 路径策略 + 高层检测 + 打分 |
-| 合成 | 候选集 | 30 模块 · 41 边 | 贪心合并 + 四格填充 + 信心评级 |
-| 投喂 | 模块树 + 查询 | task_context.json | 四级上下文，compact ~400 tokens |
+**锚点身份是这套东西的地基。** `hash_mode: struct` 让改格式不断链，只有真改语义才断；漂移分 `ok / stale / missing_symbol / missing_file / renamed` 五档，`renamed` 单独一档是因为「搬到别处了」和「没了」是两件事。
 
 ---
 
-## Module Tree V2
+## 两个问题，两套输出
 
-首次扫描即可输出项目级功能块导览图。
+CDD 不假装一个视图能回答所有问题：
 
-**不是**函数聚类 + 猜名字；**是**多证据合成 + 置信度评级。
+**「这里有什么」** — `cdd draw` × `cdd outline`：目录 → 文件 → 类 → 函数。这是字典，用来找东西。
 
-### 模块四格
+**「这些怎么连的」** — `cdd chain` × `cdd callers` × `cdd show`：顺着因果边走。往下看它调了谁，往上看谁调它。
 
-每个模块必须回答：
+往下和往上不对称，而且这个不对称本身有信息量：
 
-```
-what:      这个模块做什么
-how:       内部怎么实现的
-functions: 关键入口和类
-role:      对项目的贡献
-```
-
-### 状态与信心
-
-| 状态 | 含义 |
-|------|------|
-| `core_flow` | 主链路必经模块 |
-| `independent_capability` | 可独立调用的能力 |
-| `support_utility` | 支撑工具 |
-| `dormant` | 休眠/未接线 |
-| `uncertain` | 证据不足 |
-
-| 信心 | 条件 |
-|------|------|
-| A | ≥4 类证据一致 |
-| B | ≥3 类证据 |
-| C | 2 类证据 |
-| D | <2 类证据 |
-
-### 当前仓库实测
-
-```
-模块总数: 30
-边数:     41
-状态分布: 19 core_flow, 11 independent_capability
-信心分布: 26 A, 4 B
-区域覆盖: 15/15 (100%)
-假模块:   0
-```
-
----
-
-## Task Context Packet
-
-给小模型/执行 agent 一个当前任务的窄上下文。
-
-### 四级上下文
-
-| 级别 | 内容 | Token 预算 |
-|------|------|-----------|
-| L0 | 项目一句话 + 顶层区域 | 30-80 |
-| L1 | 当前区域 + 模块摘要 | 100-300 |
-| L2 | 0-3 个可信候选 + why + next_command | 300-800 |
-| L3 | 源码片段（按需，默认不给） | 按需 |
-
-L2 是证据门，不是候选数量生成器。唯一精确符号/文件才直接给下一步；跨文件匹配返回 `ambiguous` 和 alternatives，不会拿同文件符号补齐。v2 只有 `exact` 关系能升级为导航命令。
-
-### compact 输出示例
-
-```
-项目: CodeDendrite: 30 个功能模块 (19 core_flow, 11 independent_capability)
-当前区域: api | 提供 create_anchor 等入口能力
-任务锚点: api/anchors.py::create_anchor
-导航置信: resolved/high | 完整 anchor ID
-
-候选:
-  C0 create_anchor [任务目标] → expand api/anchors.py::create_anchor
-  C1 Anchor [被任务调用 via call] → expand codeTree/anchor_engine.py::Anchor
-  C2 generate_all_anchors [调用了任务 via call] → expand api/anchors.py::generate_all_anchors
-
-边: create_anchor→Anchor(call), generate_all_anchors→create_anchor(call)
-```
-
-**总共 ~400 tokens，7B-4K 模型吃完后还剩 3.5K 上下文。**
-
-### Task Package 评测合同
-
-生成、定位和官方结果必须分栏，官方 harness 未完整运行时不会产生 solve rate：
-
-```bash
-cdd eval validate report.json
-cdd eval summary report.json
-```
-
-合同说明见 `doc/TASKPACKAGE_EVALUATION_CONTRACT.md`，机器可读 schema 位于 `evaluation/taskpackage_evaluation_v1.schema.json`。
-
-### 完整 Issue 证据包 v2
-
-让 CDD 直接读取完整 issue，并保留从文本信号到单一动作的证据链：
-
-```bash
-cdd issue issue.md <PROJECT_PATH> --compact
-```
-
-`task_context_packet_v2` 对同级强证据冲突返回 `ambiguous`，且最多生成一个结构化动作。详见 `doc/TASK_CONTEXT_PACKET_V2.md` 和 `schemas/task_context_packet_v2.schema.json`。
-
-v1/v2 共用三条证据通道：只有 `candidates` 可带动作，`alternatives` 和 `boundaries` 只保留证据。v1 缺少 resolution 的投影边统一标记为 `resolution_unavailable`；详见 `doc/EVIDENCE_SEMANTICS_V1_V2.md`。
-
-离线比较已有任务包运行时使用 `cdd replay <TASKS.json> <RUN_DIR> --output <REPORT.json>`。缺失索引的任务会保持 `null`，不会用后验 anchor 命中补齐。详见 `doc/OFFLINE_NAVIGATION_REPLAY.md`。
-
-使用 `cdd snapshot` 保存与 base commit 绑定的每题索引；使用 `cdd issue --session` 和 `cdd action done` 阻止重复动作。详见 `doc/TASK_SNAPSHOTS_AND_ACTION_SESSIONS.md`。
+- **往下越多 → 越重。** 一个 anchor 扇出大，说明它自己干的事多。
+- **往上越多 → 越基础。** 扇入大说明它是 `load_anchors` 这类公共底座——**知道它是谁就够了**，再往上每个调用者都会引出一整棵子树，而那一层对「这东西被谁用」没有增量。
 
 ---
 
 ## 快速开始
 
-### 全链路生成
-
 ```bash
-cd tools/CodeDendrite
-PYTHONPATH=. python api/cli.py . --module-tree-v2
+# 索引一个项目（首次自动全量建立，之后增量）
+cdd update /path/to/project
+cdd status /path/to/project          # 索引位置、数量、更新时间
+
+# 找东西
+cdd outline /path/to/project         # 目录/文件/符号大纲
+cdd file backend/main.py             # 这个文件里有什么
+cdd peek backend/main.py             # 现场解析，不需要索引
+
+# 顺着走
+cdd chain 'backend/main.py::Class.method'   # 它调了谁
+cdd callers 'backend/main.py::Class.method' # 谁调它
+cdd code 'backend/main.py::Class.method' -C 3   # 打印源码，上下各 3 行
+
+# 给小模型的上下文
+cdd context 'create_anchor' /path/to/project            # 紧凑文本
+cdd context 'create_anchor' /path/to/project --full     # 完整任务包
 ```
 
-输出：
-```
-.codedendrite/capability_candidates.json   # 282 候选
-.codedendrite/module_tree_v2.json          # 30 模块 · 41 边
-.codedendrite/module_tree_v2.html          # 可搜索导览页
-```
+目录永远可以省略，省略就是当前目录；也可以不切目录，路径直接跟在命令后面。
 
-### Task Context Packet
+### Python API
 
-```bash
-# 人用命令
-cdd context create_anchor .
-cdd context 'api/anchors.py::create_anchor' . --full
+```python
+from serve import scan_project, list_anchors, load_anchors, load_relations
+from serve import analyze_call_chain, trace_variable, find_subclasses
+from serve import find_definition, search_symbol, analyze_code
 
-# 生成并保存 JSON
-PYTHONPATH=. python api/cli.py . --task-context create_anchor
-
-# 直接输出 compact 文本（给小模型用）
-PYTHONPATH=. python api/cli.py . --task-context-compact PythonExtractor
+anchors  = load_anchors("/path/to/project")     # {anchor_id: Anchor}
+relations = load_relations("/path/to/project")  # {"edges": [...], "meta": {...}}
 ```
 
-### 按 YAML 配置展开调用链
-
-`cdd chain --yaml` 会先调用目标项目自己的 YAML 配置加载函数，再用配置值选择注册表、装饰器和动态分派对应的 Anchor。YAML 用于选择链路分支，调用链起点仍由第一个参数指定。与不带 YAML 的“全部候选图”相比，带 YAML 的结果会删除已确定但未选中的分支，因此节点数通常更少。
-
-```bash
-# 从真实模块入口展开全部静态可达链路
-cd /path/to/project
-cdd chain 'main.py::<module>' . \
-  --depth 99 \
-  --yaml config/runtime.yaml
-
-# 从指定函数开始，只看其下游链路
-cdd chain 'code/manager/runtime.py::build_runtime' . \
-  --depth 8 \
-  --yaml config/runtime.yaml
-```
-
-输出头部会显示实际采用的项目加载器、全部激活键；每个由配置选中的节点会显式标注 `[YAML → 注册键]`：
-
-```text
-YAML profile: config/runtime.yaml via code/dataset/load_config.py::load_config (12 active registry keys)
-YAML selected: answer.parse.normal, cfg.ollama, chat.normal, ...
-[2] OllamaProvider*  code/provider/provider.py:362  [YAML → client.ollama]
-[1] chat*  code/provider/provider.py:441  [YAML → chat.normal]
-[1] trigger_manual*  code/recall/trigger.py:35  [YAML → trigger.manual]
-```
-
-说明：
-
-- 使用项目自身已索引的 `config.load`、`yaml.load`、`load_config`、`load_yaml` 或 `parse_yaml` Anchor 解析配置，不写死某个项目路径。
-- 若项目加载器因缺少可选依赖而无法导入，安全回退会递归合并 `_BASE_`，再按最终配置选择链路；输出会列出回退方式和被包含文件。
-- 支持 `@register` 这类“注册键就是类名”的裸装饰器；配置里的 `YOLOv3`、`CSPResNet` 等名称可直接落到对应 class Anchor。
-- class 调用会继续进入 `__init__`；`obj.method()` 会结合局部赋值推断对象类型，避免链路停在类节点。
-- `create(cfg)` 这类工厂调用只展开该调用点对应的配置项；配置段内引用的子组件会继续形成父组件到子组件的 YAML 依赖边。
-- `main.py::<module>` 表示模块顶层执行入口；先运行 `cdd file main.py .` 可确认入口 Anchor。
-- YAML 未提供某项配置时，对应动态分支保留候选，不擅自选择。
-- 不带 `--yaml`：展示所有静态候选分支；带 `--yaml`：保留普通调用和 YAML 选中的动态分支。
-- 名称后的 `*` 表示该节点由 YAML 选中；`[YAML → key]` 给出选择它的配置键，不表示该函数只能通过 YAML 调用。
-- 对 YOLO 这类组件型 YAML，形如 `[from, repeats, component, args]` 的层声明会生成 `YAML component graph`；组件名只有在唯一精确匹配项目内 class Anchor 时才会链接，外部组件显示为 `unresolved`。
-- 项目加载器无法导入时会明确显示 `PyYAML.safe_load (fallback)`；不会假装项目加载器执行成功。
-- 结果是静态可达链路；反射、运行时生成调用和外部进程调用需要运行时 trace 补充。
-
-### 全部 CLI 命令
-
-| 命令 | 作用 |
-|------|------|
-| `--module-tree-v2` | 全链路：候选 + 模块树 + HTML |
-| `--capability-candidates` | 只生成候选集 |
-| `--module-tree-v2-html` | 只渲染 HTML |
-| `--module-tree-v2-check` | 检查完整性报告 |
-| `--path-policy-check PATH` | 检查路径角色 |
-| `--task-context QUERY` | 生成任务上下文包 |
-| `--task-context-compact QUERY` | 输出 compact 文本 |
+公开接口统一从 `serve` 层出（78 个导出，实现分布在各桶）。新代码建议直接 import 归属层，例如 `from index.api.anchors import load_anchors`。
 
 ---
 
-## AI Agent Skills
+## cdd 命令全集
 
-`.kimi-code/skills/` 下有三个开箱即用的 agent skill，让 LLM 编码助手（Kimi Code / Claude Code）直接走 CDD 的导航能力，而不是盲翻文件：
+`cdd` 是人用入口。下面是它现在真正提供的命令。
 
-| Skill | 职责 |
+### 索引
+
+| 命令 | 作用 |
+|---|---|
+| `cdd update [目录]` | 增量更新；首次自动全量建立 |
+| `cdd rebuild [目录]` | 强制全量重建 |
+| `cdd status [目录]` | 索引位置、数量、更新时间 |
+| `cdd peek <文件>` | 现场解析单个文件，不需要索引 |
+| `cdd outline [目录]` | 生成目录/文件/符号大纲 |
+| `cdd path-role <路径> [目录]` | 判断路径是源码/测试/生成文件 |
+
+### 查代码
+
+| 命令 | 作用 |
+|---|---|
+| `cdd file <文件> [目录]` | 文件内的类和函数 |
+| `cdd code <函数> [目录] [-C N]` | 打印源码和行号，可带上下文 |
+| `cdd anchors <关键词> [目录]` | 按文件路径关键词搜 anchor |
+| `cdd find <关键词> [目录]` | 搜调用/继承/数据流关系 |
+| `cdd show <节点ID> [目录]` | 展开节点的一层关系 |
+| `cdd chain <函数> [目录]` | 它继续调用了谁 |
+| `cdd callers <函数> [目录]` | 静态可解析的调用者 |
+| `cdd count [目录]` | 各种关系的数量 |
+| `cdd registered [目录]` | 装饰器注册关系 |
+
+### 模型上下文与任务包
+
+| 命令 | 作用 |
+|---|---|
+| `cdd context <问题> [目录]` | 紧凑任务上下文（可加 `--full`） |
+| `cdd issue <issue文件> [目录]` | 从完整 issue 生成证据包 v2 |
+| `cdd action status\|done <会话> ...` | 记录动作并阻止重复 |
+| `cdd debug <文件> "<错误>" [目录]` | 定位可疑函数 |
+
+### 可视化
+
+| 命令 | 作用 |
+|---|---|
+| `cdd draw [目录]` | 增量更新索引后，按文件画类/函数及调用入出边 |
+| `cdd graph [目录] [--focus <函数>]` | 关系图 HTML |
+| `cdd map [目录]` | 全项目代码地图 HTML |
+| `cdd timeline <函数> [目录]` | 调用链时间线 HTML |
+| `cdd summary [目录] [--full]` | 终端里的依赖摘要 |
+
+以上默认自动打开浏览器，加 `--no-open` 只生成文件。
+
+### 语义模块（可选能力）
+
+| 命令 | 作用 |
+|---|---|
+| `cdd modules <关键词> [目录]` | 搜语义模块 |
+| `cdd owner <函数> [目录]` | 这个函数属于哪个模块 |
+| `cdd module <模块ID> [目录]` | 看指定模块 |
+| `cdd module-graph [目录]` | 模块关系图 |
+| `cdd tree build\|check\|render\|candidates [目录]` | Module Tree V2 |
+
+模块树是把 anchor 再往上聚一层，回答「这套代码由哪些能力构成」。它需要额外一轮合成，**默认不参与日常导航**——`chain` / `callers` / `context` 都不依赖它。
+
+### Ignore 配置
+
+| 命令 | 作用 |
+|---|---|
+| `cdd ignore init [目录]` | 创建默认 `.codedendrite_ignore` |
+| `cdd ignore list \| show [目录]` | 分组查看 / 看原始配置 |
+| `cdd ignore add <规则> [目录] [--kind scan\|map\|privacy]` | 加规则 |
+| `cdd ignore remove <规则> [目录] [--kind ...]` | 删规则 |
+| `cdd ignore check <路径> [目录]` | 这个路径最终会被怎么处理 |
+
+改完规则要跑 `cdd rebuild`，旧索引才会彻底更新。
+
+### 临时调试日志（会改源码）
+
+`cdd log-add` / `log-file` / `log-folder` 沿调用链插 `print`，`cdd log-remove` 全部删掉。删完要 `cdd rebuild`，行号才回正。
+
+---
+
+## 项目结构
+
+```
+CodeDendrite/
+├── base/      类型与纯数据，无依赖       16 个模块
+│   ├── shared/          Anchor / Edge 等公共类型
+│   ├── anchorMemory/    记忆条目类型
+│   ├── anchorRepair/    漂移状态类型
+│   ├── codeGenome/      基因库类型
+│   ├── inheritance/     Python 继承类型
+│   ├── cpp_inheritance/ C++ 继承类型
+│   └── dataFlow/        数据流类型
+│
+├── parse/     AST 提取，只依赖 base      54 个模块
+│   ├── languages/       统一语言注册与解析管线
+│   ├── codeGenome/      多语言 AST 提取
+│   ├── codeAnalysis/    11 种语言的分析器
+│   ├── inheritance/     Python 继承提取
+│   ├── cpp_inheritance/ C++ 继承提取
+│   └── hash/            内容哈希与增量检测
+│
+├── index/     索引与锚点身份              25 个模块
+│   ├── api/             anchors / query 等对外函数
+│   ├── codeTree/        anchor_engine 与 anchor_engine_v2
+│   ├── inheritance/     类索引
+│   └── cpp_inheritance/ C++ 类索引
+│
+├── relate/    因果边                      53 个模块
+│   ├── api/             relations 读写与查询
+│   ├── dataFlow/        数据流分析
+│   ├── inheritance/     继承追踪
+│   ├── cpp_inheritance/ C++ 继承追踪
+│   ├── pathTracer/      路径追踪
+│   ├── dynamic/         运行时分发痕迹
+│   └── codeTree/        深度漂移分析
+│
+├── synth/     上层合成                    50 个模块
+│   ├── api/             task_context_packet / module_tree / action_session
+│   ├── smartAnalyzer/   智能分析器
+│   ├── context_builder/ 上下文压缩
+│   ├── anchorMemory/    锚点记忆
+│   ├── anchorRepair/    锚点修复
+│   └── codeTree/        anchor CLI / deep drift
+│
+├── view/      呈现                        27 个模块
+│   ├── visualize/       anchor_browser / 代码地图 / 关系图 / 时间线
+│   ├── codeAnalysis/    语言可视化入口
+│   ├── codeTree/        HTML viewer
+│   ├── lens/            DSH Session Lens 插件（当前工作树）
+│   └── lens-pcb/        Lens 的并行分支
+│
+├── serve/     对外接口                    39 个模块
+│   ├── api/             公开 API 出口（78 个导出）+ CLI
+│   ├── ai_tools/        agent 工具封装
+│   └── mcp_server.py    MCP server
+│
+├── skills/codedendrite/cdd   人用 CLI（住在包外面，见下）
+├── schemas/                  机器可读 schema
+└── tests/                    按层 + 按版本组织
+```
+
+**依赖方向是单向的**：`serve / view` → `synth` → `index / relate` → `parse` → `base`。反过来不成立。
+
+> `cdd` 的源码不在包内，在 `skills/codedendrite/cdd`。它 `parents[2]` 定位仓库根，所以为什么放在那个深度不是随便定的。改它不用重装包。
+
+---
+
+## 关键技术数据
+
+本仓库自测（`cdd status` / `cdd count`）：
+
+| 指标 | 数值 |
 |------|------|
-| `cdd-understand` | 项目理解：索引 → 枢纽排行 → 模块树 → chain 定位 → task-context 上下文包 |
-| `cdd-rebuild` | 拓扑重构：挪代码前先查上下游调用链评估影响面，每步增量重索引验证 |
-| `cdd-learn` | 项目学习：L0 全局地图 → L1 模块 → L2 调用链 → L3 数据流，分层带人读懂项目 |
+| 锚点总数 | **3795** — function 2280 · method 918 · css_rule 226 · class 209 · module 108 · dom_id 54 |
+| 因果边 | **11666** — dataflow 7069 · call 4033 · impact 407 · inherit 96 · dispatch 61 |
+| 源文件 | 391 |
+| 支持语言 | 11 种 — Python · TypeScript/JavaScript · C/C++ · Java · Kotlin · Go · Rust · Swift · PHP · Ruby · HTML |
+| 公开 API | 78 个导出 |
+| 锚点身份 | 结构哈希，`raw` / `struct` 两种模式 |
+| 漂移检测 | 5 档 — ok / stale / missing_symbol / missing_file / renamed |
+| 任务包 compact | 单次查询实测 283 tokens |
 
-想让其他项目也用上，把 `.kimi-code/skills/` 复制或软链到 `~/.kimi-code/skills/` 即可（新会话生效）。
+**已知边界**：静态可达链路只覆盖能静态解析的调用。反射、运行时生成、外部进程调用需要运行时 trace 补充——`cdd callers` 会在方法零结果时明确提示这一点，而不是让你把「没找到」读成「没被调用」。
 
 ---
 
@@ -328,94 +295,73 @@ YAML selected: answer.parse.normal, cfg.ollama, chat.normal, ...
 ```python
 @dataclass
 class Anchor:
-    id: str              # "file.py::symbol" 唯一标识
-    symbol: str          # 符号名
-    file: str            # 相对路径
-    line_start: int      # 起始行
-    line_end: int        # 结束行
-    hash: str            # 结构哈希（秒级变更检测）
-    callers: List[str]   # 调用者
-    callees: List[str]   # 被调用者
-    symbol_type: str     # function / class / method
-    drift: str           # ok / stale / missing_symbol / missing_file
-    # ... 继承、数据流、AI 记忆等字段
+    id: str                  # "相对路径::符号" 唯一标识
+    symbol: str              # 符号名；None 表示整个文件
+    file: str                # 项目相对路径
+    line_start: int
+    line_end: int
+    column_start: int
+    column_end: int
+    hash: str                # 结构哈希
+    signature: str
+    qualified_name: str
+    imports: list[str]
+    code: str                # 符号源码
+
+    # 关系（由 relate/ 填充）
+    callers: list[str]
+    callees: list[str]
+    call_sites: list[dict]
+    inputs: list[dict]
+    outputs: list[dict]
+
+    # 继承
+    parent_classes: list[str]
+    overrides: str | None
+    overridden_by: list[str]
+    mro: list[str]
+    own_methods: list[str]
+    effective_methods: dict[str, str]
+
+    # 身份与漂移
+    symbol_type: str         # function / method / class / module / dom_id / css_rule
+    language: str
+    drift: str               # ok / stale / missing_symbol / missing_file / renamed
+    description: str
+
+    # 控制流虚拟块与注册表
+    is_virtual: bool
+    virtual_kind: str | None
+    parent_anchor: str | None
+    scope_label: str | None
+    block_metadata: dict
+    registered_as: str | None
+
+    observations: list[str]  # 记忆条目
 ```
 
 ---
 
-## 项目结构
+## 模块树（可选）
 
-```
-tools/CodeDendrite/
-├── api/                        # 公开 API 层
-│   ├── anchors.py              # 锚点管理
-│   ├── relations.py            # 关系管理
-│   ├── path_policy.py          # 路径策略（三角色分类）
-│   ├── capability_candidates.py # 能力候选提取
-│   ├── module_tree_v2.py       # 模块树 V2 核心算法
-│   ├── task_context_packet.py  # 任务上下文包
-│   ├── analysis.py             # 符号搜索
-│   └── cli.py                  # CLI 入口
-├── codeGenome/                 # 多语言 AST 提取
-├── codeTree/                   # 锚点引擎 + 深度分析
-├── codeAnalysis/               # 专用及通用语言分析器
-├── languages/                  # V1.18 统一语言注册、全量/增量解析管线
-├── inheritance/                # Python 继承追踪
-├── cpp_inheritance/            # C++ 继承追踪
-├── dataFlow/                   # 数据流分析
-├── context_builder/            # 上下文构建器
-├── anchorRepair/               # 锚点修复
-├── anchorMemory/               # AI 记忆
-├── pathTracer/                 # 路径追踪
-├── smartAnalyzer/              # 智能分析器 V2
-├── hash/                       # AST 哈希计算
-├── shared/                     # 共享类型（Anchor dataclass）
-├── visualize/                  # HTML 可视化
-│   └── module_tree_v2.py       # 模块树可视化
-├── tests/                      # 测试
-│   ├── test_module_tree_v2_smoke.py   # 模块树测试 (20 项)
-│   └── test_task_context_smoke.py     # 任务包结构与证据门测试
-└── .codedendrite/              # 输出目录
-    ├── anchors.json
-    ├── relations.json
-    ├── module_tree_v2.json
-    ├── module_tree_v2.html
-    ├── task_context.json
-    └── capability_candidates.json
+模块树把 anchor 再聚一层成「语义模块」，回答的是**「这套代码由哪些能力构成」**，不是「有哪些文件」。它不是函数聚类加猜名字，是多证据合成加置信度评级：每个模块要说清 `what / how / functions / role` 四格，按区域覆盖和证据条数给 A/B/C/D 信心。
+
+它需要额外一轮合成，**日常导航不需要它**。`cdd chain` / `cdd callers` / `cdd context` 全部只依赖 anchors + relations。要看的时候：
+
+```bash
+cdd tree check          # 覆盖率和低置信模块
+cdd tree build          # 生成并打开 HTML
+cdd modules <关键词>     # 直接搜
 ```
 
 ---
 
-## 关键技术数据
+## DSH Session Lens
 
-| 指标 | 数值 |
-|------|------|
-| 可执行语言 | 20 种（Python、TS/JS、C/C++、Java、Kotlin、Go、Rust、Swift、PHP、Ruby、HTML、C#、Scala、Objective-C、Shell、PowerShell、Vue、Svelte、SQL） |
-| 配置路由 | YAML / JSON / TOML；YAML 可用 `cdd chain ... --yaml ...` 选择实际分支 |
-| 混合语言边 | V1.18 支持字面量 HTTP method + path 精确桥接；边保留行列、证据与解析状态 |
-| 更新一致性 | 全量 rebuild 与增量 update 共用语言适配层；单文件解析失败保留上次有效 Anchor |
-| 锚点总数 | 1312（537 function + 647 method + 128 class） |
-| 关系总数 | 1794（924 dataflow + 631 call + 127 impact + 75 inherit + 37 dispatch） |
-| 源文件数 | 157 |
-| 模块数 | 30（19 core_flow + 11 independent_capability） |
-| 区域覆盖 | 15/15 (100%) |
-| 模块树 JSON | ~99KB |
-| 任务包 compact | ~400 tokens |
+`view/lens/` 是插进 DeepSeek Harness 的插件，把仓库的真实 anchor 图浮在对话上面：被 agent 看过、改过的点亮，被 compaction 拿走的变淡。骨架是 CDD 的静态索引边，会话轨迹在上面上色。
 
----
-
-## 与 RAG 向量搜索的对比
-
-| 维度 | RAG + 向量搜索 | CodeDendrite |
-|------|---------------|-------------|
-| 粒度 | 文本块 | 函数/类/方法 |
-| 关系 | 无 | 5 种因果边 |
-| 可解释性 | 相似度分数 | 证据链 + 置信度 |
-| 增量更新 | 全量重建 | hash 增量检测 |
-| 小模型投喂 | 原始代码片段 | 分层预算 compact 文本 |
-| 模型依赖 | 需要 embedding model | 纯静态分析，零模型依赖 |
+亮度不是估的，是从 `session.surface` 直接读出来的——**一次 compaction 之后，图上直接看得见这轮把哪些代码从模型脑子里拿走了**。代码里没有边，图上就是断开的；先后碰过两个不相干的函数，不会被连成一条假路径。
 
 ---
 
 **License:** MIT
-**更新:** 2026-04-25
