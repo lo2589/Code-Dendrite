@@ -1,0 +1,137 @@
+{
+  "version": "task_context_packet_v1",
+  "task_query": "scan_project",
+  "model_profile": "small",
+  "resolved_anchor": null,
+  "match_count": 3,
+  "navigation": {
+    "status": "ambiguous",
+    "confidence": "low",
+    "safe_to_recommend": false,
+    "reason": "匹配跨越 3 个文件，不能当作下一步建议",
+    "match_types": [
+      "symbol_name"
+    ],
+    "candidate_files": [
+      "parse/codeGenome/api.py",
+      "synth/smartAnalyzer/orchestrator.py",
+      "synth/smartAnalyzer/smart_analyzer.py"
+    ],
+    "raw_match_count": 3,
+    "query": "scan_project",
+    "evidence_boundary": "候选表示静态定位证据，不表示缺陷已确认",
+    "relation_coverage": "available",
+    "relation_resolution_counts": {
+      "exact": 11634
+    }
+  },
+  "ambiguous_matches": [
+    {
+      "id": "A0",
+      "anchor": "parse/codeGenome/api.py::scan_project",
+      "file": "parse/codeGenome/api.py",
+      "line": 297,
+      "match_type": "symbol_name",
+      "resolution": "possible",
+      "reason": "任务入口存在歧义；只作为 alternative，不生成命令"
+    },
+    {
+      "id": "A1",
+      "anchor": "synth/smartAnalyzer/orchestrator.py::scan_project",
+      "file": "synth/smartAnalyzer/orchestrator.py",
+      "line": 143,
+      "match_type": "symbol_name",
+      "resolution": "possible",
+      "reason": "任务入口存在歧义；只作为 alternative，不生成命令"
+    },
+    {
+      "id": "A2",
+      "anchor": "synth/smartAnalyzer/smart_analyzer.py::SmartCodeAnalyzer.scan_project",
+      "file": "synth/smartAnalyzer/smart_analyzer.py",
+      "line": 350,
+      "match_type": "symbol_name",
+      "resolution": "possible",
+      "reason": "任务入口存在歧义；只作为 alternative，不生成命令"
+    }
+  ],
+  "project_brief": {
+    "project": "CodeDendrite_refactor: 40 个功能模块 (24 independent_capability, 16 core_flow)",
+    "areas": [
+      "base",
+      "index",
+      "parse",
+      "relate",
+      "serve",
+      "synth",
+      "view"
+    ]
+  },
+  "error_packet": {},
+  "area_map": {
+    "current_area": "unknown",
+    "task_anchor": "",
+    "area_modules": [],
+    "responsibility": "无法定位任务锚点"
+  },
+  "task_slice": {
+    "entry": "",
+    "candidates": [],
+    "alternatives": [
+      {
+        "id": "A0",
+        "anchor": "parse/codeGenome/api.py::scan_project",
+        "file": "parse/codeGenome/api.py",
+        "line": 297,
+        "match_type": "symbol_name",
+        "resolution": "possible",
+        "reason": "任务入口存在歧义；只作为 alternative，不生成命令"
+      },
+      {
+        "id": "A1",
+        "anchor": "synth/smartAnalyzer/orchestrator.py::scan_project",
+        "file": "synth/smartAnalyzer/orchestrator.py",
+        "line": 143,
+        "match_type": "symbol_name",
+        "resolution": "possible",
+        "reason": "任务入口存在歧义；只作为 alternative，不生成命令"
+      },
+      {
+        "id": "A2",
+        "anchor": "synth/smartAnalyzer/smart_analyzer.py::SmartCodeAnalyzer.scan_project",
+        "file": "synth/smartAnalyzer/smart_analyzer.py",
+        "line": 350,
+        "match_type": "symbol_name",
+        "resolution": "possible",
+        "reason": "任务入口存在歧义；只作为 alternative，不生成命令"
+      }
+    ],
+    "boundaries": [],
+    "context_edges": []
+  },
+  "anchor_packet": {
+    "target": null,
+    "upstream": [],
+    "downstream": [],
+    "boundaries": []
+  },
+  "control_packet": {
+    "target": null,
+    "call_paths": [],
+    "boundaries": []
+  },
+  "source_slices": [],
+  "_level3_on_demand": true,
+  "token_estimate": {
+    "level0": 42,
+    "level1": 27,
+    "level2": 221,
+    "error": 0,
+    "navigation": 124,
+    "anchor_packet": 17,
+    "control_packet": 13,
+    "source_slices": 0,
+    "total": 444,
+    "prompt": 283
+  },
+  "prompt": "Read the package in order: navigation, project, error, anchors, control. Candidates are static evidence, not a confirmed bug location. If navigation is ambiguous, search before expanding.\n\nNavigation:\n{\n  \"status\": \"ambiguous\",\n  \"confidence\": \"low\",\n  \"safe_to_recommend\": false,\n  \"reason\": \"匹配跨越 3 个文件，不能当作下一步建议\",\n  \"match_types\": [\n    \"symbol_name\"\n  ],\n  \"candidate_files\": [\n    \"parse/codeGenome/api.py\",\n    \"synth/smartAnalyzer/orchestrator.py\",\n    \"synth/smartAnalyzer/smart_analyzer.py\"\n  ],\n  \"raw_match_count\": 3,\n  \"query\": \"scan_project\",\n  \"evidence_boundary\": \"候选表示静态定位证据，不表示缺陷已确认\",\n  \"relation_coverage\": \"available\",\n  \"relation_resolution_counts\": {\n    \"exact\": 11634\n  }\n}\n\nProject:\n{\n  \"project\": \"CodeDendrite_refactor: 40 个功能模块 (24 independent_capability, 16 core_flow)\",\n  \"areas\": [\n    \"base\",\n    \"index\",\n    \"parse\",\n    \"relate\",\n    \"serve\",\n    \"synth\",\n    \"view\"\n  ]\n}\n\nAnchors:\n{\n  \"target\": null,\n  \"upstream\": [],\n  \"downstream\": [],\n  \"boundaries\": []\n}\n\nControl:\n{\n  \"target\": null,\n  \"call_paths\": [],\n  \"boundaries\": []\n}"
+}

@@ -1,0 +1,12 @@
+graph TD
+  m_sm_001["analyze_project_structur\n(sm_001)\nentry: analyze_project_structure"]
+  m_sm_002["create_analyzer\n(sm_002)\nentry: create_analyzer"]
+  m_sm_003["dispatch\n(sm_003)\nentry: Router.dispatch / SuperAnalyzer._analyze_tree"]
+  m_sm_004["generate_mermaid_for\n(sm_004)\nentry: generate_mermaid_for_project"]
+  m_sm_005["context\n(sm_005)\nentry: tool_context / cmd_report"]
+  m_sm_006["main\n(sm_006)\nentry: main / main"]
+  m_sm_007["jump\n(sm_007)\nentry: jump"]
+  m_sm_003 -->|call:10| m_sm_007
+  m_sm_003 -->|call:1| m_sm_006
+  m_sm_005 -->|call:1| m_sm_007
+  m_sm_006 -->|call:1| m_sm_007
