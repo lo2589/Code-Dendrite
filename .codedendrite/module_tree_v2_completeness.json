@@ -1,0 +1,10 @@
+{
+  "area_coverage": {
+    "total_areas": 7,
+    "covered": 7,
+    "uncovered": []
+  },
+  "fake_module_warnings": [],
+  "low_confidence_modules": [],
+  "missing_evidence": []
+}

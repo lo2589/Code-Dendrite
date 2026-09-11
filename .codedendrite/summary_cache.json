@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-09-05T10:59:54.625436Z",
+  "summary_version": 3,
+  "call_structure_hash": "82111f1909af8b24bc2593a641bb0f468c48da704473b985b623e5298177e69f",
+  "project_name": "CodeDendrite_refactor",
+  "project_one_line": "Coordinate analyze project structur, cmd report workflows",
+  "modules": [
+    {
+      "id": "sm_001",
+      "name": "analyze_project_structur",
+      "responsibility": "Handle analyze project structure"
+    },
+    {
+      "id": "sm_002",
+      "name": "cmd_report",
+      "responsibility": "Coordinate cmd report, format map, trace path"
+    },
+    {
+      "id": "sm_003",
+      "name": "context",
+      "responsibility": "Handle tool context"
+    },
+    {
+      "id": "sm_004",
+      "name": "dispatch",
+      "responsibility": "Coordinate dispatch, analyze tree, run"
+    },
+    {
+      "id": "sm_005",
+      "name": "generate_mermaid_for",
+      "responsibility": "Handle generate mermaid for project"
+    },
+    {
+      "id": "sm_006",
+      "name": "main",
+      "responsibility": "Coordinate main, main"
+    },
+    {
+      "id": "sm_007",
+      "name": "jump",
+      "responsibility": "Handle jump"
+    }
+  ]
+}

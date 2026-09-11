@@ -1,0 +1,414 @@
+{
+  "generated_at": "2026-09-05T10:59:54.621247Z",
+  "phase": 1,
+  "call_structure_hash": "82111f1909af8b24bc2593a641bb0f468c48da704473b985b623e5298177e69f",
+  "semantic_modules": [
+    {
+      "id": "sm_001",
+      "name": "analyze_project_structur",
+      "responsibility": "Handle analyze project structure",
+      "responsibility_hint": "ProjectStructureAnalyzer -> __init__ -> _analyze_file -> _scan_directory",
+      "entry_functions": [
+        {
+          "symbol_id": "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::analyze_project_structure",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer.__init__",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer._analyze_file",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer._scan_directory",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer.analyze",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer.generate_summary",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer.to_json",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::ProjectStructureAnalyzer.to_tree_string",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::analyze_project_structure",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::analyzer.to_json",
+        "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py::analyzer.to_tree_string"
+      ],
+      "cross_module_edges": [],
+      "source_dirs": [
+        "parse/"
+      ]
+    },
+    {
+      "id": "sm_002",
+      "name": "cmd_report",
+      "responsibility": "Coordinate cmd report, format map, trace path",
+      "responsibility_hint": "trace_path -> to_mermaid -> to_pipeline",
+      "entry_functions": [
+        {
+          "symbol_id": "synth/codeTree/anchor_cli/load_config.py::cmd_report",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "synth/context_builder/formatter.py::format_map",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "synth/smartAnalyzer/smart_analyzer_patch.py::SmartCodeAnalyzerV2.trace_path",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "synth/codeTree/anchor_cli/load_config.py::cmd_coverage",
+        "synth/codeTree/anchor_cli/load_config.py::cmd_report",
+        "synth/codeTree/anchor_cli/load_config.py::load_config",
+        "synth/codeTree/anchor_cli/load_config.py::print",
+        "synth/codeTree/deep_drift/list_all_symbols.py::_list_all_symbols",
+        "synth/context_builder/formatter.py::_to_compact",
+        "synth/context_builder/formatter.py::_to_json",
+        "synth/context_builder/formatter.py::format_map",
+        "synth/smartAnalyzer/smart_analyzer_patch.py::SmartCodeAnalyzerV2.trace_path",
+        "synth/smartAnalyzer/smart_analyzer_patch.py::result.to_mermaid",
+        "synth/smartAnalyzer/smart_analyzer_patch.py::result.to_pipeline"
+      ],
+      "cross_module_edges": [],
+      "source_dirs": [
+        "synth/"
+      ]
+    },
+    {
+      "id": "sm_003",
+      "name": "context",
+      "responsibility": "Handle tool context",
+      "responsibility_hint": "load_anchors -> _anchors -> _module_tree -> _relations",
+      "entry_functions": [
+        {
+          "symbol_id": "serve/mcp_server.py::tool_context",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "index/api/anchors/core_load.py::load_anchors",
+        "serve/mcp_server.py::_anchors",
+        "serve/mcp_server.py::_module_tree",
+        "serve/mcp_server.py::_relations",
+        "serve/mcp_server.py::json.dumps",
+        "serve/mcp_server.py::tool_context",
+        "synth/api/task_context_packet/anchor.py::_anchor_attr",
+        "synth/api/task_context_packet/anchor.py::_bounded_matches",
+        "synth/api/task_context_packet/anchor.py::_build_edge_indexes",
+        "synth/api/task_context_packet/anchor.py::_find_anchor_area",
+        "synth/api/task_context_packet/anchor.py::_match_sort_key",
+        "synth/api/task_context_packet/anchor.py::_score_related_symbol",
+        "synth/api/task_context_packet/anchor.py::build_level0",
+        "synth/api/task_context_packet/anchor.py::build_level1",
+        "synth/api/task_context_packet/anchor.py::build_level2",
+        "synth/api/task_context_packet/anchor.py::resolve_task_anchor",
+        "synth/api/task_context_packet/plugin.py::_find_anchor_module",
+        "synth/api/task_context_packet/plugin.py::_is_test_file"
+      ],
+      "cross_module_edges": [
+        {
+          "to_module": "sm_007",
+          "edge_type": "call",
+          "count": 1,
+          "top_pairs": [
+            [
+              "serve/mcp_server.py::_anchors",
+              "index/api/anchors/core_load.py::load_anchors"
+            ]
+          ]
+        }
+      ],
+      "source_dirs": [
+        "index/",
+        "serve/",
+        "synth/"
+      ]
+    },
+    {
+      "id": "sm_004",
+      "name": "dispatch",
+      "responsibility": "Coordinate dispatch, analyze tree, run",
+      "responsibility_hint": "get_anchor -> load_anchors -> load_relations -> _current_python_range",
+      "entry_functions": [
+        {
+          "symbol_id": "relate/dynamic/test_trace_target.py::Router.dispatch",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "relate/inheritance/super_analyzer/super_chain.py::SuperAnalyzer._analyze_tree",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "serve/api/task_runner.py::run",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "index/api/anchors/anchors_list.py::get_anchor",
+        "index/api/anchors/core_load.py::load_anchors",
+        "relate/api/relations/load_relations.py::load_relations",
+        "relate/dynamic/test_trace_target.py::Router.dispatch",
+        "relate/dynamic/test_trace_target.py::Router.handle_bye",
+        "relate/dynamic/test_trace_target.py::Router.handle_hello",
+        "relate/dynamic/test_trace_target.py::Router.handle_unknown",
+        "relate/dynamic/test_trace_target.py::build_message",
+        "relate/dynamic/test_trace_target.py::greet",
+        "relate/inheritance/super_analyzer/super_chain.py::SuperAnalyzer._analyze_tree",
+        "relate/inheritance/super_analyzer/super_chain.py::SuperCallInfo",
+        "relate/inheritance/super_analyzer/super_chain.py::super_args.append",
+        "serve/api/inspector/find_anchor.py::_current_python_range",
+        "serve/api/inspector/find_anchor.py::find_anchor",
+        "serve/api/inspector/find_anchor.py::get_anchor_relations",
+        "serve/api/inspector/get_downward_chain.py::get_anchor_source",
+        "serve/api/inspector/get_upward_chain.py::get_upward_chain",
+        "serve/api/inspector/get_upward_chain.py::list_file_anchors",
+        "serve/api/task_runner.py::_expand_info",
+        "serve/api/task_runner.py::_nav_first_msg",
+        "serve/api/task_runner.py::_parse_cmd",
+        "serve/api/task_runner.py::_run_tool",
+        "serve/api/task_runner.py::diffs.append",
+        "serve/api/task_runner.py::msgs.append",
+        "serve/api/task_runner.py::print",
+        "serve/api/task_runner.py::run",
+        "synth/api/jump_packet.py::_infer_brief",
+        "synth/api/jump_packet.py::build_jump_packet"
+      ],
+      "cross_module_edges": [
+        {
+          "to_module": "sm_007",
+          "edge_type": "call",
+          "count": 10,
+          "top_pairs": [
+            [
+              "serve/api/inspector/get_downward_chain.py::get_anchor_source",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ],
+            [
+              "serve/api/inspector/get_upward_chain.py::get_upward_chain",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ],
+            [
+              "serve/api/inspector/get_upward_chain.py::get_upward_chain",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ],
+            [
+              "serve/api/inspector/find_anchor.py::get_anchor_relations",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ],
+            [
+              "serve/api/inspector/find_anchor.py::get_anchor_relations",
+              "index/api/anchors/anchors_list.py::get_anchor"
+            ]
+          ]
+        },
+        {
+          "to_module": "sm_006",
+          "edge_type": "call",
+          "count": 1,
+          "top_pairs": [
+            [
+              "serve/api/task_runner.py::_run_tool",
+              "serve/api/inspector/get_upward_chain.py::list_file_anchors"
+            ]
+          ]
+        }
+      ],
+      "source_dirs": [
+        "index/",
+        "relate/",
+        "serve/",
+        "synth/"
+      ]
+    },
+    {
+      "id": "sm_005",
+      "name": "generate_mermaid_for",
+      "responsibility": "Handle generate mermaid for project",
+      "responsibility_hint": "MermaidGenerator -> __init__ -> _build_flow_graph -> _calculate_duration",
+      "entry_functions": [
+        {
+          "symbol_id": "view/codeAnalysis/graph/__init__.py::generate_mermaid_for_project",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.__init__",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._build_flow_graph",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._calculate_duration",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._escape_string",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._find_entry_functions",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._find_function_by_name",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._generate_gantt_full",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._generate_gantt_simple",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._generate_sequence_recursive",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._group_by_module",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator._shorten_name",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.generate_call_graph",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.generate_execution_flow",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.generate_full_report",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.generate_gantt",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.generate_sequence",
+        "view/codeAnalysis/graph/__init__.py::MermaidGenerator.generate_summary",
+        "view/codeAnalysis/graph/__init__.py::generate_mermaid_for_project",
+        "view/codeAnalysis/graph/__init__.py::generator.generate_call_graph",
+        "view/codeAnalysis/graph/__init__.py::generator.generate_execution_flow",
+        "view/codeAnalysis/graph/__init__.py::generator.generate_full_report",
+        "view/codeAnalysis/graph/__init__.py::generator.generate_gantt",
+        "view/codeAnalysis/graph/__init__.py::generator.generate_sequence"
+      ],
+      "cross_module_edges": [],
+      "source_dirs": [
+        "view/"
+      ]
+    },
+    {
+      "id": "sm_006",
+      "name": "main",
+      "responsibility": "Coordinate main, main",
+      "responsibility_hint": "append_trace_event -> clear_trace_events -> get_dynamic_dir -> iter_trace_events",
+      "entry_functions": [
+        {
+          "symbol_id": "relate/dynamic/trace_cli.py::main",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "serve/api/autolog.py::main",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "index/api/anchors/core_load.py::load_anchors",
+        "relate/dynamic/dynamic_store.py::append_trace_event",
+        "relate/dynamic/dynamic_store.py::clear_trace_events",
+        "relate/dynamic/dynamic_store.py::get_dynamic_dir",
+        "relate/dynamic/dynamic_store.py::iter_trace_events",
+        "relate/dynamic/dynamic_store.py::load_executed_edges",
+        "relate/dynamic/dynamic_store.py::save_executed_edges",
+        "relate/dynamic/dynamic_store.py::save_routes",
+        "relate/dynamic/edge_extractor.py::build_edge_key",
+        "relate/dynamic/edge_extractor.py::extract_executed_edges",
+        "relate/dynamic/merge.py::_find_match",
+        "relate/dynamic/merge.py::merge_static_with_executed",
+        "relate/dynamic/route_mapper.py::_is_dispatcher",
+        "relate/dynamic/route_mapper.py::extract_dispatch_routes",
+        "relate/dynamic/trace_cli.py::cmd_edges",
+        "relate/dynamic/trace_cli.py::cmd_merge",
+        "relate/dynamic/trace_cli.py::cmd_routes",
+        "relate/dynamic/trace_cli.py::cmd_trace",
+        "relate/dynamic/trace_cli.py::main",
+        "relate/dynamic/trace_logger.py::make_trace_callback",
+        "relate/dynamic/trace_runner.py::run_with_trace",
+        "serve/api/autolog.py::_find_def_line",
+        "serve/api/autolog.py::_indent_of",
+        "serve/api/autolog.py::_insert_logs_in_file",
+        "serve/api/autolog.py::cmd_add",
+        "serve/api/autolog.py::cmd_add_file",
+        "serve/api/autolog.py::cmd_add_folder",
+        "serve/api/autolog.py::cmd_remove",
+        "serve/api/autolog.py::main",
+        "serve/api/inspector/get_upward_chain.py::list_file_anchors"
+      ],
+      "cross_module_edges": [
+        {
+          "to_module": "sm_007",
+          "edge_type": "call",
+          "count": 1,
+          "top_pairs": [
+            [
+              "serve/api/inspector/get_upward_chain.py::list_file_anchors",
+              "index/api/anchors/core_load.py::load_anchors"
+            ]
+          ]
+        }
+      ],
+      "source_dirs": [
+        "index/",
+        "relate/",
+        "serve/"
+      ]
+    },
+    {
+      "id": "sm_007",
+      "name": "jump",
+      "responsibility": "Handle jump",
+      "responsibility_hint": "Edge -> get_anchor -> resolve_anchor_candidates -> filter_anchors_by_file",
+      "entry_functions": [
+        {
+          "symbol_id": "serve/api/navigator/jump.py::jump",
+          "confidence": "high",
+          "signal": "dispatch_source"
+        }
+      ],
+      "member_symbols": [
+        "base/shared/types.py::Edge",
+        "index/api/anchors/anchors_list.py::get_anchor",
+        "index/api/anchors/anchors_list.py::resolve_anchor_candidates",
+        "index/api/anchors/core_load.py::filter_anchors_by_file",
+        "index/api/anchors/core_load.py::load_anchors",
+        "relate/api/relations/generate_relations.py::generate_relations",
+        "relate/api/relations/load_relations.py::_build_id_index",
+        "relate/api/relations/load_relations.py::_build_virtual_skip_pairs",
+        "relate/api/relations/load_relations.py::_callee_condition",
+        "relate/api/relations/load_relations.py::_callee_seq",
+        "relate/api/relations/load_relations.py::_callee_target",
+        "relate/api/relations/load_relations.py::_edge_hash",
+        "relate/api/relations/load_relations.py::_norm",
+        "relate/api/relations/load_relations.py::_resolve_id",
+        "relate/api/relations/load_relations.py::expand_node",
+        "relate/api/relations/load_relations.py::flatten_virtual",
+        "relate/api/relations/load_relations.py::get_node_edges",
+        "relate/api/relations/load_relations.py::load_relations",
+        "serve/api/navigator/jump.py::Step",
+        "serve/api/navigator/jump.py::_refresh",
+        "serve/api/navigator/jump.py::_write_current_target",
+        "serve/api/navigator/jump.py::_write_log",
+        "serve/api/navigator/jump.py::jump",
+        "serve/api/navigator/target.py::Step",
+        "serve/api/navigator/target.py::Target",
+        "serve/api/navigator/target.py::_build_context_summary",
+        "serve/api/navigator/target.py::_extract_code",
+        "serve/api/navigator/target.py::_refresh",
+        "serve/api/navigator/target.py::_write_current_target",
+        "serve/api/navigator/target.py::_write_log",
+        "synth/api/module_tree/compute_call_structure_hash.py::_build_semantic_modules",
+        "synth/api/module_tree/compute_call_structure_hash.py::_collect_dispatch_sources",
+        "synth/api/module_tree/compute_call_structure_hash.py::_collect_dispatch_targets",
+        "synth/api/module_tree/compute_call_structure_hash.py::_compute_call_structure_hash",
+        "synth/api/module_tree/compute_call_structure_hash.py::_find_cli_entries",
+        "synth/api/module_tree/compute_call_structure_hash.py::_normalize_anchors",
+        "synth/api/module_tree/compute_call_structure_hash.py::_normalize_relations",
+        "synth/api/module_tree/module.py::_score_entries",
+        "synth/api/module_tree/module.py::generate_module_tree",
+        "synth/api/module_tree/module.py::get_module",
+        "synth/api/module_tree/module.py::load_module_tree",
+        "synth/api/module_tree/module.py::query_modules",
+        "synth/context_builder/builder.py::ContextBuilder",
+        "synth/context_builder/builder.py::ContextBuilder.__init__",
+        "synth/context_builder/builder.py::ContextBuilder._build_entry_section",
+        "synth/context_builder/builder.py::ContextBuilder._build_hotspot_section",
+        "synth/context_builder/builder.py::ContextBuilder._build_inheritance_section",
+        "synth/context_builder/builder.py::ContextBuilder._build_module_section",
+        "synth/context_builder/builder.py::ContextBuilder._build_module_tree_section",
+        "synth/context_builder/builder.py::ContextBuilder._build_symbol_index",
+        "synth/context_builder/builder.py::ContextBuilder._ensure_loaded",
+        "synth/context_builder/builder.py::ContextBuilder._strip_anchors",
+        "synth/context_builder/builder.py::ContextBuilder.build_map"
+      ],
+      "cross_module_edges": [],
+      "source_dirs": [
+        "base/",
+        "index/",
+        "relate/",
+        "serve/",
+        "synth/"
+      ]
+    }
+  ]
+}

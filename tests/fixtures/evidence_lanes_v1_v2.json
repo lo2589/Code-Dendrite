@@ -1,0 +1,15 @@
+{
+  "v1_projection": {
+    "candidate_entries": ["app.py::main"],
+    "boundary_resolutions": ["resolution_unavailable"]
+  },
+  "v2_program_model": {
+    "candidate_entries": ["app.py::main", "app.py::helper"],
+    "boundary_resolutions": ["possible", "unresolved", "unsupported"]
+  },
+  "ambiguous_entry": {
+    "candidate_count": 0,
+    "alternative_count": 2,
+    "recommended_command_count": 0
+  }
+}
