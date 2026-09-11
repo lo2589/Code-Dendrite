@@ -1,0 +1,1258 @@
+#!/usr/bin/env python3
+"""Human-friendly local CLI for CodeDendrite."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+IGNORE_SECTIONS = {
+    "scan": "scan_exclude",
+    "map": "map_exclude",
+    "privacy": "privacy_mask",
+}
+MINIMAL_IGNORE = """# CodeDendrite ignore rules
+
+[scan_exclude]
+.codedendrite/
+**/.codedendrite/
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
+.git/
+node_modules/
+.venv/
+venv/
+
+[map_exclude]
+
+[privacy_mask]
+.env
+.env.*
+*secret*
+*password*
+*credential*
+*api_key*
+"""
+
+
+def project_dir(raw: str | None) -> Path:
+    target = Path(raw or ".").expanduser().resolve()
+    if not target.is_dir():
+        raise SystemExit(f"目录不存在：{target}")
+    return target
+
+
+def require_index(target: Path) -> None:
+    if not (target / ".codedendrite" / "anchors.json").exists():
+        raise SystemExit(f"该目录还没有 CodeDendrite 索引，先运行：cdd update {target}")
+
+
+def python_env() -> dict:
+    """子解释器的环境：必须带仓库根，否则桶模块互相 import 不了。
+
+    入口点现在是桶里的模块（`build_file_index.py` 开头就是
+    `from view.visualize.anchor_browser.dom_sidebar import ...`），而子进程的
+    sys.path[0] 是脚本自己所在的目录，不是仓库根。`run_module` 一直带着，
+    `run_script` 没带——于是所有脚本入口都死在 "No module named 'view'"。
+    """
+    env = os.environ.copy()
+    old_path = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(REPO_ROOT) if not old_path else str(REPO_ROOT) + os.pathsep + old_path
+    )
+    return env
+
+
+def run_module(module: str, args: list[str]) -> int:
+    command = [sys.executable, "-m", module, *args]
+    return subprocess.run(command, cwd=REPO_ROOT, env=python_env(), check=False).returncode
+
+
+def run_script(script: Path, args: list[str]) -> int:
+    command = [sys.executable, str(script), *args]
+    return subprocess.run(command, cwd=REPO_ROOT, env=python_env(), check=False).returncode
+
+
+def unavailable(command: str, why: str) -> int:
+    """A subcommand whose backend is not in this tree.
+
+    Kept as a named refusal rather than a dead module string: a missing
+    `tools.CodeDendrite.evaluation.*` reports "No module named 'tools'", which
+    points at the old layout instead of at the actual answer.
+    """
+    print(f"{command} 不可用：{why}", file=sys.stderr)
+    return 3
+
+
+def open_output(path: Path, no_open: bool = False) -> int:
+    if no_open:
+        print(f"已生成，未自动打开：{path}")
+        return 0
+    if not path.exists():
+        print(f"生成命令成功，但没有找到可视化文件：{path}", file=sys.stderr)
+        return 1
+    if sys.platform == "darwin":
+        opener = "open"
+    elif os.name == "nt":
+        os.startfile(path)  # type: ignore[attr-defined]
+        print(f"已打开：{path}")
+        return 0
+    else:
+        opener = shutil.which("xdg-open")
+        if not opener:
+            print(f"系统没有找到 xdg-open，请手动打开：{path}")
+            return 1
+    result = subprocess.run(
+        [opener, str(path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode:
+        print(f"自动打开失败，请手动打开：{path}", file=sys.stderr)
+        return result.returncode
+    print(f"已打开：{path}")
+    return 0
+
+
+def run_visual(
+    module: str,
+    args: list[str],
+    output: Path,
+    no_open: bool = False,
+) -> int:
+    result = run_module(module, args)
+    if result:
+        return result
+    return open_output(output, no_open=no_open)
+
+
+def run_visual_script(
+    script: Path,
+    args: list[str],
+    output: Path,
+    no_open: bool = False,
+) -> int:
+    result = run_script(script, args)
+    if result:
+        return result
+    return open_output(output, no_open=no_open)
+
+
+def normalize_file(raw: str, target: Path) -> str:
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        return raw
+    try:
+        return path.resolve().relative_to(target).as_posix()
+    except ValueError:
+        return str(path.resolve())
+
+
+def json_count(path: Path, preferred_keys: tuple[str, ...]) -> str:
+    if not path.exists():
+        return "-"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return "无法读取"
+    for key in preferred_keys:
+        value = data.get(key) if isinstance(data, dict) else None
+        if isinstance(value, (list, dict)):
+            return str(len(value))
+        if isinstance(value, int):
+            return str(value)
+    if isinstance(data, (list, dict)):
+        return str(len(data))
+    return "?"
+
+
+def peek_file(target: Path, raw_path: str) -> int:
+    """Read one file's anchors right now, without an index.
+
+    Every read command asks the index first, which is right for questions about
+    relations — those only exist once the whole tree has been seen. But "what is
+    in this file" needs nothing of the sort, and refusing to answer it until a
+    full scan has run is what makes a file outside the project, or one written a
+    minute ago, invisible.
+
+    Only what is in the file is reported, and the output says so. An anchor here
+    has no callers and no callees, because whether anything calls it is not a
+    property of this file.
+    """
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = target / candidate
+    candidate = candidate.resolve()
+    if not candidate.is_file():
+        print(f"没有这个文件：{candidate}")
+        return 1
+
+    codedendrite_root = REPO_ROOT
+    if str(codedendrite_root) not in sys.path:
+        sys.path.insert(0, str(codedendrite_root))
+    try:
+        from parse.languages.registry import create_analyzer, language_for_path
+    except Exception as error:
+        print(f"读不到语言注册表：{error}")
+        return 1
+
+    spec = language_for_path(candidate)
+    if spec is None and not candidate.suffix:
+        # A file with no extension is usually a script, and it says what it is on
+        # its first line. Not guessing here would leave every CLI entry point in
+        # a repository unreadable — including this one.
+        try:
+            first = candidate.open(encoding="utf8", errors="ignore").readline()
+        except Exception:
+            first = ""
+        if first.startswith("#!"):
+            for name, probe in (("python", "python"), ("javascript", "node"),
+                                ("ruby", "ruby"), ("php", "php"), ("shell", "sh")):
+                if probe in first:
+                    spec = language_for_path("x." + {"python": "py", "javascript": "js",
+                                                     "ruby": "rb", "php": "php",
+                                                     "shell": "sh"}[name])
+                    break
+    if spec is None:
+        print(f"不认识这个文件：{candidate.suffix or '(没有扩展名，也没有 shebang)'}")
+        return 1
+    analyzer = create_analyzer(candidate.parent, "probe" + spec.extensions[0])
+    if analyzer is None:
+        print(f"{spec.name}：只登记了扩展名，没有分析器")
+        return 1
+
+    try:
+        module = analyzer.analyze_file(str(candidate))
+    except Exception as error:
+        print(f"解析失败：{error}")
+        return 1
+
+    functions = list(getattr(module, "functions", None) or [])
+    classes = list(getattr(module, "classes", None) or [])
+    imports = list(getattr(module, "imports", None) or [])
+
+    try:
+        shown = candidate.relative_to(target)
+    except ValueError:
+        shown = candidate
+    print(f"文件：{shown}")
+    print(f"语言：{spec.name}")
+    if classes:
+        print(f"类：{', '.join(str(c) for c in classes[:20])}")
+    if imports:
+        print(f"import：{', '.join(str(i) for i in imports[:12])}"
+              + (f" …共 {len(imports)}" if len(imports) > 12 else ""))
+    if not functions:
+        print("没有解析出函数或方法。")
+    else:
+        print(f"符号 {len(functions)} 个：")
+        for fn in functions:
+            name = getattr(fn, "name", "?")
+            line = getattr(fn, "line_number", None)
+            owner = getattr(fn, "class_name", None) or getattr(fn, "parent", None)
+            label = f"{owner}.{name}" if owner else name
+            print(f"  {label:<48s} {line if line else ''}")
+    print("现算的，只有这个文件里的东西。谁调用它、它调用谁，要有索引才知道"
+          "（cdd update）。")
+    return 0
+
+
+def show_status(target: Path) -> int:
+    output = target / ".codedendrite"
+    print(f"项目：{target}")
+    print(f"索引：{output}")
+    if not output.is_dir():
+        print("状态：未建立（运行 cdd update）")
+        return 1
+
+    anchors = output / "anchors.json"
+    relations = output / "relations.json"
+    modules = output / "module_tree.json"
+    print(f"状态：已建立")
+    print(f"anchors：{json_count(anchors, ('anchors',))}")
+    print(f"relations：{json_count(relations, ('edges', 'relations'))}")
+    print(f"modules：{json_count(modules, ('semantic_modules', 'modules'))}")
+
+    show_coverage(anchors, relations)
+
+    existing = [path for path in (anchors, relations, modules) if path.exists()]
+    if existing:
+        newest = max(path.stat().st_mtime for path in existing)
+        print(f"最近更新：{datetime.fromtimestamp(newest).isoformat(sep=' ', timespec='seconds')}")
+    return 0
+
+
+def show_coverage(anchors_path: Path, relations_path: Path) -> None:
+    """Per language: how many anchors ended up joined to nothing.
+
+    There is no honest recall number to print here. Recall needs a denominator —
+    how many relations the source actually contains — and an index has no way to
+    know that. Every denominator that can be built is contaminated: the edges it
+    found describe only themselves; the call sites it saw include `print` and
+    `document.querySelector`, which are supposed to stay unresolved; and matching
+    unresolved calls by name drowns in `push` and `get`.
+
+    So the one number reported is the share of anchors with no edge at all, said
+    for what it is: a mixture of "nothing calls this" and "we could not work out
+    what calls this". It cannot be split without ground truth, and pretending
+    otherwise is how a graph missing half its edges passes for complete.
+
+    A language with zero cross-file edges is flagged separately. That is not a
+    rate — it is a statement about shape, and it is always worth saying.
+    """
+    import collections
+
+    try:
+        with anchors_path.open(encoding="utf8") as handle:
+            anchors = json.load(handle)
+        with relations_path.open(encoding="utf8") as handle:
+            edges = (json.load(handle) or {}).get("edges") or []
+    except Exception:
+        return
+    if not isinstance(anchors, dict) or not anchors:
+        return
+
+    degree = collections.Counter()
+    cross = collections.Counter()
+    total = collections.Counter()
+    for edge in edges:
+        source, target = edge.get("from_id"), edge.get("to_id")
+        if source is None or target is None:
+            continue
+        degree[source] += 1
+        degree[target] += 1
+        lang = (anchors.get(source) or {}).get("language") or _lang_of(source)
+        total[lang] += 1
+        if str(source).split("::")[0] != str(target).split("::")[0]:
+            cross[lang] += 1
+
+    per = collections.defaultdict(lambda: [0, 0])
+    for key, record in anchors.items():
+        lang = (record or {}).get("language") or _lang_of(key)
+        per[lang][0] += 1
+        if degree[key] == 0:
+            per[lang][1] += 1
+
+    rows = [(lang, n, alone) for lang, (n, alone) in per.items() if n >= 5]
+    rows.sort(key=lambda row: -row[1])
+    if not rows:
+        return
+    print("图的构成：")
+    print("  {:<12}{:>8}{:>8}{:>14}".format("语言", "anchor", "边", "可疑孤儿"))
+    for lang, count, alone in rows:
+        note = ""
+        if total.get(lang, 0) > 0 and cross.get(lang, 0) == 0:
+            note = "   ← 没有一条边跨文件，这门语言只连出了文件内部"
+        print("  {:<12}{:>8}{:>8}{:>13.0f}%{}".format(lang, count, total.get(lang, 0),
+                                                     100.0 * alone / count, note))
+    print("  可疑孤儿 = 一条边都没有的 anchor，含「确实没人调」和「没能解析出来」，两者分不开。")
+
+
+def _lang_of(anchor_id: str) -> str:
+    """Fall back to the extension when an anchor never recorded its language."""
+    import os
+    ext = os.path.splitext(str(anchor_id).split("::")[0])[1].lower()
+    return {
+        ".py": "python", ".pyw": "python",
+        ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript",
+        ".ts": "typescript", ".tsx": "typescript",
+        ".java": "java", ".go": "go", ".rs": "rust", ".rb": "ruby", ".php": "php",
+        ".kt": "kotlin", ".swift": "swift", ".cs": "csharp",
+        ".c": "cpp", ".cc": "cpp", ".cpp": "cpp", ".h": "cpp", ".hpp": "cpp",
+    }.get(ext, ext.lstrip(".") or "(无扩展名)")
+
+
+def ignore_file(target: Path) -> Path:
+    return target / ".codedendrite_ignore"
+
+
+def validate_ignore_pattern(pattern: str) -> str:
+    pattern = pattern.strip()
+    if not pattern:
+        raise SystemExit("ignore 规则不能为空")
+    if "\n" in pattern or "\r" in pattern:
+        raise SystemExit("一条 ignore 规则不能包含换行")
+    if pattern.startswith(("#", "[")):
+        raise SystemExit("ignore 规则不能以 # 或 [ 开头")
+    return pattern
+
+
+def parse_ignore_rules(path: Path) -> dict[str, list[str]]:
+    rules = {section: [] for section in IGNORE_SECTIONS.values()}
+    if not path.exists():
+        return rules
+    current: str | None = None
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line in {f"[{section}]" for section in rules}:
+            current = line[1:-1]
+        elif line.startswith("[") and line.endswith("]"):
+            current = None
+        elif current and line and not line.startswith("#"):
+            rules[current].append(line)
+    return rules
+
+
+def init_ignore(target: Path) -> int:
+    path = ignore_file(target)
+    if path.exists():
+        print(f"已存在：{path}")
+        return 0
+    path.write_text(MINIMAL_IGNORE, encoding="utf-8")
+    print(f"已创建：{path}")
+    print("按需添加规则，然后运行 cdd rebuild。")
+    return 0
+
+
+def list_ignore(target: Path, raw: bool = False) -> int:
+    path = ignore_file(target)
+    print(f"配置：{path}")
+    if not path.exists():
+        print("尚未创建。运行：cdd ignore init")
+        return 1
+    if raw:
+        print(path.read_text(encoding="utf-8"), end="")
+        return 0
+    rules = parse_ignore_rules(path)
+    labels = {
+        "scan_exclude": "scan：完全不扫描",
+        "map_exclude": "map：扫描但不展示",
+        "privacy_mask": "privacy：展示符号但隐藏内容",
+    }
+    for section in ("scan_exclude", "map_exclude", "privacy_mask"):
+        print(f"\n[{labels[section]}]  {len(rules[section])} 条")
+        for pattern in rules[section]:
+            print(f"  {pattern}")
+    return 0
+
+
+def add_ignore_rule(target: Path, kind: str, raw_pattern: str) -> int:
+    path = ignore_file(target)
+    if not path.exists():
+        init_ignore(target)
+    pattern = validate_ignore_pattern(raw_pattern)
+    section = IGNORE_SECTIONS[kind]
+    rules = parse_ignore_rules(path)
+    if pattern in rules[section]:
+        print(f"规则已存在：[{section}] {pattern}")
+        return 0
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = f"[{section}]"
+    if header not in lines:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.extend([header, pattern])
+    else:
+        start = lines.index(header)
+        end = len(lines)
+        for index in range(start + 1, len(lines)):
+            stripped = lines[index].strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                end = index
+                break
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1
+        lines.insert(end, pattern)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"已添加：[{section}] {pattern}")
+    print(f"配置：{path}")
+    print("让旧索引彻底移除这些内容：cdd rebuild")
+    return 0
+
+
+def remove_ignore_rule(target: Path, kind: str, raw_pattern: str) -> int:
+    path = ignore_file(target)
+    if not path.exists():
+        raise SystemExit("没有 .codedendrite_ignore；无需删除规则")
+    pattern = validate_ignore_pattern(raw_pattern)
+    section = IGNORE_SECTIONS[kind]
+    current: str | None = None
+    removed = False
+    output: list[str] = []
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current = stripped[1:-1]
+        if current == section and stripped == pattern and not stripped.startswith("#"):
+            removed = True
+            continue
+        output.append(raw_line)
+    if not removed:
+        print(f"未找到：[{section}] {pattern}")
+        return 1
+    path.write_text("\n".join(output) + "\n", encoding="utf-8")
+    print(f"已删除：[{section}] {pattern}")
+    print("让重新纳入的文件进入索引：cdd rebuild")
+    return 0
+
+
+def check_ignore(target: Path, raw_path: str) -> int:
+    path = ignore_file(target)
+    if not path.exists():
+        raise SystemExit("没有 .codedendrite_ignore；先运行 cdd ignore init")
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = target / candidate
+    candidate = candidate.resolve()
+
+    codedendrite_root = REPO_ROOT
+    if str(codedendrite_root) not in sys.path:
+        sys.path.insert(0, str(codedendrite_root))
+    from base.shared.codedendrite_ignore import CodeDendriteIgnore
+
+    rules = CodeDendriteIgnore(str(target))
+    should_scan = rules.should_scan(candidate)
+    in_map = rules.should_include_in_map(candidate)
+    masked = rules.should_mask_content(candidate)
+    try:
+        display = candidate.relative_to(target)
+    except ValueError:
+        display = candidate
+    print(f"路径：{display}")
+    print(f"扫描：{'是' if should_scan else '否'}")
+    print(f"地图展示：{'是' if in_map else '否'}")
+    print(f"内容脱敏：{'是' if masked else '否'}")
+    if not should_scan:
+        print("结果：scan_exclude")
+    elif masked:
+        print("结果：privacy_mask")
+    elif not in_map:
+        print("结果：map_exclude")
+    else:
+        print("结果：正常扫描和展示")
+    return 0
+
+
+def show_anchor_code(target: Path, symbol: str, context: int = 0) -> int:
+    """Print one indexed function/class body with line numbers."""
+    if context < 0:
+        raise SystemExit("--context 不能小于 0")
+
+    codedendrite_root = REPO_ROOT
+    if str(codedendrite_root) not in sys.path:
+        sys.path.insert(0, str(codedendrite_root))
+
+    from index.api.anchors import load_anchors
+    from serve.api.inspector import get_anchor_source
+
+    anchors = load_anchors(str(target))
+    candidates = []
+
+    exact_id = anchors.get(symbol)
+    if exact_id is not None and not exact_id.is_virtual:
+        candidates = [exact_id]
+    else:
+        candidates = [
+            anchor
+            for anchor in anchors.values()
+            if not anchor.is_virtual and anchor.id == symbol
+        ]
+
+    if not candidates:
+        exact_symbol = [
+            anchor
+            for anchor in anchors.values()
+            if not anchor.is_virtual and anchor.symbol == symbol
+        ]
+        suffix_symbol = [
+            anchor
+            for anchor in anchors.values()
+            if (
+                not anchor.is_virtual
+                and anchor.symbol.endswith("." + symbol)
+                and anchor not in exact_symbol
+            )
+        ]
+        candidates = exact_symbol or suffix_symbol
+
+    if not candidates:
+        keyword = symbol.lower()
+        suggestions = [
+            anchor
+            for anchor in anchors.values()
+            if not anchor.is_virtual and keyword in anchor.symbol.lower()
+        ][:10]
+        print(f"没有找到函数或类：{symbol}", file=sys.stderr)
+        if suggestions:
+            print("可能是：", file=sys.stderr)
+            for anchor in suggestions:
+                print(f"  {anchor.id}", file=sys.stderr)
+        return 1
+
+    unique = {anchor.id: anchor for anchor in candidates}
+    if len(unique) > 1:
+        print(f"名称不唯一，请改用完整 anchor ID：{symbol}", file=sys.stderr)
+        for anchor_id in sorted(unique):
+            print(f"  {anchor_id}", file=sys.stderr)
+        return 2
+
+    anchor = next(iter(unique.values()))
+    result = get_anchor_source(anchor.id, str(target), context=context)
+    if result is None:
+        print(f"找到了 anchor，但无法读取源码：{anchor.id}", file=sys.stderr)
+        return 1
+
+    print(f"{result['symbol']}  {result['file']}:{result['line_start']}-{result['line_end']}")
+    print(result["source"])
+    return 0
+
+
+def add_root(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("directory", nargs="?", default=".", help="项目目录，默认当前目录")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="cdd",
+        add_help=False,
+        description=(
+            "CodeDendrite 人用命令。所有命令的项目目录都可省略，省略时使用当前目录。"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "【最短工作流】\n"
+            "  cd 你的项目\n"
+            "  cdd update\n"
+            "  cdd status\n"
+            "  cdd file backend/main.py\n"
+            "  cdd chain 'backend/main.py::Class.method'\n"
+            "\n"
+            "【索引】\n"
+            "  cdd update [目录]                 首次自动全量建立，之后增量更新\n"
+            "  cdd rebuild [目录]                强制全量重建\n"
+            "  cdd status [目录]                 查看索引位置、数量、更新时间\n"
+            "  cdd peek <文件>                   现场解析一个文件，不需要索引\n"
+            "  cdd outline [目录]                生成目录/文件/符号大纲\n"
+            "\n"
+            "【Ignore 配置】\n"
+            "  cdd ignore init [目录]            创建默认 .codedendrite_ignore\n"
+            "  cdd ignore list [目录]            分组查看当前规则\n"
+            "  cdd ignore show [目录]            查看原始配置文件\n"
+            "  cdd ignore add <规则> [目录]       完全不扫描，默认 kind=scan\n"
+            "  cdd ignore add tests/ --kind map   扫描但不在地图展示\n"
+            "  cdd ignore add .env --kind privacy 展示符号但隐藏内容\n"
+            "  cdd ignore remove <规则> [目录]    删除规则，--kind 与添加时一致\n"
+            "  cdd ignore check <路径> [目录]     检查某个路径最终如何处理\n"
+            "  修改规则后运行 cdd rebuild，旧索引才会彻底更新。\n"
+            "\n"
+            "【查代码】\n"
+            "  cdd file <文件> [目录]            查看文件内的类和函数\n"
+            "  cdd code <函数> [目录]            在终端打印该函数的源码和行号\n"
+            "  cdd code <函数> [目录] -C 3       同时显示上下各 3 行上下文\n"
+            "  cdd anchors <关键词> [目录]        按文件名搜索 anchor\n"
+            "  cdd find <关键词> [目录]           搜索静态调用/继承/数据流关系\n"
+            "  cdd show <节点ID> [目录]           展开节点的一层关系\n"
+            "  cdd chain <函数> [目录]            查看它继续调用了谁\n"
+            "  cdd callers <函数> [目录]          查看静态可解析的调用者；方法零结果会提示候选\n"
+            "  cdd count [目录]                  统计各种关系数量\n"
+            "  cdd registered [目录]             查看装饰器注册关系\n"
+            "\n"
+            "【语义模块与模型上下文】\n"
+            "  cdd modules <关键词> [目录]         搜索语义模块\n"
+            "  cdd owner <函数> [目录]            查看函数属于哪个模块\n"
+            "  cdd module <模块ID> [目录]          查看指定模块\n"
+            "  cdd context <问题> [目录]          输出紧凑任务上下文\n"
+            "  cdd context <问题> [目录] --full   生成完整任务上下文文件\n"
+            "  cdd issue <issue文件> [目录]       从完整 issue 生成证据包 v2\n"
+            "  cdd snapshot <issue> <输出目录>    保存可回放索引与任务包\n"
+            "  cdd action status|done <会话> ... 记录动作并阻止重复\n"
+            "  cdd debug <文件> \"<错误>\" [目录]   定位可疑函数\n"
+            "  cdd eval validate <报告.json>      校验任务包评测合同\n"
+            "  cdd eval summary <报告.json>       分栏汇总生成/定位/官方指标\n"
+            "  cdd replay <任务.json> <运行目录>  离线对比旧/新任务包导航\n"
+            "\n"
+            "【可视化】\n"
+            "  cdd draw [目录]                    增量更新索引后，按文件画类/函数及调用入出边\n"
+            "  cdd graph [目录]                   生成并打开关系图 HTML\n"
+            "  cdd graph [目录] --focus <函数>    只画函数附近\n"
+            "  cdd map [目录]                     生成并打开全项目代码地图\n"
+            "  cdd summary [目录] [--full]        在终端显示依赖摘要\n"
+            "  cdd timeline <函数> [目录]          生成并打开调用时间线\n"
+            "  cdd module-graph [目录]            生成并打开语义模块关系图\n"
+            "  以上命令默认自动打开；加 --no-open 时只生成文件。\n"
+            "\n"
+            "【Module Tree V2】\n"
+            "  cdd tree build [目录]              生成候选、模块树并打开 HTML\n"
+            "  cdd tree check [目录]              检查覆盖和低置信模块\n"
+            "  cdd tree render [目录]             重新生成并打开 HTML\n"
+            "  cdd tree candidates [目录]         只重新生成能力候选\n"
+            "  cdd path-role <路径> [目录]         判断源码/测试/生成文件角色\n"
+            "\n"
+            "【临时调试日志：会修改源码】\n"
+            "  cdd log-add <函数> [目录]           沿调用链插入 print\n"
+            "  cdd log-file <文件> [目录]          给文件内函数插入 print\n"
+            "  cdd log-folder <文件夹> [目录]      给目录内 Python 函数插入 print\n"
+            "  cdd log-remove [目录]              删除全部自动插入的 print\n"
+            "  删除日志后运行 cdd rebuild，恢复正确索引行号。\n"
+            "\n"
+            "目录永远可省略，省略就是当前目录；也可不切目录：\n"
+            "  cdd update /path/to/project\n"
+            "详细参数：cdd <命令> --help"
+        ),
+    )
+    parser.add_argument("-h", "--help", "-help", action="help", help="显示完整帮助")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    update = sub.add_parser("update", help="更新索引；首次会自动全量建立")
+    add_root(update)
+    update.add_argument("--virtual", action="store_true", help="建立虚拟控制流节点")
+    update.add_argument("--files", nargs="*", default=None, help="仅更新这些项目内文件（供编辑器/插件增量刷新）")
+    update.add_argument("--topology-only", action="store_true", help="只刷新 Anchor/关系，跳过模块树与摘要")
+
+    rebuild = sub.add_parser("rebuild", help="强制全量重建索引")
+    add_root(rebuild)
+    rebuild.add_argument("--virtual", action="store_true", help="建立虚拟控制流节点")
+
+    status = sub.add_parser("status", help="查看索引位置、数量和更新时间")
+    add_root(status)
+
+    ignore = sub.add_parser("ignore", help="管理项目的 .codedendrite_ignore")
+    ignore_sub = ignore.add_subparsers(dest="ignore_command", required=True)
+
+    ignore_init = ignore_sub.add_parser("init", help="创建默认 ignore 配置")
+    add_root(ignore_init)
+
+    ignore_list = ignore_sub.add_parser("list", help="分组查看 ignore 规则")
+    add_root(ignore_list)
+
+    ignore_show = ignore_sub.add_parser("show", help="显示原始 ignore 配置")
+    add_root(ignore_show)
+
+    ignore_add = ignore_sub.add_parser("add", help="添加 ignore 规则")
+    ignore_add.add_argument("pattern", help="例如 node_modules/、tests/** 或 .env")
+    add_root(ignore_add)
+    ignore_add.add_argument(
+        "--kind",
+        choices=tuple(IGNORE_SECTIONS),
+        default="scan",
+        help="scan=不扫描，map=不展示，privacy=隐藏内容；默认 scan",
+    )
+
+    ignore_remove = ignore_sub.add_parser("remove", help="删除 ignore 规则")
+    ignore_remove.add_argument("pattern")
+    add_root(ignore_remove)
+    ignore_remove.add_argument(
+        "--kind",
+        choices=tuple(IGNORE_SECTIONS),
+        default="scan",
+        help="必须与添加规则时的 kind 一致；默认 scan",
+    )
+
+    ignore_check = ignore_sub.add_parser("check", help="检查路径命中的 ignore 结果")
+    ignore_check.add_argument("path")
+    add_root(ignore_check)
+
+    outline = sub.add_parser("outline", help="生成目录/文件/符号大纲")
+    add_root(outline)
+    outline.add_argument("--output", help="自定义输出文件")
+
+    peek = sub.add_parser("peek", help="现场解析一个文件，不需要索引")
+    peek.add_argument("file")
+    add_root(peek)
+
+    file_cmd = sub.add_parser("file", help="查看一个文件内的类和函数")
+    file_cmd.add_argument("file", help="相对项目目录的文件路径")
+    add_root(file_cmd)
+    file_cmd.add_argument("--virtual", action="store_true", help="包含虚拟控制流节点")
+
+    code = sub.add_parser(
+        "code",
+        aliases=["source", "cut"],
+        help="在终端打印一个函数或类的源码",
+    )
+    code.add_argument("symbol", help="短函数名、Class.method 或完整 anchor ID")
+    add_root(code)
+    code.add_argument(
+        "-C",
+        "--context",
+        type=int,
+        default=0,
+        help="额外显示函数上下各 N 行；默认 0",
+    )
+
+    find = sub.add_parser("find", help="按关键词搜索调用/继承/数据流关系")
+    find.add_argument("keyword")
+    add_root(find)
+
+    anchors = sub.add_parser("anchors", help="按文件路径关键词搜索 anchor")
+    anchors.add_argument("keyword")
+    add_root(anchors)
+
+    show = sub.add_parser("show", help="展开一个函数或节点的直接关系")
+    show.add_argument("node", help="例如 backend/main.py::Class.method")
+    add_root(show)
+
+    chain = sub.add_parser("chain", help="查看它继续调用了谁")
+    chain.add_argument("symbol")
+    add_root(chain)
+    chain.add_argument("--depth", type=int, default=6)
+    chain.add_argument("--yaml", help="按 YAML 配置激活注册表调用路线")
+
+    callers = sub.add_parser(
+        "callers",
+        help="查看静态可解析的调用者；变量接收者方法会标成未解析候选",
+    )
+    callers.add_argument("symbol")
+    add_root(callers)
+    callers.add_argument("--depth", type=int, default=6)
+
+    count = sub.add_parser("count", help="统计各种关系数量")
+    add_root(count)
+
+    registered = sub.add_parser("registered", help="查看装饰器注册关系")
+    add_root(registered)
+    registered.add_argument("--decorator", help="只看指定装饰器")
+
+    modules = sub.add_parser("modules", help="按关键词查语义模块")
+    modules.add_argument("keyword")
+    add_root(modules)
+    modules.add_argument("--limit", type=int, default=5)
+
+    owner = sub.add_parser("owner", help="查看一个函数属于哪个语义模块")
+    owner.add_argument("symbol")
+    add_root(owner)
+
+    module = sub.add_parser("module", help="按模块 ID 或准确名称查看模块")
+    module.add_argument("module_id")
+    add_root(module)
+
+    module_graph = sub.add_parser("module-graph", help="生成语义模块关系图")
+    add_root(module_graph)
+    module_graph.add_argument("--no-isolated", action="store_true", help="隐藏孤立模块")
+    module_graph.add_argument("--no-open", action="store_true", help="只生成，不自动打开")
+
+    context = sub.add_parser("context", help="生成适合交给模型的任务上下文")
+    context.add_argument("query")
+    add_root(context)
+    context.add_argument("--large", action="store_true", help="使用大模型上下文配置")
+    context.add_argument("--full", action="store_true", help="保存完整上下文，而非打印紧凑版")
+    context.add_argument("--error", help="附带错误信息")
+
+    issue = sub.add_parser("issue", help="从完整 issue 生成 Evidence Packet v2")
+    issue.add_argument("issue", help="issue 文件；加 --text 时为完整 issue 文本")
+    add_root(issue)
+    issue.add_argument("--text", action="store_true", help="将 issue 参数视为文本而非文件")
+    issue.add_argument("--compact", action="store_true", help="只打印紧凑证据摘要")
+    issue.add_argument("--output", help="自定义完整 JSON 输出路径")
+    issue.add_argument("--session", help="使用动作会话，拒绝重复推荐")
+    issue.add_argument("--max-actions", type=int, default=12, help="会话动作预算")
+
+    snapshot = sub.add_parser("snapshot", help="保存 commit-bound CDD 任务快照")
+    snapshot.add_argument("issue", help="完整 issue 文件")
+    snapshot.add_argument("output_dir", help="快照根目录")
+    add_root(snapshot)
+    snapshot.add_argument("--instance-id", required=True)
+    snapshot.add_argument("--base-commit")
+
+    action = sub.add_parser("action", help="查看或记录任务包动作会话")
+    action_sub = action.add_subparsers(dest="action_command", required=True)
+    action_status = action_sub.add_parser("status", help="查看会话已执行动作")
+    action_status.add_argument("session_id")
+    add_root(action_status)
+    action_status.add_argument("--max-actions", type=int, default=12)
+    action_done = action_sub.add_parser("done", help="记录一个已执行动作")
+    action_done.add_argument("session_id")
+    action_done.add_argument("kind")
+    action_done.add_argument("target")
+    add_root(action_done)
+    action_done.add_argument("--max-actions", type=int, default=12)
+
+    evaluation = sub.add_parser("eval", help="校验或汇总任务包评测报告")
+    evaluation_sub = evaluation.add_subparsers(dest="evaluation_command", required=True)
+    for name, help_text in (
+        ("validate", "校验评测合同"),
+        ("summary", "分栏汇总评测指标"),
+    ):
+        evaluation_command = evaluation_sub.add_parser(name, help=help_text)
+        evaluation_command.add_argument("report", help="评测报告 JSON")
+
+    replay = sub.add_parser("replay", help="离线对比记录任务包与新 Evidence Packet")
+    replay.add_argument("tasks", help="任务数据集 JSON")
+    replay.add_argument("run_dir", help="已有 benchmark 运行目录")
+    replay.add_argument("--output", help="输出报告 JSON")
+    replay.add_argument("--snapshot-dir", help="按 instance 保存的 CDD 快照目录")
+
+    graph = sub.add_parser("graph", help="生成关系图 HTML")
+    add_root(graph)
+    graph.add_argument("--focus", help="只画某个函数附近")
+    graph.add_argument("--radius", type=int, default=2)
+    graph.add_argument("--no-open", action="store_true", help="只生成，不自动打开")
+
+    draw = sub.add_parser("draw", help="生成目录/文件/类/函数复合调用图")
+    add_root(draw)
+    draw.add_argument("--no-refresh", action="store_true", help="不更新 anchors.json，直接重画")
+    draw.add_argument("--no-open", action="store_true", help="只生成，不自动打开")
+
+    code_map = sub.add_parser("map", help="生成全项目代码地图 HTML")
+    add_root(code_map)
+    code_map.add_argument("--no-open", action="store_true", help="只生成，不自动打开")
+
+    summary = sub.add_parser("summary", help="在终端显示模块依赖摘要")
+    add_root(summary)
+    summary.add_argument("--full", action="store_true", help="显示包含 anchor 数量的完整版")
+
+    timeline = sub.add_parser("timeline", help="生成调用链时间线 HTML")
+    timeline.add_argument("symbol")
+    add_root(timeline)
+    timeline.add_argument("--depth", type=int, default=5)
+    timeline.add_argument("--error", help="在时间线中标出错误函数")
+    timeline.add_argument("--no-open", action="store_true", help="只生成，不自动打开")
+
+    debug = sub.add_parser("debug", help="根据文件和错误定位可疑函数")
+    debug.add_argument("file", help="报错相关文件")
+    debug.add_argument("error", help="错误文本；有空格时加引号")
+    add_root(debug)
+    debug.add_argument("--entry", help="已知入口函数")
+    debug.add_argument("--target-symbol", help="已知目标函数")
+    debug.add_argument("--conditions", help="路由条件字典，例如 \"{'method':'chat'}\"")
+    debug.add_argument("--edited-file", action="append", default=[], help="已修改文件，可重复")
+    debug.add_argument("--edited-symbol", action="append", default=[], help="已修改函数，可重复")
+    debug.add_argument("--no-refresh", action="store_true", help="定位前不更新索引")
+    debug.add_argument("--limit", type=int, default=5)
+
+    tree = sub.add_parser("tree", help="Module Tree V2 构建、检查和渲染")
+    tree_sub = tree.add_subparsers(dest="tree_command", required=True)
+    for name, help_text in (
+        ("build", "生成候选、模块树、完整性检查和 HTML"),
+        ("check", "显示完整性与验证摘要"),
+        ("render", "仅重新生成 HTML"),
+        ("candidates", "仅重新生成能力候选"),
+    ):
+        tree_command = tree_sub.add_parser(name, help=help_text)
+        add_root(tree_command)
+        if name in {"build", "render"}:
+            tree_command.add_argument("--no-open", action="store_true", help="只生成，不自动打开")
+
+    path_role = sub.add_parser("path-role", help="判断路径的源码/测试/生成文件角色")
+    path_role.add_argument("path")
+    add_root(path_role)
+
+    log = sub.add_parser("log-add", help="沿调用链插入临时 print（会修改源码）")
+    log.add_argument("symbol")
+    add_root(log)
+    log.add_argument("--depth", type=int, default=6)
+    log.add_argument("--direction", choices=("down", "up", "both"), default="down")
+
+    log_file = sub.add_parser("log-file", help="给一个文件内所有函数插入 print（会修改源码）")
+    log_file.add_argument("file")
+    add_root(log_file)
+
+    log_folder = sub.add_parser("log-folder", help="给目录内 Python 函数插入 print（会修改源码）")
+    log_folder.add_argument("folder")
+    add_root(log_folder)
+
+    unlog = sub.add_parser("log-remove", help="删除 cdd 插入的全部临时 print")
+    add_root(unlog)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    target = project_dir(getattr(args, "directory", "."))
+    target_arg = str(target)
+
+    if args.command == "update":
+        command = [target_arg, "--update"]
+        if args.virtual:
+            command.append("--virtual-blocks")
+        if args.files is not None:
+            command.extend(["--changed-files", *args.files])
+        if args.topology_only:
+            command.append("--topology-only")
+        return run_module("serve.api.cli", command)
+    if args.command == "rebuild":
+        command = [target_arg]
+        if args.virtual:
+            command.append("--virtual-blocks")
+        return run_module("serve.api.cli", command)
+    if args.command == "status":
+        return show_status(target)
+    if args.command == "ignore":
+        if args.ignore_command == "init":
+            return init_ignore(target)
+        if args.ignore_command == "list":
+            return list_ignore(target)
+        if args.ignore_command == "show":
+            return list_ignore(target, raw=True)
+        if args.ignore_command == "add":
+            return add_ignore_rule(target, args.kind, args.pattern)
+        if args.ignore_command == "remove":
+            return remove_ignore_rule(target, args.kind, args.pattern)
+        if args.ignore_command == "check":
+            return check_ignore(target, args.path)
+        raise SystemExit(f"未知 ignore 命令：{args.ignore_command}")
+    if args.command == "path-role":
+        return run_module(
+            "serve.api.cli",
+            [target_arg, "--path-policy-check", args.path],
+        )
+    if args.command == "eval":
+        return unavailable("cdd eval", 'evaluation/ 评测流水线未随八桶重构迁入本树（迁移映射表列为不迁移，要跑得先把 evaluation/ 迁进来）')
+    if args.command == "replay":
+        command = [
+            str(Path(args.tasks).expanduser().resolve()),
+            str(Path(args.run_dir).expanduser().resolve()),
+        ]
+        if args.output:
+            command.extend(["--output", str(Path(args.output).expanduser().resolve())])
+        if args.snapshot_dir:
+            command.extend(["--snapshot-dir", str(Path(args.snapshot_dir).expanduser().resolve())])
+        return unavailable("cdd replay", 'evaluation/ 评测流水线未随八桶重构迁入本树（迁移映射表列为不迁移，要跑得先把 evaluation/ 迁进来）')
+    if args.command == "snapshot":
+        command = [
+            target_arg,
+            str(Path(args.issue).expanduser().resolve()),
+            str(Path(args.output_dir).expanduser().resolve()),
+            "--instance-id", args.instance_id,
+        ]
+        if args.base_commit:
+            command.extend(["--base-commit", args.base_commit])
+        return unavailable("cdd snapshot", 'evaluation/ 评测流水线未随八桶重构迁入本树（迁移映射表列为不迁移，要跑得先把 evaluation/ 迁进来）')
+    if args.command == "action":
+        command = [args.action_command, args.session_id, target_arg]
+        if args.action_command == "done":
+            if not args.kind or not args.target:
+                raise SystemExit("cdd action done 需要 kind 和 target")
+            command.extend([args.kind, args.target])
+        command.extend(["--max-actions", str(args.max_actions)])
+        return run_module("synth.api.action_session", command)
+
+    require_index(target)
+
+    if args.command == "peek":
+        return peek_file(target, args.file)
+    if args.command == "outline":
+        command = [target_arg, "--anchor-outline"]
+        if args.output:
+            command.extend(["--outline-output", args.output])
+        return run_module("serve.api.cli", command)
+    if args.command == "file":
+        command = ["fileanchors", normalize_file(args.file, target), target_arg]
+        if args.virtual:
+            command.append("--with-virtual")
+        return run_module("serve.api.query", command)
+    if args.command in {"code", "source", "cut"}:
+        return show_anchor_code(target, args.symbol, context=args.context)
+    if args.command == "find":
+        return run_module(
+            "serve.api.query", ["edges", args.keyword, target_arg]
+        )
+    if args.command == "anchors":
+        return run_module(
+            "serve.api.query", ["anchors", args.keyword, target_arg]
+        )
+    if args.command == "show":
+        return run_module(
+            "serve.api.query", ["expand", args.node, target_arg]
+        )
+    if args.command in {"chain", "callers"}:
+        direction = "down" if args.command == "chain" else "up"
+        command = [
+                "chain",
+                args.symbol,
+                target_arg,
+                "--depth",
+                str(args.depth),
+                "--direction",
+                direction,
+            ]
+        if args.command == "chain" and args.yaml:
+            command.extend(["--yaml", str(Path(args.yaml).expanduser().resolve())])
+        return run_module("serve.api.query", command)
+    if args.command == "count":
+        return run_module("serve.api.query", ["count", target_arg])
+    if args.command == "registered":
+        command = ["registered", target_arg]
+        if args.decorator:
+            command.extend(["--decorator", args.decorator])
+        return run_module("serve.api.query", command)
+    if args.command == "modules":
+        return run_module(
+            "serve.api.cli",
+            [
+                target_arg,
+                "--modules",
+                "--query",
+                args.keyword,
+                "--limit",
+                str(args.limit),
+            ],
+        )
+    if args.command == "owner":
+        return run_module(
+            "serve.api.cli",
+            [target_arg, "--modules", "--symbol", args.symbol],
+        )
+    if args.command == "module":
+        return run_module(
+            "serve.api.cli",
+            [target_arg, "--modules", "--module-id", args.module_id],
+        )
+    if args.command == "module-graph":
+        command = [target_arg, "--module-graph"]
+        if args.no_isolated:
+            command.append("--no-isolated")
+        return run_visual(
+            "serve.api.cli",
+            command,
+            target / ".codedendrite" / "module_tree_graph.md",
+            no_open=args.no_open,
+        )
+    if args.command == "context":
+        command = [
+            target_arg,
+            "--task-context" if args.full else "--task-context-compact",
+            args.query,
+            "--model-profile",
+            "large" if args.large else "small",
+        ]
+        if args.error:
+            command.extend(["--error", args.error])
+        return run_module("serve.api.cli", command)
+    if args.command == "issue":
+        command = [target_arg]
+        if args.text:
+            command.extend(["--issue", args.issue])
+        else:
+            command.extend(["--issue-file", str(Path(args.issue).expanduser().resolve())])
+        if args.compact:
+            command.append("--compact")
+        if args.output:
+            command.extend(["--output", str(Path(args.output).expanduser().resolve())])
+        if args.session:
+            command.extend(["--session", args.session, "--max-actions", str(args.max_actions)])
+        return run_module("synth.api.issue_evidence_packet", command)
+    if args.command == "graph":
+        command = ["graph"]
+        if args.focus:
+            command.append(args.focus)
+        command.extend(["--radius", str(args.radius), "--root", target_arg])
+        return run_visual(
+            "serve.api.query",
+            command,
+            target / ".codedendrite" / "relation_graph.html",
+            no_open=args.no_open,
+        )
+    if args.command == "draw":
+        if not args.no_refresh:
+            result = run_module("serve.api.cli", [target_arg, "--update"])
+            if result:
+                return result
+        output = target / ".codedendrite" / "anchor_browser.html"
+        return run_visual_script(
+            REPO_ROOT / "view" / "visualize" / "anchor_browser" / "build_file_index.py",
+            [target_arg, "--output", str(output)],
+            output,
+            no_open=args.no_open,
+        )
+    if args.command == "map":
+        return run_visual(
+            "serve.api.query",
+            ["codemap", target_arg],
+            target / ".codedendrite" / "code_map.html",
+            no_open=args.no_open,
+        )
+    if args.command == "summary":
+        return run_module(
+            "serve.api.query",
+            ["map", "full" if args.full else "compact", target_arg],
+        )
+    if args.command == "timeline":
+        command = [
+            "timeline",
+            args.symbol,
+            target_arg,
+            "--depth",
+            str(args.depth),
+        ]
+        if args.error:
+            command.extend(["--error", args.error])
+        return run_visual(
+            "serve.api.query",
+            command,
+            target / ".codedendrite" / "call_timeline.html",
+            no_open=args.no_open,
+        )
+    if args.command == "debug":
+        command = [
+            target_arg,
+            "--debug-loop",
+            "--file",
+            normalize_file(args.file, target),
+            "--error",
+            args.error,
+            "--limit",
+            str(args.limit),
+        ]
+        if args.entry:
+            command.extend(["--entry-symbol", args.entry])
+        if args.target_symbol:
+            command.extend(["--target-symbol", args.target_symbol])
+        if args.conditions:
+            command.extend(["--conditions", args.conditions])
+        if args.edited_file:
+            command.extend(["--edited-files", *args.edited_file])
+        if args.edited_symbol:
+            command.extend(["--edited-symbols", *args.edited_symbol])
+        if args.no_refresh:
+            command.append("--no-refresh")
+        return run_module("serve.api.cli", command)
+    if args.command == "tree":
+        flag = {
+            "build": "--module-tree-v2",
+            "check": "--module-tree-v2-check",
+            "render": "--module-tree-v2-html",
+            "candidates": "--capability-candidates",
+        }[args.tree_command]
+        if args.tree_command in {"build", "render"}:
+            return run_visual(
+                "serve.api.cli",
+                [target_arg, flag],
+                target / ".codedendrite" / "module_tree_v2.html",
+                no_open=args.no_open,
+            )
+        return run_module("serve.api.cli", [target_arg, flag])
+    if args.command == "log-add":
+        return run_module(
+            "serve.api.autolog",
+            [
+                "add",
+                args.symbol,
+                target_arg,
+                "--depth",
+                str(args.depth),
+                "--direction",
+                args.direction,
+            ],
+        )
+    if args.command == "log-file":
+        return run_module(
+            "serve.api.autolog",
+            ["add-file", normalize_file(args.file, target), target_arg],
+        )
+    if args.command == "log-folder":
+        return run_module(
+            "serve.api.autolog",
+            ["add-folder", normalize_file(args.folder, target), target_arg],
+        )
+    if args.command == "log-remove":
+        return run_module("serve.api.autolog", ["remove", target_arg])
+
+    raise SystemExit(f"未知命令：{args.command}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
