@@ -645,16 +645,39 @@ module.exports = {
      *
      * @returns null when it could not be started, else the running record.
      */
-    /** Absolute path of the `cdd` entry point, or null when it is not on disk. */
+    /**
+     * Absolute path of the `cdd` entry point, or null when it is not on disk.
+     *
+     * Two levels up, not three. The plugin used to live at
+     * `tools/CodeDendrite/lens`, so the repository root was three hops away;
+     * the bucket refactor moved it to `view/lens`, and the old `../../../`
+     * silently resolved to `<parent-of-repo>/skills/...` — a path that does
+     * not exist, which reads back as "cdd not found" with nothing to explain
+     * why.
+     */
     const cddBin = () => {
       const candidate = typeof config.cddBin === 'string' && config.cddBin.length > 0
         ? config.cddBin
-        : path.resolve(PACKAGE_ROOT, '..', '..', '..', 'skills', 'codedendrite', 'cdd')
+        : path.resolve(PACKAGE_ROOT, '..', '..', 'skills', 'codedendrite', 'cdd')
       return fs.existsSync(candidate) ? candidate : null
     }
     const pythonBin = () => (typeof config.pythonBin === 'string' && config.pythonBin.length > 0
       ? config.pythonBin
       : 'python3')
+
+    // The Python entry points are bucket modules now — `build_file_index.py`
+    // opens with `from view.visualize.anchor_browser.dom_sidebar import ...` —
+    // so they only import when the repository root is on PYTHONPATH. The
+    // children run with `cwd` set to the workspace being drawn, which puts that
+    // workspace first on sys.path and never the repository. Without this every
+    // spawn dies with "No module named 'view'", which `refreshPage` reports as
+    // `spawn-failed` and `startReindex` as an exit code — neither of which
+    // points at the path.
+    const REPO_ROOT = path.resolve(PACKAGE_ROOT, '..', '..')
+    const pythonEnv = () => ({
+      ...process.env,
+      PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+    })
 
     // Which workspaces this plugin has actually served a drawing for, and when
     // anyone last asked. A page-at-a-time refresh keeps what you open true; the
@@ -683,7 +706,15 @@ module.exports = {
     // The generator, reached directly rather than through `cdd`: the page-level
     // refresh is a flag on it, and `cdd` lives outside this repository in a
     // wheel that has to be rebuilt to gain one.
-    const GENERATOR = path.resolve(PACKAGE_ROOT, '..', 'visualize', 'anchor_browser.py')
+    //
+    // `anchor_browser.py` was split into a package by the bucket refactor; the
+    // argparse entry (the one carrying `--page`) is `build_file_index.py`. The
+    // old filename does not exist any more, and a missing GENERATOR makes
+    // `refreshPage` answer `no-manifest` — an answer that looks like a fact
+    // about the page rather than a broken path.
+    const GENERATOR = path.resolve(
+      PACKAGE_ROOT, '..', 'visualize', 'anchor_browser', 'build_file_index.py',
+    )
 
     /**
      * Bring one page up to date, if anything it draws has moved.
@@ -699,7 +730,7 @@ module.exports = {
     const refreshPage = (root, pageId) => new Promise((resolve) => {
       if (!fs.existsSync(GENERATOR)) { resolve({ state: 'no-manifest' }); return }
       const child = childProcess.spawn(pythonBin(), [GENERATOR, root, '--page', String(pageId)], {
-        cwd: root, stdio: ['ignore', 'pipe', 'ignore'],
+        cwd: root, env: pythonEnv(), stdio: ['ignore', 'pipe', 'ignore'],
       })
       let out = ''
       child.stdout.on('data', (chunk) => { out += chunk })
@@ -727,7 +758,7 @@ module.exports = {
       // makes what comes back actually new. --no-open must still never launch a
       // browser on the machine running the harness.
       const child = childProcess.spawn(pythonBin(), [cdd, 'draw', root, '--no-open'], {
-        cwd: root, stdio: 'ignore',
+        cwd: root, env: pythonEnv(), stdio: 'ignore',
       })
       drawing.set(root, child)
       child.on('exit', () => { drawing.delete(root) })
@@ -743,7 +774,7 @@ module.exports = {
         return null
       }
       const child = childProcess.spawn(pythonBin(), [cdd, 'update', root], {
-        cwd: root, stdio: ['ignore', 'pipe', 'pipe'], detached: false,
+        cwd: root, env: pythonEnv(), stdio: ['ignore', 'pipe', 'pipe'], detached: false,
       })
       let tail = ''
       const keep = chunk => { tail = (tail + chunk).slice(-4000) }
