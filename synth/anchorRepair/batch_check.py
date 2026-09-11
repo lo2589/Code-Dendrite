@@ -3,18 +3,11 @@ batch_check.py - 锚点批量检查 (Medium L2-002, L2-003)
 ======================================================
 """
 
-import sys
 from pathlib import Path
 from typing import List, Optional
 
 from base.anchorRepair.types import AnchorStatusType, AnchorStatus
-
-# 添加 codeTree 目录到路径以复用 anchor_engine_v2
-_CODE_TREE_PATH = Path(__file__).parent.parent / "codeTree"
-if str(_CODE_TREE_PATH) not in sys.path:
-    sys.path.insert(0, str(_CODE_TREE_PATH))
-
-from anchor_engine_v2 import (
+from index.codeTree.anchor_engine_v2 import (
     Anchor, compute_hash_v2, classify_severity,
     _load_db
 )

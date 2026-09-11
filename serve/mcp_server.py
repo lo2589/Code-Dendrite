@@ -20,7 +20,7 @@ import sys
 
 # ensure CD is importable
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_PARENT = os.path.dirname(os.path.dirname(_HERE))
+_PARENT = os.path.dirname(_HERE)
 for _p in (_HERE, _PARENT):
     if _p not in sys.path:
         sys.path.insert(0, _p)
@@ -46,7 +46,7 @@ _cache: dict = {}
 
 def _anchors():
     if "anchors" not in _cache:
-        from tools.CodeDendrite.api.anchors import load_anchors
+        from index.api.anchors import load_anchors
         _cache["anchors"] = load_anchors(ROOT)
     return _cache["anchors"]
 
@@ -83,7 +83,7 @@ def _project_summary() -> str:
 
 def tool_context(query: str, level: str = "l2") -> str:
     """Task context packet for a symbol / keyword."""
-    from tools.CodeDendrite.api.task_context_packet import (
+    from synth.api.task_context_packet import (
         resolve_task_anchor, build_level0, build_level1, build_level2, build_anchor_packet,
     )
     anchors = _anchors()
@@ -111,7 +111,7 @@ def tool_context(query: str, level: str = "l2") -> str:
 
 def tool_symbol(symbol: str) -> str:
     """Look up a symbol: file, line, callers, callees."""
-    from tools.CodeDendrite.api.task_context_packet import (
+    from synth.api.task_context_packet import (
         resolve_task_anchor, build_anchor_packet,
     )
     anchors = _anchors()
@@ -125,7 +125,7 @@ def tool_symbol(symbol: str) -> str:
 
 def tool_search(keyword: str, limit: int = 20) -> str:
     """Search anchors by keyword (symbol name, file path, or free text)."""
-    from tools.CodeDendrite.api.task_context_packet import resolve_task_anchor
+    from synth.api.task_context_packet import resolve_task_anchor
     anchors = _anchors()
     matches = resolve_task_anchor(keyword, anchors)
     rows = []

@@ -11,10 +11,15 @@ import os
 from pathlib import Path
 from typing import Optional
 
+# 本文件在 view/codeAnalysis/ 下，桶是仓库根的顶层包，需要把仓库根放上路径
+_ROOT = str(Path(__file__).resolve().parents[2])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
 # 导入工具包内的模块
-from tools.codeAnalysis.analyzer import PythonAnalyzer, CppAnalyzer, JavaAnalyzer
-from tools.codeAnalysis.analyzer.structure_analyzer import ProjectStructureAnalyzer, analyze_project_structure
-from tools.codeAnalysis.graph import MermaidGenerator, generate_mermaid_for_project
+from parse.codeAnalysis.analyzer import PythonAnalyzer, CppAnalyzer, JavaAnalyzer
+from parse.codeAnalysis.analyzer.structure_analyzer import ProjectStructureAnalyzer, analyze_project_structure
+from view.codeAnalysis.graph import MermaidGenerator, generate_mermaid_for_project
 
 
 def detect_language(project_path: str) -> str:

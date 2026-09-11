@@ -3,19 +3,12 @@ repair.py - 锚点批量修复 (Hard L2-001, Medium L2-004, L2-005)
 ==============================================================
 """
 
-import sys
 import time
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
 
 from base.anchorRepair.types import AnchorStatusType, AnchorStatus, RepairResult, SyncResult
-
-# 添加 codeTree 目录到路径以复用 anchor_engine_v2
-_CODE_TREE_PATH = Path(__file__).parent.parent / "codeTree"
-if str(_CODE_TREE_PATH) not in sys.path:
-    sys.path.insert(0, str(_CODE_TREE_PATH))
-
-from anchor_engine_v2 import (
+from index.codeTree.anchor_engine_v2 import (
     Anchor, compute_hash_v2, classify_severity,
     _load_db, _save_db, ANCHOR_DB
 )

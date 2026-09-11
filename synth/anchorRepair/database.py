@@ -4,17 +4,11 @@ database.py - 锚点数据库管理
 对 anchor_engine_v2 的封装，提供更友好的接口。
 """
 
-import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import asdict
 
-# 添加 codeTree 目录到路径以复用 anchor_engine_v2
-_CODE_TREE_PATH = Path(__file__).parent.parent / "codeTree"
-if str(_CODE_TREE_PATH) not in sys.path:
-    sys.path.insert(0, str(_CODE_TREE_PATH))
-
-from anchor_engine_v2 import (
+from index.codeTree.anchor_engine_v2 import (
     Anchor, _load_db, _save_db, ANCHOR_DB
 )
 

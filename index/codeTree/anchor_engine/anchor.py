@@ -179,10 +179,14 @@ def check_drift(
 
     if anchor_ids:
         for aid in anchor_ids:
-            if aid in db:
+            if aid in db and not aid.startswith("_"):
                 to_check[aid] = Anchor(**db[aid])
     elif not doc_text:
         for aid, data in db.items():
+            # `_meta` 是库版本头，不是锚点：空库时 _load_db 只返回 {"_meta": ...}，
+            # 原来会把它当锚点塞进 Anchor(**data) 直接 TypeError。
+            if aid.startswith("_") or not isinstance(data, dict):
+                continue
             to_check[aid] = Anchor(**data)
 
     # also merge with DB for stored hashes
@@ -304,6 +308,10 @@ def list_anchors(root: str = ".") -> dict:
     db = _load_db(rp)
     result = []
     for aid, data in db.items():
+        # `_meta` 是库版本头，不是锚点：空库时 _load_db 只返回 {"_meta": ...}，
+        # 原来会把它当锚点塞进 Anchor(**data) 直接 TypeError。
+        if aid.startswith("_") or not isinstance(data, dict):
+            continue
         a = Anchor(**data)
         h, status = compute_hash(a.file, a.symbol, a.line_start, a.line_end, rp)
         drift = "ok" if (status == "ok" and h == a.hash) else status if status != "ok" else "stale"

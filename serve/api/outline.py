@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from tools.CodeDendrite.api.anchors import load_anchors
+from index.api.anchors import load_anchors
 
 
 TYPE_LABELS = {
