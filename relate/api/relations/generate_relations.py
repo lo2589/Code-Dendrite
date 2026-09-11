@@ -81,16 +81,22 @@ def generate_relations(root: str = ".") -> dict:
                     refs = [{"target": to_id, "seq": 0, "conds": ["nocond"]}]
                 for ref in refs:
                     condition = _callee_condition(ref)
+                    bridge_kind = ref.get("bridge_kind") if isinstance(ref, dict) else None
                     _add_edge(Edge(
                         from_id=from_id,
                         to_id=to_id,
-                        edge_type="call",
+                        edge_type="dispatch" if bridge_kind else "call",
                         data_in=", ".join(i.get("type", "") for i in anchor.inputs if i.get("type")),
                         data_out=", ".join(o.get("type", "") for o in anchor.outputs if o.get("type")),
                         outer_hash=_edge_hash(from_id, to_id),
                         condition=condition,
                         is_conditional=bool(condition),
                         seq=[_callee_seq(ref)],
+                        call_line=int(ref.get("line", 0) or 0),
+                        call_column=int(ref.get("column", 0) or 0),
+                        resolution=str(ref.get("resolution") or "exact"),
+                        evidence=str(ref.get("evidence") or "anchor-call-site"),
+                        bridge_kind=bridge_kind,
                     ))
 
         # 2) Inheritance edges.
@@ -118,30 +124,49 @@ def generate_relations(root: str = ".") -> dict:
                     data_out=anchor.overrides,
                 ))
 
-        # 3) Dataflow edges from anchor.callees.
-        for anchor in anchors.values():
-            if anchor.is_virtual:
-                continue
-            for raw_callee in _iter_call_refs(anchor):
-                callee_id = _callee_target(raw_callee)
-                if not callee_id:
-                    continue
-                callee = _resolve_id(callee_id, id_index)
-                if not callee or callee.is_virtual:
-                    continue
-                if (_norm(anchor.id), _norm(callee.id)) in skip_pairs:
-                    continue  # callee 通过虚拟块路由，不建直接数据流边
-                condition = _callee_condition(raw_callee)
+        # 3) Dataflow edges: 严谨数据流 —— 只保留真实数据移动
+        #    (参数传入 / 返回值被消费 / 产出 relay / 同类 self.attr 写->读)，
+        #    不再"调用即数据流"。
+        try:
+            from relate.dataFlow.strict_dataflow import compute_strict_dataflow
+
+            for df in compute_strict_dataflow(str(root_path), anchors, skip_pairs=skip_pairs):
                 _add_edge(Edge(
-                    from_id=_norm(anchor.id),
-                    to_id=_norm(callee.id),
+                    from_id=df["from_id"],
+                    to_id=df["to_id"],
                     edge_type="dataflow",
-                    data_in=", ".join(o.get("type", "") for o in anchor.outputs if o.get("type")),
-                    data_out=", ".join(i.get("type", "") for i in callee.inputs if i.get("type")),
-                    condition=condition,
-                    is_conditional=bool(condition),
-                    seq=[_callee_seq(raw_callee)],
+                    data_in=df.get("data_in", ""),
+                    data_out=df.get("data_out", ""),
+                    condition=df.get("condition"),
+                    is_conditional=bool(df.get("condition")),
+                    seq=df.get("seq", []),
+                    evidence=df.get("evidence", "strict-dataflow"),
                 ))
+        except Exception as ex:  # 严格提取失败时回退旧的 call-derived dataflow，保证产物可用
+            failed.append("strict dataflow, fallback to call-derived: {}".format(ex))
+            for anchor in anchors.values():
+                if anchor.is_virtual:
+                    continue
+                for raw_callee in _iter_call_refs(anchor):
+                    callee_id = _callee_target(raw_callee)
+                    if not callee_id:
+                        continue
+                    callee = _resolve_id(callee_id, id_index)
+                    if not callee or callee.is_virtual:
+                        continue
+                    if (_norm(anchor.id), _norm(callee.id)) in skip_pairs:
+                        continue  # callee 通过虚拟块路由，不建直接数据流边
+                    condition = _callee_condition(raw_callee)
+                    _add_edge(Edge(
+                        from_id=_norm(anchor.id),
+                        to_id=_norm(callee.id),
+                        edge_type="dataflow",
+                        data_in=", ".join(o.get("type", "") for o in anchor.outputs if o.get("type")),
+                        data_out=", ".join(i.get("type", "") for i in callee.inputs if i.get("type")),
+                        condition=condition,
+                        is_conditional=bool(condition),
+                        seq=[_callee_seq(raw_callee)],
+                    ))
 
         # 4) Impact edges inferred from call/dataflow fan-in.
         dependents = defaultdict(set)

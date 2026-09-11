@@ -51,6 +51,11 @@ ANCHOR_DEFAULTS = {
     "scope_label": None,
     "block_metadata": {},
     "registered_as": None,
+    "column_start": 0,
+    "column_end": 0,
+    "qualified_name": "",
+    "signature": "",
+    "imports": [],
 }
 
 BUILTIN_NOISE = {

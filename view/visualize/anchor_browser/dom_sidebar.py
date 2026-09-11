@@ -119,9 +119,16 @@ __FILE_CODE_JS__
 let curFile = null, showExt = true, CG = null;
 
 /* ──────── source view ──────── */
-function renderSource(fp, ls, le){
-  const src = FILE_CODE[fp];
-  if(!src){document.getElementById('d-src-pre').textContent='(source not available)';return;}
+/* 源码不装在页里，用到才从磁盘取。内联过的那一版，四分之三的体积是源码快照，
+   而快照一旦生成就开始过时；而且只装了本页那一个文件，点到邻居的 anchor 就是
+   一句「取不到」。现在它来自磁盘，所以既不占页面体积，也永远是当前的。 */
+const CODE = {};
+function sourceUrl(fp){
+  const q = new URLSearchParams(location.search);
+  q.delete('page'); q.set('file', fp);
+  return 'draw-source?' + q.toString();
+}
+function paintSource(fp, src, ls, le){
   const lines = src.split('\\n');
   let h = '';
   lines.forEach((line,i)=>{
@@ -136,6 +143,18 @@ function renderSource(fp, ls, le){
     const spans=pre.querySelectorAll('.src-hl');
     if(spans.length) spans[0].scrollIntoView({block:'center'});
   }
+}
+function renderSource(fp, ls, le){
+  const pre=document.getElementById('d-src-pre');
+  if(CODE[fp]!==undefined){paintSource(fp,CODE[fp],ls,le);return;}
+  if(FILE_CODE[fp]!==undefined){CODE[fp]=FILE_CODE[fp];paintSource(fp,FILE_CODE[fp],ls,le);return;}
+  pre.textContent='读取中… '+fp;
+  fetch(sourceUrl(fp),{cache:'no-store'})
+    .then(r=>r.ok?r.text():Promise.reject(new Error('HTTP '+r.status)))
+    .then(t=>{CODE[fp]=t;paintSource(fp,t,ls,le);})
+    /* 说清楚是哪个文件、为什么没拿到。「取不到」这三个字本身不是答案。 */
+    .catch(e=>{pre.textContent='读不到 '+fp+'：'+String(e.message||e)
+      +'\\n（把这一页当普通文件直接打开时会这样，源码要经 host 才能读）';});
 }
 
 /* ──────── file tree ──────── */
@@ -152,7 +171,7 @@ function renderTree(tree, el, path) {
       renderTree(ch, kids, fp);
       wrap.appendChild(lbl); wrap.appendChild(kids); el.appendChild(wrap);
     } else {
-      const cnt=(FILE_ANCHORS[fp]||[]).length;
+      const cnt=(typeof FILE_COUNT!=='undefined'&&FILE_COUNT[fp]!==undefined)?FILE_COUNT[fp]:(FILE_ANCHORS[fp]||[]).length;
       const f=document.createElement('div');
       f.className='fi'; f.dataset.path=fp; f.title=fp;
       f.innerHTML=esc(name)+'<span class="fc">'+cnt+'</span>';
@@ -164,7 +183,31 @@ function renderTree(tree, el, path) {
 function toggleD(lbl){const c=lbl.nextElementSibling;const o=c.classList.toggle('open');lbl.querySelector('.ca').textContent=o?'▼':'▶';}
 function expandUp(el){let p=el.parentElement;while(p&&p.id!=='file-tree'){if(p.classList.contains('dc')){p.classList.add('open');const l=p.previousElementSibling;if(l){const c=l.querySelector('.ca');if(c)c.textContent='▼';}}p=p.parentElement;}}
 function filterTree(q){q=q.toLowerCase();document.querySelectorAll('.fi').forEach(el=>{const s=!q||el.dataset.path.toLowerCase().includes(q);el.style.display=s?'':'none';if(s&&q)expandUp(el);});}
+/* 每一页只装自己这个文件和它一跳之内的邻居。点到本页没有的文件，就换页——
+   一页的大小因此由文件决定，不由仓库决定。 */
+function pageHref(path){
+  const id = (typeof PAGE_OF!=='undefined') ? PAGE_OF[path] : undefined;
+  if (id === undefined) return null;
+  if (location.protocol === 'file:') {
+    const base = location.pathname.replace(/[/][^/]*$/, '');
+    const stem = location.pathname.split('/').pop().replace(/[.]html$/, '').replace(/_pages$/, '');
+    return base.replace(/[/][^/]*_pages$/, '') + '/' + (location.pathname.includes('_pages/') ? '' : stem + '_pages/') + id + '.html';
+  }
+  const q = new URLSearchParams(location.search);
+  q.set('page', id);
+  return location.pathname + '?' + q.toString();
+}
+function goHome(){
+  if (location.protocol === 'file:') { history.back(); return; }
+  const q = new URLSearchParams(location.search);
+  q.delete('page');
+  location.href = location.pathname + (q.toString() ? '?' + q.toString() : '');
+}
 function selectFile(path,el){
+  if ((FILE_ANCHORS[path]||[]).length === 0 && (typeof FILE_COUNT==='undefined' || (FILE_COUNT[path]||0) > 0)) {
+    const href = pageHref(path);
+    if (href) { location.href = href; return; }
+  }
   document.querySelectorAll('.fi').forEach(e=>e.classList.remove('sel')); el.classList.add('sel');
   curFile=path;
   document.getElementById('gtit').textContent=path+'  ('+(FILE_ANCHORS[path]||[]).length+' anchors)';
@@ -576,18 +619,25 @@ class CompoundGraph {
         bh+=`</g>`;
         nh+=`<g transform="translate(${sn.x.toFixed(1)},${sn.y.toFixed(1)})">`;
         // Labels and small nodes stay in the foreground layer.
-        const clbl=sn.label.length>20?sn.label.slice(0,18)+'…':sn.label;
-        nh+=`<text data-nid="${escA(sn.id)}" x="0" y="${-hh+16}" text-anchor="middle" fill="#c586c0" font-size="12" font-family="Consolas,monospace" font-weight="bold" style="cursor:pointer">${escX(clbl)}</text>`;
+        /* 名字不截断：放不下就折行。一个被切成 factory#14.tre… 的名字，
+           既不能读也不能搜，省下的那点宽度不值这个。 */
+        const clines=wrapLabel(sn.label, Math.max(12, Math.floor(sn.w/7.2)), 3);
+        clines.forEach((ln,li)=>{
+          nh+=`<text data-nid="${escA(sn.id)}" x="0" y="${-hh+16+li*13}" text-anchor="middle" fill="#c586c0" font-size="12" font-family="Consolas,monospace" font-weight="bold" style="cursor:pointer">${escX(ln)}</text>`;
+        });
         // method circles inside
         for(const m of sn.methods){
           const mSel=m.id===sel;
           const mf=mSel?'#2a6a4a':(CFILL[m.type]||CFILL['']);
           const mt=CTXT[m.type]||CTXT[''];
-          const mlbl=m.label.length>9?m.label.slice(0,7)+'…':m.label;
+          const mlines=wrapLabel(m.label, 11, 2);
           nh+=`<g data-nid="${escA(m.id)}" transform="translate(${m.ox.toFixed(1)},${m.oy.toFixed(1)})" style="cursor:pointer">`;
           nh+=`<circle r="18" fill="${mf}" stroke="${mSel?'#fff':'none'}" stroke-width="${mSel?2:0}"/>`;
           nh+=`<title>${escX(m.id)}</title>`;
-          nh+=`<text text-anchor="middle" dominant-baseline="central" fill="${mt}" font-size="9" font-family="Consolas,monospace" pointer-events="none">${escX(mlbl)}</text>`;
+          mlines.forEach((ln,li)=>{
+            const dy = 22 + li*10 + (mlines.length===1?-1:0);
+            nh+=`<text text-anchor="middle" y="${dy}" fill="${mt}" font-size="9" font-family="Consolas,monospace" pointer-events="none">${escX(ln)}</text>`;
+          });
           nh+=`</g>`;
           for(const v of m.virtuals){
             const vSel=v.id===sel;
@@ -605,8 +655,11 @@ class CompoundGraph {
         const r=20;
         nh+=`<g data-nid="${escA(sn.id)}" transform="translate(${sn.x.toFixed(1)},${sn.y.toFixed(1)})" style="cursor:pointer">`;
         nh+=`<circle r="${r}" fill="${isSel?'#2a4a90':CFILL[sn.type]||CFILL['']}" stroke="${isSel?'#fff':'none'}" stroke-width="${isSel?2:0}"/>`;
-        const lbl=sn.label.length>11?sn.label.slice(0,9)+'…':sn.label;
-        nh+=`<text text-anchor="middle" dominant-baseline="central" fill="${CTXT[sn.type]||CTXT['']}" font-size="10" font-family="Consolas,monospace" pointer-events="none">${escX(lbl)}</text>`;
+        /* 名字挪到圆下面折行。塞在 r=20 的圆里就只剩九个字符，
+           generate_experiment_report 会变成 generate_… —— 读不出也搜不到。 */
+        wrapLabel(sn.label, 14, 3).forEach((ln,li)=>{
+          nh+=`<text text-anchor="middle" y="${r+13+li*11}" fill="${CTXT[sn.type]||CTXT['']}" font-size="10" font-family="Consolas,monospace" pointer-events="none">${escX(ln)}</text>`;
+        });
         nh+=`</g>`;
       } else {
         // external node — dashed circle
@@ -614,8 +667,9 @@ class CompoundGraph {
         const r=12;
         nh+=`<g data-nid="${escA(sn.id)}" transform="translate(${sn.x.toFixed(1)},${sn.y.toFixed(1)})" style="cursor:pointer" opacity="0.75">`;
         nh+=`<circle r="${r}" fill="#1a2030" stroke="${isSel?'#fff':'#3a5a7a'}" stroke-width="${isSel?2:1}" stroke-dasharray="3 2"/>`;
-        const lbl=sn.label.length>9?sn.label.slice(0,7)+'…':sn.label;
-        nh+=`<text text-anchor="middle" dominant-baseline="central" fill="#3a6080" font-size="9" font-family="Consolas,monospace" pointer-events="none">${escX(lbl)}</text>`;
+        wrapLabel(sn.label, 13, 2).forEach((ln,li)=>{
+          nh+=`<text text-anchor="middle" y="${r+11+li*10}" fill="#3a6080" font-size="9" font-family="Consolas,monospace" pointer-events="none">${escX(ln)}</text>`;
+        });
         nh+=`</g>`;
       }
     }
@@ -643,8 +697,16 @@ function renderDetail(nid){
   if(a.drift&&a.drift!=='ok')h+=` &middot; <span style="color:#f85149">drift:${esc(a.drift)}</span>`;
   h+=`</div>`;
   if(a.desc)h+=`<div class="ds"><h4>Description</h4><p>${esc(a.desc)}</p></div>`;
-  if(a.ins&&a.ins.length)h+=`<div class="ds"><h4>Inputs</h4><p>${esc(a.ins.join(', '))}</p></div>`;
-  if(a.outs&&a.outs.length)h+=`<div class="ds"><h4>Outputs</h4><p>${esc(a.outs.join(', '))}</p></div>`;
+  /* 参数存的是 {name, type} 对象，join 只会调 toString，于是每一项都成了
+     [object Object]。有类型就写「名字: 类型」，没有就只写名字。 */
+  const io=xs=>xs.map(x=>{
+    if(x===null||x===undefined) return '';
+    if(typeof x!=='object') return String(x);
+    if(x.type) return x.name+': '+x.type;
+    return x.name===undefined?JSON.stringify(x):String(x.name);
+  }).filter(Boolean).join(', ');
+  if(a.ins&&a.ins.length)h+=`<div class="ds"><h4>Inputs</h4><p>${esc(io(a.ins))}</p></div>`;
+  if(a.outs&&a.outs.length)h+=`<div class="ds"><h4>Outputs</h4><p>${esc(io(a.outs))}</p></div>`;
   if(a.callers.length){
     h+=`<div class="ds"><h4>Called by (${a.callers.length})</h4><div>`;
     for(const c of a.callers){const cls=inFile.has(c)?'ci':'ce';h+=`<span class="chip ${cls}" data-nid="${escA(c)}" title="${esc(c)}">${esc(shortN(c))}</span>`;}
@@ -677,6 +739,23 @@ function virtualLabel(nid,a){
   const kind=a.vk==='condition'?'if':(a.vk||'block');
   return kind+'@'+(a.ls||'?');
 }
+/* 按可用宽度折行，不加省略号。宁可多占一行，也不给一个读不出来的名字。 */
+function wrapLabel(text, per, maxLines){
+  const t=String(text||'');
+  if(t.length<=per) return [t];
+  const out=[];
+  let rest=t;
+  while(rest.length>0 && out.length<maxLines){
+    if(out.length===maxLines-1){ out.push(rest); break; }
+    let cut=per;
+    const seg=rest.slice(0, per+1);
+    const brk=Math.max(seg.lastIndexOf('.'), seg.lastIndexOf('_'), seg.lastIndexOf('#'));
+    if(brk>per*0.5) cut=brk+1;
+    out.push(rest.slice(0,cut));
+    rest=rest.slice(cut);
+  }
+  return out;
+}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function escX(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escA(s){return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
@@ -684,6 +763,15 @@ function expandUp(el){let p=el.parentElement;while(p&&p.id!=='file-tree'){if(p.c
 
 /* ──────── init ──────── */
 renderTree(FILE_TREE,document.getElementById('file-tree'),'');
+if (typeof PAGE_SELF !== 'undefined' && PAGE_SELF) {
+  const back=document.createElement('div');
+  back.className='dl'; back.style.color='#4ea1ff'; back.textContent='← 全部文件';
+  back.onclick=goHome;
+  const host=document.getElementById('file-tree');
+  host.insertBefore(back, host.firstChild);
+  const self=[...document.querySelectorAll('.fi')].find(e=>e.dataset.path===PAGE_SELF);
+  if (self) { expandUp(self); selectFile(PAGE_SELF, self); }
+}
 if(Object.keys(FILE_TREE).length===1){const f=document.querySelector('.dl');if(f)toggleD(f);}
 </script>
 </body>

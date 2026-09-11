@@ -17,5 +17,7 @@ from collections import defaultdict
 
 from view.visualize.anchor_browser.dom_sidebar import _HTML
 from view.visualize.anchor_browser.build_file_index import _build_file_index, _build_tree, _load_anchors, _read_file_code, _slim, generate, main
+from view.visualize.anchor_browser.context import _context, _js, _one_hop, _owner_index, _subtree
+from view.visualize.anchor_browser.write_page import _write_page, _write_shell, refresh_page
 
-__all__ = ['_HTML', '_build_file_index', '_build_tree', '_load_anchors', '_read_file_code', '_slim', 'generate', 'main']
+__all__ = ['_HTML', '_build_file_index', '_build_tree', '_load_anchors', '_read_file_code', '_slim', 'generate', 'main', '_context', '_js', '_one_hop', '_owner_index', '_subtree', '_write_page', '_write_shell', 'refresh_page']

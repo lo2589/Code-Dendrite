@@ -30,8 +30,8 @@ _ANCHOR_DBG = bool(os.environ.get("CD_ANCHOR_LOG"))
 
 from index.api.anchors.call_site_collector import _alog
 from index.api.anchors.build_effective_methods_table import _anchor_to_storage, _apply_inheritance_refs, _build_effective_methods_table, _extract_call_sites_from_tree, _extract_function_io_from_tree
-from index.api.anchors.resolve import _finalize_anchor_graph, _module_anchor_for_file
-from index.api.anchors.core_anchor import _merge_code_anchor, _slow_warn
+from index.api.anchors.resolve import _finalize_anchor_graph, _module_anchor_for_file, _normalize_file_ref
+from index.api.anchors.core_anchor import _merge_code_anchor, _merge_parsed_anchor, _slow_warn
 
 def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=False) -> dict:
     root = Path(root)
@@ -161,73 +161,6 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     except Exception as e:
         failed.append("codeAnalysis: {}".format(e))
 
-    # ── 源 2: codeAnalysis（补 codeGenome 缺失的 Python 符号）──
-    _TS_EXTS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
-    try:
-        ts_analyzer = get_analyzer(str(root), language="typescript")
-        for dirpath, dirnames, filenames in os.walk(root):
-            dp = Path(dirpath)
-            dirnames[:] = [d for d in dirnames if ignore.should_scan(dp / d / "_x.ts")]
-            for fname in filenames:
-                if Path(fname).suffix.lower() not in _TS_EXTS:
-                    continue
-                ts_file = dp / fname
-                if not ignore.should_scan(ts_file):
-                    continue
-                if any(p in exclude for p in ts_file.parts):
-                    continue
-                try:
-                    rel = str(ts_file.relative_to(root)).replace("\\", "/")
-                except ValueError:
-                    rel = str(ts_file).replace("\\", "/")
-                lang = "typescript" if Path(fname).suffix.lower() in {".ts", ".tsx"} else "javascript"
-                try:
-                    _t0 = _time.perf_counter()
-                    module = ts_analyzer.analyze_file(str(ts_file))
-                    _slow_warn("ts.analyze", rel, _time.perf_counter() - _t0)
-                    for cls in module.classes:
-                        cls_name = cls.name if hasattr(cls, "name") else str(cls)
-                        key_cls = "{}::{}".format(rel, cls_name)
-                        if key_cls not in anchors:
-                            anchors[key_cls] = Anchor(
-                                id=key_cls, symbol=cls_name, file=rel,
-                                line_start=getattr(cls, "line_number", 1),
-                                line_end=getattr(cls, "line_number", 1),
-                                hash="", language=lang, symbol_type="class",
-                            )
-                    for func in module.functions:
-                        if not func.name:
-                            continue
-                        if getattr(func, "is_method", False) and getattr(func, "class_name", None):
-                            qualified = "{}.{}".format(func.class_name, func.name)
-                            fkey = "{}::{}".format(rel, qualified)
-                            sym_type = "method"
-                        else:
-                            qualified = func.name
-                            fkey = "{}::{}".format(rel, qualified)
-                            sym_type = "function"
-                        if fkey not in anchors:
-                            # calls holds bare identifiers — regex extraction has
-                            # no scope info, unlike codeGenome's AST-resolved
-                            # callees. _finalize_anchor_graph already resolves
-                            # any anchor's callees generically (same-file
-                            # candidate first, then a project-wide-unique
-                            # symbol) right before anchors.json is written, so
-                            # nothing JS/TS-specific is needed beyond handing
-                            # it these bare names — that resolver just never
-                            # received any before now.
-                            anchors[fkey] = Anchor(
-                                id=fkey, symbol=qualified, file=rel,
-                                line_start=getattr(func, "line_number", 1),
-                                line_end=getattr(func, "line_number", 1),
-                                hash="", language=lang, symbol_type=sym_type,
-                                callees=list(getattr(func, "calls", None) or []),
-                            )
-                except Exception:
-                    pass
-    except Exception as e:
-        failed.append("codeAnalysis_ts: {}".format(e))
-
     # ── 源 2a2: inline <script> blocks inside .html ───────────
     # _TS_EXTS never included .html, so a page's real logic living in an
     # inline <script> — as opposed to a linked .js file — was invisible to
@@ -289,6 +222,20 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
                         )
     except Exception as e:
         failed.append("html_inline_script: {}".format(e))
+
+    # ── 统一语言适配层 ────────────────────────────────────────
+    # Dedicated Python extraction above remains the richest implementation.
+    # Every other language now enters through the same path used by update,
+    # so a rebuild and an incremental refresh cannot disagree by language.
+    try:
+        from parse.languages.pipeline import parse_paths, walk_source_paths
+        source_paths = walk_source_paths(root, ignore=ignore, exclude_dirs=exclude)
+        parsed, language_failures, _completed = parse_paths(root, source_paths)
+        for parsed_anchor in parsed.values():
+            _merge_parsed_anchor(anchors, parsed_anchor)
+        failed.extend(language_failures)
+    except Exception as e:
+        failed.append("language_pipeline: {}".format(e))
 
 
     # ── 源 2b: codeAnalysis TypeScript/JavaScript ─────────────
@@ -463,18 +410,26 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     # ── 源 4: inheritance（mro / parent_classes / overridden_by / overrides）
     if include_virtual_blocks:
         try:
-            from index.api.control_flow_blocks import extract_control_flow_blocks
-
-            for key, block_anchor in extract_control_flow_blocks(str(root)).items():
-                if not ignore.should_scan(root / block_anchor.file):
-                    continue
-                if key not in anchors:
-                    anchors[key] = block_anchor
+            from serve.api.control_flow_dispatch import extract_file_control_flow
+            from parse.languages.pipeline import walk_source_paths
+            for source_file in walk_source_paths(root, ignore=ignore, exclude_dirs=exclude):
+                rel = _normalize_file_ref(root, source_file)
+                source = source_file.read_text(encoding="utf-8", errors="replace")
+                for key, block_anchor in extract_file_control_flow(root, rel, source).items():
+                    if key not in anchors:
+                        anchors[key] = block_anchor
         except Exception as e:
             failed.append("control_flow_blocks: {}".format(e))
 
+    # ── 运行时桥：HTTP 与 JS Worker 的可证明异步跳转 ──────────
+    try:
+        from serve.api.bridges import apply_runtime_bridges
+        apply_runtime_bridges(root, anchors)
+    except Exception as e:
+        failed.append("runtime_bridges: {}".format(e))
+
     # ── 反向构建 callers ──────────────────────────────────────
-    _finalize_anchor_graph(anchors)
+    _finalize_anchor_graph(anchors, root=root)
 
     # ── 写入 anchors.json ──────────────────────────────────────
     data = {k: _anchor_to_storage(v) for k, v in anchors.items()}

@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-05T10:59:54.621247Z",
+  "generated_at": "2026-09-11T11:06:10.758515Z",
   "phase": 1,
-  "call_structure_hash": "82111f1909af8b24bc2593a641bb0f468c48da704473b985b623e5298177e69f",
+  "call_structure_hash": "fe42cb64563d66ad69b85176c8139f1ed241924560e0a6f7eaeac579c9940e39",
   "semantic_modules": [
     {
       "id": "sm_001",
@@ -35,97 +35,37 @@
     },
     {
       "id": "sm_002",
-      "name": "cmd_report",
-      "responsibility": "Coordinate cmd report, format map, trace path",
-      "responsibility_hint": "trace_path -> to_mermaid -> to_pipeline",
+      "name": "create_analyzer",
+      "responsibility": "Handle create analyzer",
+      "responsibility_hint": "get_analyzer -> __init__ -> GenericLanguageAnalyzer -> __init__",
       "entry_functions": [
         {
-          "symbol_id": "synth/codeTree/anchor_cli/load_config.py::cmd_report",
-          "confidence": "high",
-          "signal": "dispatch_source+fanout"
-        },
-        {
-          "symbol_id": "synth/context_builder/formatter.py::format_map",
-          "confidence": "high",
-          "signal": "dispatch_source+fanout"
-        },
-        {
-          "symbol_id": "synth/smartAnalyzer/smart_analyzer_patch.py::SmartCodeAnalyzerV2.trace_path",
+          "symbol_id": "parse/languages/registry.py::create_analyzer",
           "confidence": "high",
           "signal": "dispatch_source+fanout"
         }
       ],
       "member_symbols": [
-        "synth/codeTree/anchor_cli/load_config.py::cmd_coverage",
-        "synth/codeTree/anchor_cli/load_config.py::cmd_report",
-        "synth/codeTree/anchor_cli/load_config.py::load_config",
-        "synth/codeTree/anchor_cli/load_config.py::print",
-        "synth/codeTree/deep_drift/list_all_symbols.py::_list_all_symbols",
-        "synth/context_builder/formatter.py::_to_compact",
-        "synth/context_builder/formatter.py::_to_json",
-        "synth/context_builder/formatter.py::format_map",
-        "synth/smartAnalyzer/smart_analyzer_patch.py::SmartCodeAnalyzerV2.trace_path",
-        "synth/smartAnalyzer/smart_analyzer_patch.py::result.to_mermaid",
-        "synth/smartAnalyzer/smart_analyzer_patch.py::result.to_pipeline"
+        "parse/codeAnalysis/analyzer/__init__.py::get_analyzer",
+        "parse/codeAnalysis/analyzer/base.py::BaseAnalyzer.__init__",
+        "parse/codeAnalysis/analyzer/generic_analyzer.py::GenericLanguageAnalyzer",
+        "parse/codeAnalysis/analyzer/generic_analyzer.py::GenericLanguageAnalyzer.__init__",
+        "parse/codeAnalysis/analyzer/python_analyzer.py::PythonAnalyzer",
+        "parse/codeAnalysis/analyzer/python_analyzer.py::PythonAnalyzer.__init__",
+        "parse/codeAnalysis/analyzer/typescript_analyzer.py::TypeScriptAnalyzer",
+        "parse/codeAnalysis/analyzer/typescript_analyzer.py::TypeScriptAnalyzer.__init__",
+        "parse/languages/registry.py::GenericLanguageAnalyzer",
+        "parse/languages/registry.py::TypeScriptAnalyzer",
+        "parse/languages/registry.py::create_analyzer",
+        "parse/languages/registry.py::language_for_path"
       ],
       "cross_module_edges": [],
       "source_dirs": [
-        "synth/"
+        "parse/"
       ]
     },
     {
       "id": "sm_003",
-      "name": "context",
-      "responsibility": "Handle tool context",
-      "responsibility_hint": "load_anchors -> _anchors -> _module_tree -> _relations",
-      "entry_functions": [
-        {
-          "symbol_id": "serve/mcp_server.py::tool_context",
-          "confidence": "high",
-          "signal": "dispatch_source+fanout"
-        }
-      ],
-      "member_symbols": [
-        "index/api/anchors/core_load.py::load_anchors",
-        "serve/mcp_server.py::_anchors",
-        "serve/mcp_server.py::_module_tree",
-        "serve/mcp_server.py::_relations",
-        "serve/mcp_server.py::json.dumps",
-        "serve/mcp_server.py::tool_context",
-        "synth/api/task_context_packet/anchor.py::_anchor_attr",
-        "synth/api/task_context_packet/anchor.py::_bounded_matches",
-        "synth/api/task_context_packet/anchor.py::_build_edge_indexes",
-        "synth/api/task_context_packet/anchor.py::_find_anchor_area",
-        "synth/api/task_context_packet/anchor.py::_match_sort_key",
-        "synth/api/task_context_packet/anchor.py::_score_related_symbol",
-        "synth/api/task_context_packet/anchor.py::build_level0",
-        "synth/api/task_context_packet/anchor.py::build_level1",
-        "synth/api/task_context_packet/anchor.py::build_level2",
-        "synth/api/task_context_packet/anchor.py::resolve_task_anchor",
-        "synth/api/task_context_packet/plugin.py::_find_anchor_module",
-        "synth/api/task_context_packet/plugin.py::_is_test_file"
-      ],
-      "cross_module_edges": [
-        {
-          "to_module": "sm_007",
-          "edge_type": "call",
-          "count": 1,
-          "top_pairs": [
-            [
-              "serve/mcp_server.py::_anchors",
-              "index/api/anchors/core_load.py::load_anchors"
-            ]
-          ]
-        }
-      ],
-      "source_dirs": [
-        "index/",
-        "serve/",
-        "synth/"
-      ]
-    },
-    {
-      "id": "sm_004",
       "name": "dispatch",
       "responsibility": "Coordinate dispatch, analyze tree, run",
       "responsibility_hint": "get_anchor -> load_anchors -> load_relations -> _current_python_range",
@@ -224,7 +164,7 @@
       ]
     },
     {
-      "id": "sm_005",
+      "id": "sm_004",
       "name": "generate_mermaid_for",
       "responsibility": "Handle generate mermaid for project",
       "responsibility_hint": "MermaidGenerator -> __init__ -> _build_flow_graph -> _calculate_duration",
@@ -264,6 +204,75 @@
       "cross_module_edges": [],
       "source_dirs": [
         "view/"
+      ]
+    },
+    {
+      "id": "sm_005",
+      "name": "context",
+      "responsibility": "Coordinate tool context, cmd report, format map",
+      "responsibility_hint": "load_anchors -> _anchors -> _module_tree -> _relations",
+      "entry_functions": [
+        {
+          "symbol_id": "serve/mcp_server.py::tool_context",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "synth/codeTree/anchor_cli/load_config.py::cmd_report",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        },
+        {
+          "symbol_id": "synth/context_builder/formatter.py::format_map",
+          "confidence": "high",
+          "signal": "dispatch_source+fanout"
+        }
+      ],
+      "member_symbols": [
+        "index/api/anchors/core_load.py::load_anchors",
+        "serve/mcp_server.py::_anchors",
+        "serve/mcp_server.py::_module_tree",
+        "serve/mcp_server.py::_relations",
+        "serve/mcp_server.py::json.dumps",
+        "serve/mcp_server.py::tool_context",
+        "synth/api/task_context_packet/anchor.py::_anchor_attr",
+        "synth/api/task_context_packet/anchor.py::_bounded_matches",
+        "synth/api/task_context_packet/anchor.py::_build_edge_indexes",
+        "synth/api/task_context_packet/anchor.py::_find_anchor_area",
+        "synth/api/task_context_packet/anchor.py::_match_sort_key",
+        "synth/api/task_context_packet/anchor.py::_score_related_symbol",
+        "synth/api/task_context_packet/anchor.py::build_level0",
+        "synth/api/task_context_packet/anchor.py::build_level1",
+        "synth/api/task_context_packet/anchor.py::build_level2",
+        "synth/api/task_context_packet/anchor.py::resolve_task_anchor",
+        "synth/api/task_context_packet/plugin.py::_find_anchor_module",
+        "synth/api/task_context_packet/plugin.py::_is_test_file",
+        "synth/codeTree/anchor_cli/load_config.py::cmd_coverage",
+        "synth/codeTree/anchor_cli/load_config.py::cmd_report",
+        "synth/codeTree/anchor_cli/load_config.py::load_config",
+        "synth/codeTree/anchor_cli/load_config.py::print",
+        "synth/codeTree/deep_drift/list_all_symbols.py::_list_all_symbols",
+        "synth/context_builder/formatter.py::_to_compact",
+        "synth/context_builder/formatter.py::_to_json",
+        "synth/context_builder/formatter.py::format_map"
+      ],
+      "cross_module_edges": [
+        {
+          "to_module": "sm_007",
+          "edge_type": "call",
+          "count": 1,
+          "top_pairs": [
+            [
+              "serve/mcp_server.py::_anchors",
+              "index/api/anchors/core_load.py::load_anchors"
+            ]
+          ]
+        }
+      ],
+      "source_dirs": [
+        "index/",
+        "serve/",
+        "synth/"
       ]
     },
     {
@@ -352,6 +361,7 @@
         "index/api/anchors/anchors_list.py::resolve_anchor_candidates",
         "index/api/anchors/core_load.py::filter_anchors_by_file",
         "index/api/anchors/core_load.py::load_anchors",
+        "parse/codeAnalysis/analyzer/js_resolver.py::JsResolver._expand",
         "relate/api/relations/generate_relations.py::generate_relations",
         "relate/api/relations/load_relations.py::_build_id_index",
         "relate/api/relations/load_relations.py::_build_virtual_skip_pairs",
@@ -405,6 +415,7 @@
       "source_dirs": [
         "base/",
         "index/",
+        "parse/",
         "relate/",
         "serve/",
         "synth/"

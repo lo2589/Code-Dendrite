@@ -24,6 +24,19 @@ class CodeDendriteIgnore:
     
     # 默认完全不扫描的规则
     MINIMAL_CONFIG = """[scan_exclude]
+# Dependencies. Someone else's code is not this project's causal graph, and
+# indexing it dwarfs the project: 85.7% of one repository's 218,791 anchors
+# were node_modules, which is where a 68.6GB index and a 1.3GB drawing came
+# from. The rich template below has always excluded these; nothing called it,
+# so every project got this minimal one instead and scanned the lot.
+node_modules/
+**/node_modules/
+.venv/
+**/.venv/
+venv/
+**/venv/
+site-packages/
+**/site-packages/
 .codedendrite/
 **/.codedendrite/
 __pycache__/

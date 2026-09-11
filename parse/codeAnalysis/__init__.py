@@ -5,9 +5,8 @@
 # 2. 项目结构分析 - 扫描目录结构并统计
 #
 # 使用方式：
-#   from parse.codeAnalysis import analyze_project
-#   from view.codeAnalysis.graph import generate_mermaid_for_project
-#   from parse.codeAnalysis.analyzer.structure_analyzer import analyze_project_structure
+#   from tools.codeAnalysis import analyze_project, generate_mermaid_for_project
+#   from tools.codeAnalysis.analyzer.structure_analyzer import analyze_project_structure
 
 # 导出所有公共 API
 from parse.codeAnalysis.analyzer.structure_analyzer import analyze_project_structure, ProjectStructureAnalyzer

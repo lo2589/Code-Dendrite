@@ -136,10 +136,10 @@ def load_yaml_profile(path: str | Path, root: str | Path, anchors: dict) -> dict
     for loader in loader_candidates:
         module = _module_name(loader.file)
         function = str(loader.symbol)
-        worker = Path(__file__).with_name("yaml_profile_worker.py")
         command = [
             sys.executable,
-            str(worker),
+            "-m",
+            "tools.CodeDendrite.api.yaml_profile_worker",
             str(Path(root).expanduser().resolve()),
             module,
             function,
@@ -147,7 +147,7 @@ def load_yaml_profile(path: str | Path, root: str | Path, anchors: dict) -> dict
         ]
         result = subprocess.run(
             command,
-            cwd=str(Path(root).expanduser().resolve()),
+            cwd=repo_root,
             text=True,
             capture_output=True,
             check=False,

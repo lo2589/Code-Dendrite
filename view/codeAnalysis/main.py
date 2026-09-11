@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Optional
 
 # 导入工具包内的模块
-from parse.codeAnalysis.analyzer import PythonAnalyzer, CppAnalyzer, JavaAnalyzer
-from parse.codeAnalysis.analyzer.structure_analyzer import ProjectStructureAnalyzer, analyze_project_structure
-from view.codeAnalysis.graph import MermaidGenerator, generate_mermaid_for_project
+from tools.codeAnalysis.analyzer import PythonAnalyzer, CppAnalyzer, JavaAnalyzer
+from tools.codeAnalysis.analyzer.structure_analyzer import ProjectStructureAnalyzer, analyze_project_structure
+from tools.codeAnalysis.graph import MermaidGenerator, generate_mermaid_for_project
 
 
 def detect_language(project_path: str) -> str:

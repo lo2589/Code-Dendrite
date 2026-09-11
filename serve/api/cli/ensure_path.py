@@ -10,6 +10,7 @@ Examples:
 """
 import argparse
 import ast
+import json
 import os
 import sys
 from collections import Counter
@@ -83,7 +84,20 @@ def rebuild(target: str, include_virtual_blocks: bool = False):
     _db.update(_files_with_anchors)
     _db.save()
 
-def update(target: str, include_virtual_blocks: bool = False, exclude_dirs: list | None = None):
+    # What parser produced this index. Without it every later `update` sees a
+    # missing stamp, decides the parser has changed and rebuilds again.
+    _dir = os.path.join(target, ".codedendrite")
+    os.makedirs(_dir, exist_ok=True)
+    with open(os.path.join(_dir, "parser_version.json"), "w", encoding="utf-8") as handle:
+        json.dump({"parser": HashDatabase.PARSER_VERSION}, handle)
+
+def update(
+    target: str,
+    include_virtual_blocks: bool = False,
+    exclude_dirs: list | None = None,
+    changed_files: list[str] | None = None,
+    topology_only: bool = False,
+):
     # """Incrementally refresh anchors and relations from git diff."""  # 2026-05-08: 原 docstring
     """Incrementally refresh anchors and relations based on file content hash."""
     codedendrite_dir = os.path.join(target, ".codedendrite")
@@ -94,6 +108,36 @@ def update(target: str, include_virtual_blocks: bool = False, exclude_dirs: list
     if not all(os.path.exists(path) for path in required_outputs):
         print("Missing CodeDendrite outputs; running full rebuild.")
         rebuild(target, include_virtual_blocks=include_virtual_blocks)
+        return
+
+    # An extractor change invalidates output, not input. Every incremental path
+    # asks "has this file changed?" and the answer is no — the file is untouched
+    # and the fix is in the parser — so a corrected span never reaches an
+    # already-indexed repository. `projectContext` in one repo sat at line
+    # 440->440 for a month while a fresh parse gave 470->556. Nothing but a full
+    # pass re-derives it, so a version change asks for one.
+    # Only when nobody named the files. An explicit list is a caller saying
+    # "just these" — that is how one page of `cdd draw` is brought up to date on
+    # a click, and it has to stay a handful of files however old the index is.
+    if changed_files is not None:
+        _skip_parser_check = True
+    else:
+        _skip_parser_check = False
+    from parse.hash.database import HashDatabase as _HashDatabase
+    _stamp = os.path.join(codedendrite_dir, "parser_version.json")
+    _want = None if _skip_parser_check else getattr(_HashDatabase, "PARSER_VERSION", None)
+    _have = None
+    try:
+        with open(_stamp, encoding="utf-8") as handle:
+            _have = json.load(handle).get("parser")
+    except (OSError, ValueError):
+        _have = None
+    if not _skip_parser_check and _have != _want:
+        print("Parser version {} -> {}; running full rebuild.".format(_have, _want))
+        rebuild(target, include_virtual_blocks=include_virtual_blocks)
+        os.makedirs(codedendrite_dir, exist_ok=True)
+        with open(_stamp, "w", encoding="utf-8") as handle:
+            json.dump({"parser": _want}, handle)
         return
 
     # 2026-05-08: 改用 HashDatabase.get_stale_files() 检测变更。
@@ -109,7 +153,20 @@ def update(target: str, include_virtual_blocks: bool = False, exclude_dirs: list
     from pathlib import Path as _Path
 
     db = HashDatabase(target)
-    changed = db.get_stale_files() + db.get_new_files(target)
+    if changed_files is None:
+        changed = db.get_stale_files() + db.get_new_files(target)
+    else:
+        root_path = _Path(target).resolve()
+        changed = []
+        for value in changed_files:
+            candidate = _Path(value)
+            absolute = candidate.resolve() if candidate.is_absolute() else (root_path / candidate).resolve()
+            try:
+                relative = absolute.relative_to(root_path).as_posix()
+            except ValueError as exc:
+                raise SystemExit("Changed file escapes project root: {}".format(value)) from exc
+            if relative not in changed:
+                changed.append(relative)
     if exclude_dirs:
         _excl = set(exclude_dirs)
         changed = [f for f in changed if not any(part in _excl for part in _Path(f).parts)]
@@ -125,20 +182,21 @@ def update(target: str, include_virtual_blocks: bool = False, exclude_dirs: list
         print("Anchor update: {}".format(result.get("anchors.updated", result)))
 
     _print_relations(generate_relations(root=target))
-    module_tree = generate_module_tree(root=target)
-    print(
-        "Module tree: {} modules  hash={}".format(
-            len(module_tree.get("semantic_modules", [])),
-            module_tree.get("call_structure_hash", "")[:12],
+    if not topology_only:
+        module_tree = generate_module_tree(root=target)
+        print(
+            "Module tree: {} modules  hash={}".format(
+                len(module_tree.get("semantic_modules", [])),
+                module_tree.get("call_structure_hash", "")[:12],
+            )
         )
-    )
-    summary = generate_module_summary(root=target)
-    print(
-        "Summary: {} modules  cache={}".format(
-            len(summary.get("modules", [])),
-            "hit" if summary.get("reused_cache") else "miss",
+        summary = generate_module_summary(root=target)
+        print(
+            "Summary: {} modules  cache={}".format(
+                len(summary.get("modules", [])),
+                "hit" if summary.get("reused_cache") else "miss",
+            )
         )
-    )
 
     from index.api.anchors import load_anchors
     _anchors = load_anchors(target)
@@ -169,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="CodeDendrite unified CLI")
     parser.add_argument("target", help="Project root directory")
     parser.add_argument("--update", action="store_true", help="Incrementally refresh anchors and relations")
+    parser.add_argument("--changed-files", nargs="*", default=None, help="Refresh only these project-relative files")
+    parser.add_argument("--topology-only", action="store_true", help="Skip module tree and summary refresh")
     parser.add_argument("--debug-loop", action="store_true", help="Run the unified bug-location workflow")
     parser.add_argument("--modules", action="store_true", help="Query semantic modules")
     parser.add_argument("--module-graph", action="store_true", help="Render standard semantic module tree graph")
@@ -275,7 +335,12 @@ def main(argv: list[str] | None = None) -> int:
     include_virtual_blocks = bool(args.virtual_blocks and not args.no_virtual_blocks)
 
     if args.update:
-        update(target, include_virtual_blocks=include_virtual_blocks)
+        update(
+            target,
+            include_virtual_blocks=include_virtual_blocks,
+            changed_files=args.changed_files,
+            topology_only=args.topology_only,
+        )
         return 0
 
     rebuild(target, include_virtual_blocks=include_virtual_blocks)

@@ -2,134 +2,16 @@
 
 **用静态分析替代向量搜索，让 7B 小模型也能精确理解项目结构。**
 
----
+## V1.20：JS/TS真实作用域与异步调用链
 
-## 重构验证能力
-
-以本仓库自身为例，一次整树重组 + 文件拆分：
-
-| 项 | 数值 |
-|---|---|
-| 规模 | 47,653 行 · 175 文件 · 2,320 anchor · 5,143 边 |
-| 改动 | 文件路径 100% 变更 · 428 条 import 重写 · 42 个文件拆分为 104 个具名块 |
-| 耗时 | **1 分 00 秒**（流水线脚本化后；首次含调试为 21 分） |
-| 验证 | anchor symbol 丢失 **0**；`call` / `dataflow` / `inherit` / `dispatch` 边 **一根不差** |
-
-```
-                  合并源        重构后        判定
-anchor symbol     2,185         2,185         丢失 0
-call              2,409         2,409         ✓
-dataflow          2,409         2,409         ✓
-inherit              87            87         ✓
-dispatch             52            52         ✓
-impact              106           108         合成的 risk 排名，随语料重排
-```
-
-关键不在快，在于**可判定**。
-
-改完 428 条 import、拆散 42 个文件之后，凭什么说没弄坏？跑测试只能覆盖测试到的路径。
-有了 `anchors.json` + `relations.json` 作基线，答案是逐条可比对的：**5,063 条边搬完还是 5,063 条，
-少一条能指出是哪一条**。重构过程中确实丢过 153 条边——按行数顺序切分把同文件调用切散了，
-`_call_name` 这类项目内有 4 处同名定义的符号无法消歧——正是靠逐边比对定位并修复的。
-
-> 说明：这是**人指挥 + LLM 执行 + anchor 索引验证**的流程，不是一键工具。
-
----
-
-## 源码来源
-
-本树由两个上游合并而成：
-
-| 取自 | 内容 |
-|---|---|
-| `para-llm/tools/CodeDendrite` | `api/anchors.py` 增量更新丢边修复 + `only_ids` 范围收窄；`hash/database.py`、`codeGenome/database.py` 的原子写 + 跨进程 `db_lock` + 写前 rebase；新增 `shared/dblock.py` |
-| `WORKSPACE/CodeDendrite` | 其余全部。其中 `bind_core_anchors.py`、`codeAnalysis/visualizer.py`、`parsers/python_parser.py`、`build_map_rewrite.py`、`examples/analyze_any_project.py` **刻意保留此版本**——上游那份把路径硬编码成了 `/Users/yoli/…` 和 `F:/projects/…` |
-
-未迁入：`evaluation/`、`debug_injection/`、`pypi/`、`rl_trace/`、`plugin/`，以及上游 56 个一次性调试脚本。
-
----
-
-## 目录布局
-
-8 个桶，按依赖层级组织。实测桶间依赖单向率约 95%。
-
-```
-├── base/     Anchor 类型 · ID 规则 · 基础设施 · db_lock   16 文件   2,247 行
-├── parse/    采集：源码 → 符号（12 语言 AST）            49 文件   8,646 行
-├── index/    符号 → anchors.json                        25 文件   4,494 行
-├── relate/   → relations.json · 5 类因果边              52 文件   7,343 行
-├── synth/    模块树 · 上下文包 · 锚点维护                50 文件  11,584 行
-├── view/     可视化                                     24 文件   4,304 行
-├── serve/    入口 · CLI · MCP                           35 文件   6,700 行
-└── tests/    测试 + fixtures + examples                 28 文件   4,921 行
-```
-
-依赖方向：`base ← parse ← index ← relate ← synth ← view ← serve`，`tests` 依赖全部。
-
-**超过 300 行的文件被拆成同名包**，块名由 CDD 自己的 anchor 数据推导：
-
-```
-api/anchors.py  (1,979 行)  →  index/api/anchors/
-                                 ├── call_site_collector.py        类 _CallSiteCollector + 17 方法
-                                 ├── resolve.py                    7 个 resolve_* 函数
-                                 ├── generate_all_anchors.py       块内唯一符号
-                                 ├── build_effective_methods_table.py
-                                 ├── anchors_list.py
-                                 ├── core_anchor.py / core_load.py
-                                 ├── subscript_string.py
-                                 └── __init__.py                   re-export 全部符号
-```
-
-命名规则：单一类主导 → 类名；函数共同词根 → 词根；都没有 → 块外引用最多的符号名。
-`__init__.py` re-export 全部符号，外部 import 不受影响。
-
-旧路径 → 新路径的完整对照见 [doc/迁移映射.md](doc/迁移映射.md)。
-
----
-
-## 入口
-
-```python
-# 顶层稳定接口（90 项）
-from CodeDendrite_refactor import scan_project, create_anchor, load_anchors, PathTracer, AnchorMemory
-
-# 新代码建议直接 import 归属层
-from index.api.anchors import load_anchors
-from relate.api.relations import generate_relations
-from synth.api.module_tree_v2 import generate_module_tree_v2
-```
+V1.20修复了JS/TS链路中四类会直接误导读图的问题：注释/字符串被识别成类、嵌套函数只有一行、重复调用导致`call_sites`与`callees`错位、接收者方法被模糊绑定到同名测试函数。对象回调现在挂在所属函数下；相对`import/require`、本地工厂方法、静态HTTP路由和Worker消息均生成可追踪的精确边。
 
 ```bash
-python -m serve.api.cli --help        # 主 CLI
-python -m serve.api.query count .     # 查询命令
+cdd rebuild /path/to/project --virtual
+cdd chain src/client.js::factory.LensPanel /path/to/project --depth 12
 ```
 
-本树可独立运行，不依赖任何外部包路径。两个上游版本都做不到这一点——
-它们的 `from tools.CodeDendrite import ...` 只在 para-llm 仓库根目录下才解析得了。
-
----
-
-## Known Issues
-
-- **anchor ID 全部变更**：`api/anchors.py::create_anchor` → `index/api/anchors/core_anchor.py::create_anchor`。
-  历史 task context、action session、文档锚点需要 ID 别名解析层才能继续用。
-  实测 hash + symbol 可唯一命中约 92%，其余靠旧模块映射消歧。
-- **约 58 个文件仍超 300 行**，剩余的是单个巨型类，再拆需改动类内部结构（会改 anchor symbol）。
-- **3 个测试硬编码旧路径**（`"api/anchors.py::create_anchor"`），重构后失败。
-  建议改为按 symbol 查询，使测试对布局变更免疫。
-- `serve/mcp_server.py` 需要外部 `mcp` 包，未安装时无法 import（与重构无关）。
-
-### 相对上游修复的问题
-
-| 问题 | 上游状态 | 本树 |
-|---|---|---|
-| `from tools.CodeDendrite import ...` | 两版共 61 / 35 处，只在 para-llm 根目录可解析 | **0 处**，全部指向归属层 |
-| `rebuild` / `cmd_edges` / `cmd_count` | 两版调用均 `ModuleNotFoundError` | **可执行** |
-| YAML worker 子进程 | 启动 `-m tools.CodeDendrite.api.yaml_profile_worker`，失败后静默退回 PyYAML | 直接按文件路径执行同目录 worker |
-| `code_anchor.anchor_engine` | 包名从不存在，`agent_tools` 静默降级为空工具表 | 指向 `index.codeTree.anchor_engine` |
-| `tools.codeAnalysis.*` | 包名从不存在，`codeAnalysis/main.py` 无法 import | 指向 `parse.codeAnalysis` / `view.codeAnalysis` |
-| 根包可选导出 | `build_context` 等 6 个 API 从不存在，整行 try/except 失败连累 `PathTracer`、`AnchorMemory` | 改用真实名 `ContextBuilder` / `SymbolExpander` / `NodeReplacer`，导出 90 项（上游 83 项） |
-| pytest 收集 | 合并源 3 处收集错误，0 个测试可跑 | **192 passed / 4 failed** |
+插件实链已能贯通：`LensPanel → loadState → HTTP handler → projector.schedule → launch → Worker message handler → project → buildGraph`。HTTP/Worker跳转在`relations.json`中标记为`dispatch`。详见[CDD V1.20 JS/TS链路修复](doc/CDD_V1_20_JSTS_SCOPE_CALL_CHAIN.md)。
 
 ---
 
@@ -321,7 +203,7 @@ cdd eval validate report.json
 cdd eval summary report.json
 ```
 
-生成栏、定位栏、官方结果栏各自独立，官方 harness 未完整运行时该报告不含 solve rate。
+合同说明见 `doc/TASKPACKAGE_EVALUATION_CONTRACT.md`，机器可读 schema 位于 `evaluation/taskpackage_evaluation_v1.schema.json`。
 
 ### 完整 Issue 证据包 v2
 
@@ -331,13 +213,13 @@ cdd eval summary report.json
 cdd issue issue.md <PROJECT_PATH> --compact
 ```
 
-`task_context_packet_v2` 对同级强证据冲突返回 `ambiguous`，且最多生成一个结构化动作。字段定义见 `schemas/task_context_packet_v2.schema.json`。
+`task_context_packet_v2` 对同级强证据冲突返回 `ambiguous`，且最多生成一个结构化动作。详见 `doc/TASK_CONTEXT_PACKET_V2.md` 和 `schemas/task_context_packet_v2.schema.json`。
 
-v1/v2 共用三条证据通道：只有 `candidates` 可带动作，`alternatives` 和 `boundaries` 只保留证据。v1 缺少 resolution 的投影边统一标记为 `resolution_unavailable`。
+v1/v2 共用三条证据通道：只有 `candidates` 可带动作，`alternatives` 和 `boundaries` 只保留证据。v1 缺少 resolution 的投影边统一标记为 `resolution_unavailable`；详见 `doc/EVIDENCE_SEMANTICS_V1_V2.md`。
 
-离线比较已有任务包运行时使用 `cdd replay <TASKS.json> <RUN_DIR> --output <REPORT.json>`。缺失索引的任务会保持 `null`，不会用后验 anchor 命中补齐。
+离线比较已有任务包运行时使用 `cdd replay <TASKS.json> <RUN_DIR> --output <REPORT.json>`。缺失索引的任务会保持 `null`，不会用后验 anchor 命中补齐。详见 `doc/OFFLINE_NAVIGATION_REPLAY.md`。
 
-使用 `cdd snapshot` 保存与 base commit 绑定的每题索引；使用 `cdd issue --session` 和 `cdd action done` 阻止重复动作。
+使用 `cdd snapshot` 保存与 base commit 绑定的每题索引；使用 `cdd issue --session` 和 `cdd action done` 阻止重复动作。详见 `doc/TASK_SNAPSHOTS_AND_ACTION_SESSIONS.md`。
 
 ---
 
@@ -346,8 +228,8 @@ v1/v2 共用三条证据通道：只有 `candidates` 可带动作，`alternative
 ### 全链路生成
 
 ```bash
-cd CodeDendrite_refactor
-PYTHONPATH=. python -m serve.api.cli . --module-tree-v2
+cd tools/CodeDendrite
+PYTHONPATH=. python api/cli.py . --module-tree-v2
 ```
 
 输出：
@@ -362,13 +244,13 @@ PYTHONPATH=. python -m serve.api.cli . --module-tree-v2
 ```bash
 # 人用命令
 cdd context create_anchor .
-cdd context 'index/api/anchors/core_anchor.py::create_anchor' . --full
+cdd context 'api/anchors.py::create_anchor' . --full
 
 # 生成并保存 JSON
-PYTHONPATH=. python -m serve.api.cli . --task-context create_anchor
+PYTHONPATH=. python api/cli.py . --task-context create_anchor
 
 # 直接输出 compact 文本（给小模型用）
-PYTHONPATH=. python -m serve.api.cli . --task-context-compact PythonExtractor
+PYTHONPATH=. python api/cli.py . --task-context-compact PythonExtractor
 ```
 
 ### 按 YAML 配置展开调用链
@@ -427,6 +309,20 @@ YAML selected: answer.parse.normal, cfg.ollama, chat.normal, ...
 
 ---
 
+## AI Agent Skills
+
+`.kimi-code/skills/` 下有三个开箱即用的 agent skill，让 LLM 编码助手（Kimi Code / Claude Code）直接走 CDD 的导航能力，而不是盲翻文件：
+
+| Skill | 职责 |
+|------|------|
+| `cdd-understand` | 项目理解：索引 → 枢纽排行 → 模块树 → chain 定位 → task-context 上下文包 |
+| `cdd-rebuild` | 拓扑重构：挪代码前先查上下游调用链评估影响面，每步增量重索引验证 |
+| `cdd-learn` | 项目学习：L0 全局地图 → L1 模块 → L2 调用链 → L3 数据流，分层带人读懂项目 |
+
+想让其他项目也用上，把 `.kimi-code/skills/` 复制或软链到 `~/.kimi-code/skills/` 即可（新会话生效）。
+
+---
+
 ## 锚点数据结构
 
 ```python
@@ -449,27 +345,55 @@ class Anchor:
 
 ## 项目结构
 
-见上方 [目录布局](#目录布局)。原先的 `api/ codeGenome/ codeTree/ …` 21 个平级目录已按
-依赖层级重组为 `base / parse / index / relate / synth / view / serve / tests` 八个桶，
-旧路径 → 新路径的逐文件对照见 [doc/迁移映射.md](doc/迁移映射.md)。
-
-输出目录不变：
-
 ```
-.codedendrite/
-├── anchors.json
-├── relations.json
-├── module_tree_v2.json
-├── module_tree_v2.html
-├── task_context.json
-└── capability_candidates.json
+tools/CodeDendrite/
+├── api/                        # 公开 API 层
+│   ├── anchors.py              # 锚点管理
+│   ├── relations.py            # 关系管理
+│   ├── path_policy.py          # 路径策略（三角色分类）
+│   ├── capability_candidates.py # 能力候选提取
+│   ├── module_tree_v2.py       # 模块树 V2 核心算法
+│   ├── task_context_packet.py  # 任务上下文包
+│   ├── analysis.py             # 符号搜索
+│   └── cli.py                  # CLI 入口
+├── codeGenome/                 # 多语言 AST 提取
+├── codeTree/                   # 锚点引擎 + 深度分析
+├── codeAnalysis/               # 专用及通用语言分析器
+├── languages/                  # V1.18 统一语言注册、全量/增量解析管线
+├── inheritance/                # Python 继承追踪
+├── cpp_inheritance/            # C++ 继承追踪
+├── dataFlow/                   # 数据流分析
+├── context_builder/            # 上下文构建器
+├── anchorRepair/               # 锚点修复
+├── anchorMemory/               # AI 记忆
+├── pathTracer/                 # 路径追踪
+├── smartAnalyzer/              # 智能分析器 V2
+├── hash/                       # AST 哈希计算
+├── shared/                     # 共享类型（Anchor dataclass）
+├── visualize/                  # HTML 可视化
+│   └── module_tree_v2.py       # 模块树可视化
+├── tests/                      # 测试
+│   ├── test_module_tree_v2_smoke.py   # 模块树测试 (20 项)
+│   └── test_task_context_smoke.py     # 任务包结构与证据门测试
+└── .codedendrite/              # 输出目录
+    ├── anchors.json
+    ├── relations.json
+    ├── module_tree_v2.json
+    ├── module_tree_v2.html
+    ├── task_context.json
+    └── capability_candidates.json
 ```
+
+---
 
 ## 关键技术数据
 
 | 指标 | 数值 |
 |------|------|
-| 支持语言 | 12 种（Python/Java/C++/TS/Go/Rust/Swift/Kotlin/Ruby/PHP/HTML/C#） |
+| 可执行语言 | 20 种（Python、TS/JS、C/C++、Java、Kotlin、Go、Rust、Swift、PHP、Ruby、HTML、C#、Scala、Objective-C、Shell、PowerShell、Vue、Svelte、SQL） |
+| 配置路由 | YAML / JSON / TOML；YAML 可用 `cdd chain ... --yaml ...` 选择实际分支 |
+| 混合语言边 | V1.18 支持字面量 HTTP method + path 精确桥接；边保留行列、证据与解析状态 |
+| 更新一致性 | 全量 rebuild 与增量 update 共用语言适配层；单文件解析失败保留上次有效 Anchor |
 | 锚点总数 | 1312（537 function + 647 method + 128 class） |
 | 关系总数 | 1794（924 dataflow + 631 call + 127 impact + 75 inherit + 37 dispatch） |
 | 源文件数 | 157 |

@@ -2,21 +2,22 @@
   "_meta": {
     "version": 1,
     "created_at": "2026-09-04T17:20:06.336389",
-    "file_count": 330,
-    "updated_at": "2026-09-05T03:59:55.266482"
+    "file_count": 445,
+    "updated_at": "2026-09-11T04:06:11.697129",
+    "parser": 2
   },
   "files": {
     "parse/codeGenome/calls_extractor.py": {
       "hash": "b9137081",
-      "ast_hash": "18aeda20",
+      "ast_hash": "b4869610",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/smartAnalyzer/smart_analyzer.py": {
       "hash": "3225dc46",
-      "ast_hash": "7024cccb",
+      "ast_hash": "47af86e3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/_p6.py": {
       "hash": "0ad53483",
@@ -25,22 +26,22 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "synth/codeTree/test_anchor.py": {
-      "hash": "1bf6eab3",
-      "ast_hash": "6c1008a3",
+      "hash": "35100f03",
+      "ast_hash": "4ea13593",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/codeAnalysis/visualizer.py": {
       "hash": "23c1a897",
-      "ast_hash": "9b59e047",
+      "ast_hash": "ce164fed",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_issue_evidence_packet.py": {
       "hash": "f76c1df6",
-      "ast_hash": "66914a35",
+      "ast_hash": "24dcda57",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/codedendrite_ignore/_p2.py": {
       "hash": "36bb62d6",
@@ -56,27 +57,27 @@
     },
     "serve/api/yaml_profile_worker.py": {
       "hash": "bdf03058",
-      "ast_hash": "07d3b5fc",
+      "ast_hash": "f171d349",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_query_anchor_ranking.py": {
-      "hash": "20352df0",
-      "ast_hash": "36413b38",
+      "hash": "651bd411",
+      "ast_hash": "431f4143",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/formula_skip.py": {
       "hash": "42fe14a0",
-      "ast_hash": "a38ec288",
+      "ast_hash": "9dc30e09",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_l1_hash.py": {
       "hash": "be752789",
-      "ast_hash": "981c88ae",
+      "ast_hash": "de8aab74",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/hash/database/_p2.py": {
       "hash": "a09d8d7c",
@@ -92,27 +93,27 @@
     },
     "tests/test_l3_inheritance.py": {
       "hash": "cbe2df31",
-      "ast_hash": "dac84a2c",
+      "ast_hash": "39cd947a",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/dynamic/route_mapper.py": {
       "hash": "1278d500",
-      "ast_hash": "180b1b97",
+      "ast_hash": "98516075",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/smart.py": {
       "hash": "79ee6427",
-      "ast_hash": "d3bc5390",
+      "ast_hash": "8ba43bd8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_downward_chain_tree.py": {
-      "hash": "c43d59df",
-      "ast_hash": "2910649a",
+      "hash": "acd97c02",
+      "ast_hash": "adcb10ff",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/cpp_inheritance/cpp_parser/_p2.py": {
       "hash": "dd985ef5",
@@ -121,28 +122,28 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "base/anchorRepair/types.py": {
-      "hash": "4bfd3dec",
-      "ast_hash": "f6768bca",
+      "hash": "e89e3592",
+      "ast_hash": "2fd124cc",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_l4_dataflow.py": {
       "hash": "b9ded042",
-      "ast_hash": "a190388e",
+      "ast_hash": "33b60604",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/deps.py": {
       "hash": "c0260057",
-      "ast_hash": "8c8f6b2c",
+      "ast_hash": "3a4f2aef",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/smartAnalyzer/orchestrator.py": {
       "hash": "c7c0d77c",
-      "ast_hash": "c865c485",
+      "ast_hash": "21fb8cc1",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/issue_evidence_packet/_p2.py": {
       "hash": "4ebc56db",
@@ -158,15 +159,15 @@
     },
     "parse/codeAnalysis/analyzer/rust_analyzer.py": {
       "hash": "b7924250",
-      "ast_hash": "d70863cb",
+      "ast_hash": "76e4ac98",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/dynamic/dynamic_store.py": {
       "hash": "7fe1235b",
-      "ast_hash": "80502e00",
+      "ast_hash": "557a673f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/codeTree/dataflow_analyzer/_p3.py": {
       "hash": "2c282fdf",
@@ -184,7 +185,7 @@
       "hash": "31a59d11",
       "ast_hash": "5eabcba8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/__init__.py": {
       "hash": "77de4b96",
@@ -196,13 +197,13 @@
       "hash": "87f77cb0",
       "ast_hash": "626440f2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/codeAnalysis/bind_core_anchors.py": {
       "hash": "770611ef",
-      "ast_hash": "fdacf85c",
+      "ast_hash": "ce66e330",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/dataFlow/analyzer/_p2.py": {
       "hash": "40e69219",
@@ -224,45 +225,45 @@
     },
     "tests/test_l2_anchor_repair.py": {
       "hash": "dc8b0d1c",
-      "ast_hash": "eafa7127",
+      "ast_hash": "afd7931d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/hash/ast_hash.py": {
-      "hash": "ffe0f080",
-      "ast_hash": "df95b492",
+      "hash": "6850873a",
+      "ast_hash": "d06b9061",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_workflow_evidence.py": {
       "hash": "bbac5c91",
-      "ast_hash": "ab1177d6",
+      "ast_hash": "018e6ceb",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/analysis.py": {
       "hash": "b96836c0",
-      "ast_hash": "e7ba4d2a",
+      "ast_hash": "e8df7c73",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_backend_dispatch.py": {
       "hash": "61634b52",
       "ast_hash": "94c0a091",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_task_context_smoke.py": {
       "hash": "3f56c4ef",
-      "ast_hash": "0cf84332",
+      "ast_hash": "552df7cd",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/module_tree_graph.py": {
       "hash": "4eae0a90",
-      "ast_hash": "be547180",
+      "ast_hash": "9b5a8f13",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/_p2.py": {
       "hash": "e9dc77c1",
@@ -290,27 +291,27 @@
     },
     "relate/dataFlow/visualizer.py": {
       "hash": "15026252",
-      "ast_hash": "7898ebaa",
+      "ast_hash": "ee957fe0",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_string_dispatch.py": {
       "hash": "82fc3792",
-      "ast_hash": "93b604df",
+      "ast_hash": "edf8cead",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/context_builder/builder.py": {
       "hash": "766d1d00",
-      "ast_hash": "a1fff66d",
+      "ast_hash": "f0aea471",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/pipeline_generator.py": {
       "hash": "cb165e67",
-      "ast_hash": "6f5b4250",
+      "ast_hash": "87f2bf48",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/_p3.py": {
       "hash": "c03e2adc",
@@ -325,22 +326,22 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "view/codeAnalysis/main.py": {
-      "hash": "1ec55811",
-      "ast_hash": "bb5f4ef9",
+      "hash": "ffca7e9f",
+      "ast_hash": "dd70507d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/kotlin_analyzer.py": {
       "hash": "5490f48a",
-      "ast_hash": "308d8d72",
+      "ast_hash": "3f51ce15",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_virtual_blocks_smoke.py": {
-      "hash": "4f70bdf4",
-      "ast_hash": "96eae4f7",
+      "hash": "d738c25a",
+      "ast_hash": "20430dac",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/inheritance_tracker/_p1.py": {
       "hash": "ca2a863a",
@@ -350,9 +351,9 @@
     },
     "parse/codeGenome/api.py": {
       "hash": "539eaa82",
-      "ast_hash": "a79dffb7",
+      "ast_hash": "8d0cc642",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/string_dispatch/_p2.py": {
       "hash": "69bbdac4",
@@ -362,15 +363,15 @@
     },
     "relate/dynamic/trace_runner.py": {
       "hash": "9b3529a1",
-      "ast_hash": "b732cc45",
+      "ast_hash": "e89914b4",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/anchorRepair/batch_check.py": {
-      "hash": "6156830f",
-      "ast_hash": "e47691e1",
+      "hash": "86aa80da",
+      "ast_hash": "4f827d40",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/super_analyzer/_p2.py": {
       "hash": "b042edd8",
@@ -379,16 +380,16 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "index/api/anchors/__init__.py": {
-      "hash": "b989fedd",
-      "ast_hash": "b5a516f0",
+      "hash": "b5d6e865",
+      "ast_hash": "015c177c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_evidence_semantics.py": {
       "hash": "a9a2be38",
-      "ast_hash": "d4188d87",
+      "ast_hash": "7f9a3728",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/inheritance/ast_parser/_p2.py": {
       "hash": "00e48243",
@@ -397,10 +398,10 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "synth/codeTree/agent_tools.py": {
-      "hash": "fd4c2b4d",
-      "ast_hash": "87cb774d",
+      "hash": "5eb65dcf",
+      "ast_hash": "a041c6db",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/capability_candidates/_p2.py": {
       "hash": "3e569fd5",
@@ -410,9 +411,9 @@
     },
     "view/codeAnalysis/graph/__init__.py": {
       "hash": "b022778b",
-      "ast_hash": "e779ea0c",
+      "ast_hash": "3ce39d55",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/inspector/_p1.py": {
       "hash": "9c52abf2",
@@ -434,9 +435,9 @@
     },
     "parse/codeAnalysis/analyzer/swift_analyzer.py": {
       "hash": "a5f217ac",
-      "ast_hash": "a65a1323",
+      "ast_hash": "4b26cbca",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/task_context_packet/_p1.py": {
       "hash": "d2afe8ab",
@@ -464,27 +465,27 @@
     },
     "synth/anchorMemory/memory.py": {
       "hash": "556325e7",
-      "ast_hash": "840fe44c",
+      "ast_hash": "4f905f1a",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/dblock.py": {
       "hash": "f156762d",
-      "ast_hash": "c2fb0c21",
+      "ast_hash": "cbfe18f7",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/php_analyzer.py": {
-      "hash": "421e1e82",
-      "ast_hash": "e3ca1095",
+      "hash": "2f620ae0",
+      "ast_hash": "f9e394e4",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/html_analyzer.py": {
       "hash": "0e106985",
-      "ast_hash": "a5ea0e2a",
+      "ast_hash": "7955bf06",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/override_analyzer/_p1.py": {
       "hash": "7bb1eeaf",
@@ -494,21 +495,21 @@
     },
     "synth/smartAnalyzer/smart_analyzer_patch.py": {
       "hash": "7a2a42b9",
-      "ast_hash": "03fe986a",
+      "ast_hash": "5b0bf72d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/pathTracer/node.py": {
       "hash": "6a496b80",
-      "ast_hash": "529d0df7",
+      "ast_hash": "01f92759",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/context_builder/build_map_rewrite.py": {
       "hash": "20ed8db5",
-      "ast_hash": "9aea3b88",
+      "ast_hash": "5537f2e8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/_p7.py": {
       "hash": "4c3b64e5",
@@ -536,27 +537,27 @@
     },
     "tests/test_module_tree_smoke.py": {
       "hash": "d81aed77",
-      "ast_hash": "18ea4689",
+      "ast_hash": "c106e7f9",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/module_tree_v2.py": {
       "hash": "c8f54bab",
-      "ast_hash": "2b0088a3",
+      "ast_hash": "3cde3a94",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/ruby_analyzer.py": {
-      "hash": "ab3222fe",
-      "ast_hash": "e2190693",
+      "hash": "ab9ba53e",
+      "ast_hash": "274e577d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/path_policy.py": {
       "hash": "4e5d1df6",
-      "ast_hash": "e08dba46",
+      "ast_hash": "08843eb4",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/anchor_browser/_p1.py": {
       "hash": "cef62450",
@@ -574,25 +575,25 @@
       "hash": "e2f8ad2b",
       "ast_hash": "0fc99255",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/context_builder/formatter.py": {
       "hash": "1db7f688",
-      "ast_hash": "fba12926",
+      "ast_hash": "38c89228",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_js_html_anchors.py": {
       "hash": "55b949b5",
-      "ast_hash": "5292e749",
+      "ast_hash": "572795ba",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/anchorRepair/repair.py": {
-      "hash": "c1867046",
-      "ast_hash": "892056de",
+      "hash": "39436f73",
+      "ast_hash": "ebca99a4",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/resolver/_p2.py": {
       "hash": "110273a5",
@@ -602,9 +603,9 @@
     },
     "base/shared/compat.py": {
       "hash": "3f1fc09c",
-      "ast_hash": "2989156b",
+      "ast_hash": "6284bec2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/query/_p2.py": {
       "hash": "c0a325df",
@@ -614,21 +615,21 @@
     },
     "relate/dynamic/test_trace_target.py": {
       "hash": "d7145230",
-      "ast_hash": "0d1dacb5",
+      "ast_hash": "f373dbec",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/task_runner.py": {
       "hash": "e13f025b",
-      "ast_hash": "1e8e022b",
+      "ast_hash": "89e067da",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/dynamic/trace_logger.py": {
       "hash": "70784e1e",
-      "ast_hash": "3abfcf43",
+      "ast_hash": "57006929",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/cpp_extractor/_p2.py": {
       "hash": "16c79f52",
@@ -638,9 +639,9 @@
     },
     "parse/codeAnalysis/analyzer/java_analyzer.py": {
       "hash": "d721abab",
-      "ast_hash": "a60c5eb2",
+      "ast_hash": "61a73782",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine_v2/_p2.py": {
       "hash": "2896b9df",
@@ -658,7 +659,7 @@
       "hash": "25102950",
       "ast_hash": "7945c9e6",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/cpp_inheritance/cpp_tracker/_p1.py": {
       "hash": "9fec306b",
@@ -674,9 +675,9 @@
     },
     "base/dataFlow/types.py": {
       "hash": "6b14a89e",
-      "ast_hash": "d6e0e66e",
+      "ast_hash": "1d8f42da",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/call_timeline/_p1.py": {
       "hash": "086034b3",
@@ -685,16 +686,16 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "tests/test_yaml_profile.py": {
-      "hash": "d999e53e",
-      "ast_hash": "23e95b62",
+      "hash": "f5dde40a",
+      "ast_hash": "5a05155a",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_debug_loop.py": {
       "hash": "76a1de58",
-      "ast_hash": "d992e360",
+      "ast_hash": "3cbb7c68",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/python_extractor/_p1.py": {
       "hash": "c12258fe",
@@ -704,15 +705,15 @@
     },
     "base/shared/cache.py": {
       "hash": "ceb2d637",
-      "ast_hash": "a530f432",
+      "ast_hash": "79d14bf2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/hash/git_diff.py": {
       "hash": "df1604df",
-      "ast_hash": "ddcb44c8",
+      "ast_hash": "325196f0",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/inspector/_p3.py": {
       "hash": "c2f9cef7",
@@ -728,27 +729,27 @@
     },
     "parse/codeAnalysis/analyzer/__init__.py": {
       "hash": "d9c762bf",
-      "ast_hash": "c071e2ea",
+      "ast_hash": "31ad061b",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_anchor_identity.py": {
       "hash": "a8379b40",
-      "ast_hash": "cf7b3260",
+      "ast_hash": "60728a92",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_all_features.py": {
-      "hash": "143dfb63",
-      "ast_hash": "33d022aa",
+      "hash": "5d74bc90",
+      "ast_hash": "88873ad5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/parsers/python_parser.py": {
       "hash": "6c7c98a4",
-      "ast_hash": "693d91dd",
+      "ast_hash": "6726f48f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/issue_evidence_packet/_p1.py": {
       "hash": "79332d89",
@@ -758,9 +759,9 @@
     },
     "relate/dynamic/merge.py": {
       "hash": "ef6705db",
-      "ast_hash": "05efda50",
+      "ast_hash": "795e0ff3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/codedendrite_ignore/_p1.py": {
       "hash": "3301f669",
@@ -770,21 +771,21 @@
     },
     "tests/test_l4_code_analysis.py": {
       "hash": "57dd185a",
-      "ast_hash": "6f3c196c",
+      "ast_hash": "dfe00ea5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_l5_smart_analyzer.py": {
       "hash": "633a8dab",
-      "ast_hash": "8f667210",
+      "ast_hash": "0c74aab9",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/pathTracer/replacer.py": {
       "hash": "de01ef35",
-      "ast_hash": "9e95fb72",
+      "ast_hash": "e569dbfc",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/code_map/_p2.py": {
       "hash": "dbd740cb",
@@ -800,15 +801,15 @@
     },
     "synth/context_builder/expander.py": {
       "hash": "ccd0cb5f",
-      "ast_hash": "74abe8c9",
+      "ast_hash": "86b917a7",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "tests/test_integration.py": {
       "hash": "bd160110",
       "ast_hash": "8cf4ab1c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/navigator/_p3.py": {
       "hash": "a318e526",
@@ -818,9 +819,9 @@
     },
     "base/cpp_inheritance/types.py": {
       "hash": "c0459d02",
-      "ast_hash": "e0eac1f8",
+      "ast_hash": "de836c10",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/_p5.py": {
       "hash": "9171dbab",
@@ -836,15 +837,15 @@
     },
     "view/codeTree/view_html.py": {
       "hash": "4a6549cc",
-      "ast_hash": "e5231875",
+      "ast_hash": "7f25a402",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/module_focus_map.py": {
       "hash": "bbd6d05e",
-      "ast_hash": "031a39bb",
+      "ast_hash": "1c5552cd",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/capability_candidates/_p1.py": {
       "hash": "544881d6",
@@ -859,22 +860,22 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "parse/codeAnalysis/analyzer/typescript_analyzer.py": {
-      "hash": "9cedcd27",
-      "ast_hash": "15dd5bb9",
+      "hash": "8f97a881",
+      "ast_hash": "e7d1905f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/jump_packet.py": {
       "hash": "f0a9de78",
-      "ast_hash": "25be5a1c",
+      "ast_hash": "52b57349",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/mcp_server.py": {
-      "hash": "97ebf1ce",
-      "ast_hash": "a136c8df",
+      "hash": "e810a3a3",
+      "ast_hash": "466c56e8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/codeAnalysis/ui_analyzer/_p1.py": {
       "hash": "9a81cd0b",
@@ -884,9 +885,9 @@
     },
     "tests/test_query_coverage.py": {
       "hash": "1a1d490c",
-      "ast_hash": "0509f96c",
+      "ast_hash": "fdee33ad",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_analyzer/_p3.py": {
       "hash": "12cce52f",
@@ -907,22 +908,22 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "serve/api/yaml_profile.py": {
-      "hash": "01dc09cf",
-      "ast_hash": "967151fc",
+      "hash": "09dcc751",
+      "ast_hash": "95078478",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/cpp_analyzer.py": {
       "hash": "ddf1fb31",
-      "ast_hash": "b0399fa9",
+      "ast_hash": "2040a218",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/base.py": {
-      "hash": "d06fb4d0",
-      "ast_hash": "ad849f6e",
+      "hash": "0a77f04a",
+      "ast_hash": "142b0b48",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/cpp_inheritance/resolver/_p2.py": {
       "hash": "8fd6977c",
@@ -938,15 +939,15 @@
     },
     "parse/hash/file_hash.py": {
       "hash": "6710f54d",
-      "ast_hash": "01c4a9ba",
+      "ast_hash": "7d9c5bbc",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/types.py": {
-      "hash": "be084105",
-      "ast_hash": "4157331f",
+      "hash": "5487e0b3",
+      "ast_hash": "e05c60e1",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_analyzer/_p2.py": {
       "hash": "bec156a1",
@@ -964,7 +965,7 @@
       "hash": "59b5e88a",
       "ast_hash": "7c4f2d0b",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/inspector/_p2.py": {
       "hash": "810fa30d",
@@ -1004,15 +1005,15 @@
     },
     "serve/api/inheritance_api.py": {
       "hash": "819d355d",
-      "ast_hash": "7e4b6b1d",
+      "ast_hash": "ee305d28",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/pathTracer/compatibility.py": {
       "hash": "fd420313",
-      "ast_hash": "1f66f74c",
+      "ast_hash": "f7b0e86f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/anchor_browser/_p2.py": {
       "hash": "23f08877",
@@ -1034,9 +1035,9 @@
     },
     "base/inheritance/types.py": {
       "hash": "dd0fe07b",
-      "ast_hash": "a2bee568",
+      "ast_hash": "cf70cfdc",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/api/relations/_p1.py": {
       "hash": "bd5f3d2c",
@@ -1045,10 +1046,10 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "serve/api/outline.py": {
-      "hash": "2c980d53",
-      "ast_hash": "7487967f",
+      "hash": "12e63a03",
+      "ast_hash": "ec38f31c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine_v2/_p3.py": {
       "hash": "691d7aca",
@@ -1088,27 +1089,27 @@
     },
     "synth/codeTree/static_pipeline.py": {
       "hash": "83f61841",
-      "ast_hash": "b40949e3",
+      "ast_hash": "6b8cc6d3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/codeGenome/types.py": {
       "hash": "fc578316",
-      "ast_hash": "007df888",
+      "ast_hash": "034ff08f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/autolog.py": {
-      "hash": "a029fac1",
-      "ast_hash": "8b675ca5",
+      "hash": "d9c6e165",
+      "ast_hash": "944dc153",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/pathTracer/tracer.py": {
       "hash": "ec2a0aa6",
-      "ast_hash": "ea35b8e8",
+      "ast_hash": "4a571c3e",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/_p4.py": {
       "hash": "627a693b",
@@ -1118,9 +1119,9 @@
     },
     "base/codeGenome/identity.py": {
       "hash": "02144fa8",
-      "ast_hash": "bab6ea3c",
+      "ast_hash": "aca24fd0",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/_p1.py": {
       "hash": "69fa4460",
@@ -1130,15 +1131,15 @@
     },
     "synth/api/action_session.py": {
       "hash": "cbe3cbdf",
-      "ast_hash": "5e9d7d3d",
+      "ast_hash": "236b2374",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/anchorMemory/types.py": {
       "hash": "b3fe1cb5",
-      "ast_hash": "d7e8f29f",
+      "ast_hash": "74293611",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/structure_analyzer/_p1.py": {
       "hash": "5eecad51",
@@ -1160,9 +1161,9 @@
     },
     "relate/dynamic/edge_extractor.py": {
       "hash": "fd02fad7",
-      "ast_hash": "d6ea9252",
+      "ast_hash": "dc8e3f38",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/cli/_p1.py": {
       "hash": "dc36b284",
@@ -1202,33 +1203,33 @@
     },
     "relate/dynamic/trace_cli.py": {
       "hash": "e017ea16",
-      "ast_hash": "40d9d6e4",
+      "ast_hash": "1cb7a5e5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/database.py": {
-      "hash": "8868b9d3",
-      "ast_hash": "d3fa87a1",
+      "hash": "bd1950c2",
+      "ast_hash": "5ee30233",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/python_analyzer.py": {
       "hash": "cc59209c",
-      "ast_hash": "45856457",
+      "ast_hash": "d16a9eaf",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/dataflow_api.py": {
       "hash": "3234b51c",
-      "ast_hash": "33e712a7",
+      "ast_hash": "518eb3ae",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/inheritance/class_indexer.py": {
       "hash": "991d0eed",
-      "ast_hash": "c94dc241",
+      "ast_hash": "a4c68a9c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/relation_graph/_p2.py": {
       "hash": "9707f1b3",
@@ -1238,9 +1239,9 @@
     },
     "tests/test_module_tree_v2_smoke.py": {
       "hash": "69b82335",
-      "ast_hash": "31bde99c",
+      "ast_hash": "b6061e9d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/anchor_cli/_p1.py": {
       "hash": "a9b74198",
@@ -1249,10 +1250,10 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "synth/anchorRepair/database.py": {
-      "hash": "f30af95a",
-      "ast_hash": "e6bb5406",
+      "hash": "2404588c",
+      "ast_hash": "8e489eb9",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/cpp_inheritance/cpp_parser/_p1.py": {
       "hash": "1eab561e",
@@ -1262,15 +1263,15 @@
     },
     "parse/codeAnalysis/analyzer/go_analyzer.py": {
       "hash": "57d5a399",
-      "ast_hash": "1eb9ba32",
+      "ast_hash": "d3c8207e",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/pathTracer/result.py": {
       "hash": "9aba3f61",
-      "ast_hash": "a1137311",
+      "ast_hash": "4af4c8c2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_drift/_p1.py": {
       "hash": "f9ab9028",
@@ -1279,10 +1280,10 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "tests/examples/new_modules_demo.py": {
-      "hash": "48223c4c",
-      "ast_hash": "a9c8c3a0",
+      "hash": "e1f616e8",
+      "ast_hash": "f276a9ab",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/_p2.py": {
       "hash": "2fddfe5d",
@@ -1292,9 +1293,9 @@
     },
     "parse/codeGenome/config_detector.py": {
       "hash": "dd7b5c64",
-      "ast_hash": "4d6fb60e",
+      "ast_hash": "7c7da4db",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_drift/_p2.py": {
       "hash": "0a58cb5c",
@@ -1310,9 +1311,9 @@
     },
     "relate/dynamic/trace_schema.py": {
       "hash": "7f93fe6e",
-      "ast_hash": "b46de8d0",
+      "ast_hash": "a306c786",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/codeAnalysis/ui_analyzer/_p2.py": {
       "hash": "41ddd6bc",
@@ -1327,10 +1328,10 @@
       "updated_at": "2026-09-04T18:58:56.184376"
     },
     "tests/examples/quick_scan.py": {
-      "hash": "f6519c55",
-      "ast_hash": "e4098559",
+      "hash": "ae2d35bd",
+      "ast_hash": "7ef4e4f8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/override_analyzer/_p2.py": {
       "hash": "6a254220",
@@ -1348,643 +1349,1333 @@
       "hash": "98e96777",
       "ast_hash": "71411995",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "__init__.py": {
       "hash": "5154eac3",
       "ast_hash": "c8e93041",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/cli/__main__.py": {
       "hash": "547f8717",
       "ast_hash": "0d7aee2f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/call_timeline/generate_call_timeline.py": {
       "hash": "6ee07219",
-      "ast_hash": "ff3eadf4",
+      "ast_hash": "74443225",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/cpp_inheritance/cpp_tracker/cpp_inheritance_tracker.py": {
       "hash": "9fec306b",
-      "ast_hash": "4943d010",
+      "ast_hash": "7566a0b8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_drift/list_all_symbols.py": {
       "hash": "f9ab9028",
-      "ast_hash": "7d92840e",
+      "ast_hash": "04f30295",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/capability_candidates/build_capability_candidates.py": {
       "hash": "15a44e39",
-      "ast_hash": "16f8ab78",
+      "ast_hash": "a22e6d0a",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/inheritance_tracker/core.py": {
       "hash": "ca2a863a",
-      "ast_hash": "5c40ed77",
+      "ast_hash": "4c41e6e2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/core_anchor.py": {
-      "hash": "cd02ef58",
-      "ast_hash": "3324c410",
+      "hash": "5ad75842",
+      "ast_hash": "518975b3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/generate_all_anchors.py": {
-      "hash": "c3d7beba",
-      "ast_hash": "0a798552",
+      "hash": "06df9fa1",
+      "ast_hash": "19361c96",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/relation_graph/generate_relation_graph.py": {
       "hash": "3a7ee4e6",
-      "ast_hash": "81002947",
+      "ast_hash": "109cb23b",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/python_extractor/python.py": {
       "hash": "c12258fe",
-      "ast_hash": "e82f94d8",
+      "ast_hash": "7ce74d58",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/module_tree/backfill_module_tree_responsibilities.py": {
       "hash": "aaac6067",
-      "ast_hash": "c38a5ebd",
+      "ast_hash": "dcd89ca7",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/external_lib/get_builtin_class_info.py": {
       "hash": "ac54f9b5",
-      "ast_hash": "4549057d",
+      "ast_hash": "4c268bcf",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/inspector/get_downward_chain.py": {
-      "hash": "5cc789f5",
-      "ast_hash": "de55e66c",
+      "hash": "a898bd91",
+      "ast_hash": "bc5fea3b",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_analyzer/generate_pipeline_html.py": {
       "hash": "a51b620e",
-      "ast_hash": "96fbbb9d",
+      "ast_hash": "d85dc6ad",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/resolver/resolve_base_class.py": {
       "hash": "f87f491b",
-      "ast_hash": "30c5f1b2",
+      "ast_hash": "4c65609a",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/codeAnalysis/ui_analyzer/ui_interaction_analyzer.py": {
       "hash": "9a81cd0b",
-      "ast_hash": "dcc8eb67",
+      "ast_hash": "ca52c401",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/code_map/generate_code_map.py": {
       "hash": "4be9202e",
-      "ast_hash": "a0dbafd3",
+      "ast_hash": "d2a8e4b2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_analyzer/data_flow.py": {
       "hash": "e4ca88dc",
-      "ast_hash": "81b57ae0",
+      "ast_hash": "3d34a98f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/cpp_inheritance/resolver/get_all_bases.py": {
       "hash": "eda2ab1e",
-      "ast_hash": "07aa1e64",
+      "ast_hash": "00a080c5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/build_minimal_verification_step.py": {
       "hash": "207612d8",
-      "ast_hash": "7f91e351",
+      "ast_hash": "abe4f06a",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/cli/module.py": {
       "hash": "dc36b284",
-      "ast_hash": "8d16bd10",
+      "ast_hash": "1355fb29",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/cpp_inheritance/class_indexer/resolve_multi_level_inheritance.py": {
       "hash": "c19c03d4",
-      "ast_hash": "00759ae5",
+      "ast_hash": "69b4f0b7",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_analyzer/core.py": {
       "hash": "4de7b71b",
-      "ast_hash": "6717b222",
+      "ast_hash": "b906d536",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/cli/ensure_path.py": {
-      "hash": "a1a447ba",
-      "ast_hash": "1457d02c",
+      "hash": "0246e1fb",
+      "ast_hash": "1c6a5ac2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/task_context_packet/format_compact.py": {
       "hash": "c94b0448",
-      "ast_hash": "5216965f",
+      "ast_hash": "5463d0e1",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine_v2/normalize_raw.py": {
       "hash": "691d7aca",
-      "ast_hash": "c2541353",
+      "ast_hash": "7cbc01c6",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/core_load.py": {
       "hash": "b7535d28",
-      "ast_hash": "74998bf4",
+      "ast_hash": "6ada77f8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/codeTree/dataflow_analyzer/data_flow_step.py": {
       "hash": "57d0c41a",
-      "ast_hash": "573243b6",
+      "ast_hash": "9c8fd460",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/resolve.py": {
-      "hash": "e8e89876",
-      "ast_hash": "1b810960",
+      "hash": "cb91b31d",
+      "ast_hash": "10d77039",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/string_dispatch/extract_called_symbols.py": {
       "hash": "ec724bf4",
-      "ast_hash": "f4054139",
+      "ast_hash": "6b5f4579",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/dataFlow/analyzer/function.py": {
       "hash": "8b69a856",
-      "ast_hash": "654bb86c",
+      "ast_hash": "79273ea6",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/control_flow_blocks/direct_call_collector.py": {
       "hash": "463497d6",
-      "ast_hash": "46e33ff8",
+      "ast_hash": "145b3e21",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine_v2/hash.py": {
       "hash": "a5d6c7dd",
-      "ast_hash": "7ef8be34",
+      "ast_hash": "31dd7109",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/relation_graph/module.py": {
       "hash": "0152020c",
-      "ast_hash": "d0b41a73",
+      "ast_hash": "9ab9cefe",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine/anchor.py": {
       "hash": "82557f63",
-      "ast_hash": "7ff26b57",
+      "ast_hash": "c53b5ab6",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/build_effective_methods_table.py": {
-      "hash": "ab7f40ba",
-      "ast_hash": "eab3d511",
+      "hash": "96d42c1a",
+      "ast_hash": "98e85991",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/task_context_packet/plugin.py": {
       "hash": "d2afe8ab",
-      "ast_hash": "e2836cf4",
+      "ast_hash": "4b2c5d2c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/cpp_inheritance/cpp_tracker/create_tracker.py": {
       "hash": "6c34f254",
-      "ast_hash": "66d6f2f0",
+      "ast_hash": "236751bc",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/query/rank_anchor_matches.py": {
       "hash": "5559460d",
-      "ast_hash": "ef407196",
+      "ast_hash": "57e2a6ef",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/super_analyzer/validate_super_calls.py": {
       "hash": "b042edd8",
-      "ast_hash": "46d920ed",
+      "ast_hash": "2a8d963f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/query/cmd_chain.py": {
       "hash": "58c1c594",
-      "ast_hash": "66f06585",
+      "ast_hash": "b156f357",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/api/relations/generate_relations.py": {
-      "hash": "54215a10",
-      "ast_hash": "7691a2d6",
+      "hash": "b7567535",
+      "ast_hash": "54189caf",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/inspector/find_anchor.py": {
       "hash": "9c52abf2",
-      "ast_hash": "0536f0e9",
+      "ast_hash": "49457ba3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/locate_bug.py": {
       "hash": "0bb07359",
-      "ast_hash": "f24f360a",
+      "ast_hash": "62a7f866",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/codeTree/dataflow_analyzer/main.py": {
       "hash": "9504eca7",
-      "ast_hash": "05a5841e",
+      "ast_hash": "0d56ad03",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/api/relations/load_relations.py": {
       "hash": "bd5f3d2c",
-      "ast_hash": "3326987a",
+      "ast_hash": "8090c043",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/cpp_inheritance/resolver/normalize_class_name.py": {
       "hash": "d782d5e6",
-      "ast_hash": "80fd8f80",
+      "ast_hash": "5a45f122",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/codedendrite_ignore/code_dendrite_ignore.py": {
-      "hash": "b32f68a6",
-      "ast_hash": "c51030d6",
+      "hash": "04889116",
+      "ast_hash": "3e6cc8b1",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/resolver/find_method.py": {
       "hash": "5a0e834a",
-      "ast_hash": "b6d11f6c",
+      "ast_hash": "720bf06d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/external_lib/resolve_external_class.py": {
       "hash": "01244d7d",
-      "ast_hash": "92c442fd",
+      "ast_hash": "b31d9683",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/inheritance/ast_parser/parse_generic_bases.py": {
       "hash": "00e48243",
-      "ast_hash": "a9f68e9b",
+      "ast_hash": "3baba944",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/override_analyzer/override_chain.py": {
       "hash": "7bb1eeaf",
-      "ast_hash": "5d66341f",
+      "ast_hash": "a16333b5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/ai_tools/code_dendrite_tool_etc.py": {
       "hash": "cc4d0b74",
-      "ast_hash": "ef7f2bcb",
+      "ast_hash": "846528f3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/ai_tools/smart_analyze_tool_etc.py": {
       "hash": "685b76b2",
-      "ast_hash": "05f7a215",
+      "ast_hash": "e9cbdfb6",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/extract.py": {
       "hash": "2fddfe5d",
-      "ast_hash": "eb3f52dc",
+      "ast_hash": "782c234d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/task_context_packet/anchor.py": {
       "hash": "4f9c745d",
-      "ast_hash": "e1a6d70b",
+      "ast_hash": "9723c345",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/module_tree_v2/module_tree.py": {
       "hash": "79e5078a",
-      "ast_hash": "23d6fcfb",
+      "ast_hash": "545eb55d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/control_flow_blocks/control_flow_block_extractor.py": {
       "hash": "d826eee7",
-      "ast_hash": "2f1357db",
+      "ast_hash": "d4af1f8e",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/resolve_target_anchor.py": {
       "hash": "e0927cc8",
-      "ast_hash": "867f6415",
+      "ast_hash": "9a63a0e9",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/anchor_browser/dom_sidebar.py": {
-      "hash": "cef62450",
-      "ast_hash": "7d471fb5",
+      "hash": "241b73ad",
+      "ast_hash": "c92897dc",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/subscript_string.py": {
-      "hash": "69fa4460",
-      "ast_hash": "ed8ae33d",
+      "hash": "dc057296",
+      "ast_hash": "056d113f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "base/shared/codedendrite_ignore/glob_match.py": {
       "hash": "3301f669",
-      "ast_hash": "d3495827",
+      "ast_hash": "d8ca8744",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/cpp_inheritance/cpp_parser/parse.py": {
       "hash": "0f76a20b",
-      "ast_hash": "ac4c279a",
+      "ast_hash": "427c2a29",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/resolver/resolve_bases.py": {
       "hash": "e9eb18d1",
-      "ast_hash": "97f0372c",
+      "ast_hash": "072a9450",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/module_tree/compute_call_structure_hash.py": {
       "hash": "b2b096ca",
-      "ast_hash": "e1293df3",
+      "ast_hash": "fa59e490",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/super_analyzer/super_chain.py": {
       "hash": "466ff63f",
-      "ast_hash": "500a1c2e",
+      "ast_hash": "c67ab0b5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/anchor_browser/build_file_index.py": {
-      "hash": "987bdaf3",
-      "ast_hash": "c2aad6e9",
+      "hash": "cd2f69d5",
+      "ast_hash": "f1c8bfde",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine_v2/load_db.py": {
       "hash": "1f081029",
-      "ast_hash": "1c06931b",
+      "ast_hash": "dae76769",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/codeTree/dataflow_analyzer/variable_info_etc.py": {
       "hash": "8d022718",
-      "ast_hash": "3624ad23",
+      "ast_hash": "7b63cac0",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/workflow/run_debug_loop.py": {
       "hash": "957182f8",
-      "ast_hash": "415e8671",
+      "ast_hash": "28119cc5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/hash/database/change_type.py": {
       "hash": "1133de15",
-      "ast_hash": "f6ac9406",
+      "ast_hash": "5e5e21f9",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/anchors_list.py": {
-      "hash": "94bf60bb",
-      "ast_hash": "35242b44",
+      "hash": "6f1aa1a4",
+      "ast_hash": "ea521605",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/anchor_cli/cmd_schedule.py": {
       "hash": "f1770e0f",
-      "ast_hash": "641da855",
+      "ast_hash": "9eebc7b2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/override_analyzer/validate_overrides.py": {
       "hash": "6a254220",
-      "ast_hash": "b4569627",
+      "ast_hash": "7d566087",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/deep_drift/deep_drift_report.py": {
       "hash": "632a489e",
-      "ast_hash": "c2cdf4e4",
+      "ast_hash": "1f30a983",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/module_tree_v2/module_assign.py": {
       "hash": "ec6940c8",
-      "ast_hash": "822b80bf",
+      "ast_hash": "cb3b94d7",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/cpp_inheritance/class_indexer/get_class_hierarchy.py": {
       "hash": "00399405",
-      "ast_hash": "3e89095e",
+      "ast_hash": "699bd793",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/inspector/get_upward_chain.py": {
       "hash": "c2f9cef7",
-      "ast_hash": "51e40e9e",
+      "ast_hash": "89cdfcf3",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/python_extractor/core.py": {
       "hash": "f133d7a1",
-      "ast_hash": "6ce4b894",
+      "ast_hash": "f2731e18",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/structure_analyzer/enrich_project_info_with_structure.py": {
       "hash": "5f090789",
-      "ast_hash": "12c4dadf",
+      "ast_hash": "e1bc840d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/issue_evidence_packet/validate_issue_evidence_packet.py": {
       "hash": "79332d89",
-      "ast_hash": "099962c1",
+      "ast_hash": "c51f867c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/hash/database/hash_database.py": {
-      "hash": "a09d8d7c",
-      "ast_hash": "4af8fd8d",
+      "hash": "b3430608",
+      "ast_hash": "8800abd5",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/codeAnalysis/ui_analyzer/analyze_ui.py": {
       "hash": "5df6cc2a",
-      "ast_hash": "bf187e0c",
+      "ast_hash": "fc4a3be8",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/module_tree/module.py": {
       "hash": "9c36963e",
-      "ast_hash": "8ce08f3f",
+      "ast_hash": "085bd409",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/codeTree/anchor_cli/load_config.py": {
       "hash": "a9b74198",
-      "ast_hash": "757d3197",
+      "ast_hash": "e570c873",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/module_tree_v2/module_completeness.py": {
       "hash": "9cb2f4c0",
-      "ast_hash": "c44e5252",
+      "ast_hash": "3187e167",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/code_map/build_treemap_data.py": {
       "hash": "4958060e",
-      "ast_hash": "cda9824a",
+      "ast_hash": "8036f3ef",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "view/visualize/call_timeline/generate_mermaid.py": {
       "hash": "086034b3",
-      "ast_hash": "da1b5d9e",
+      "ast_hash": "d2f542a9",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/cpp_extractor/core.py": {
       "hash": "7968d87e",
-      "ast_hash": "c3e0936c",
+      "ast_hash": "d9d7a56e",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/navigator/start.py": {
       "hash": "7f1c4efa",
-      "ast_hash": "9eeea987",
+      "ast_hash": "77a1a6fa",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/python_extractor/extract_python.py": {
       "hash": "0e7ade51",
-      "ast_hash": "28b43cf1",
+      "ast_hash": "bfa64c99",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/cpp_inheritance/cpp_parser/core.py": {
       "hash": "1eab561e",
-      "ast_hash": "e93b432e",
+      "ast_hash": "8388324b",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/issue_evidence_packet/issue_evidence.py": {
       "hash": "ebc74c99",
-      "ast_hash": "7468b85f",
+      "ast_hash": "741e95f2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/navigator/target.py": {
       "hash": "4621ddf0",
-      "ast_hash": "7573bff2",
+      "ast_hash": "0f894409",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "synth/api/capability_candidates/count_call_fanout.py": {
       "hash": "544881d6",
-      "ast_hash": "4a856b40",
+      "ast_hash": "ca56e4f4",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/api/anchors/call_site_collector.py": {
       "hash": "c7e32811",
-      "ast_hash": "317f992e",
+      "ast_hash": "6db8f59d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/inheritance/ast_parser/parse.py": {
       "hash": "6d203559",
-      "ast_hash": "516796b1",
+      "ast_hash": "f023cc34",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/inheritance/inheritance_tracker/create_tracker.py": {
       "hash": "352603c6",
-      "ast_hash": "d59b470e",
+      "ast_hash": "fa31b82c",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "relate/dataFlow/analyzer/analyze_function_flow.py": {
       "hash": "dfb7cd69",
-      "ast_hash": "64064abd",
+      "ast_hash": "522ace5f",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "serve/api/navigator/jump.py": {
       "hash": "8a8e3116",
-      "ast_hash": "fdfa024b",
+      "ast_hash": "a63252c6",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/cpp_extractor/extract.py": {
       "hash": "7af16d4a",
-      "ast_hash": "73d4f19c",
+      "ast_hash": "f7460e05",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeAnalysis/analyzer/structure_analyzer/project_structure_analyzer.py": {
       "hash": "5eecad51",
-      "ast_hash": "21ea7ca9",
+      "ast_hash": "273572b2",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/hash/database/classify_change.py": {
       "hash": "306e9287",
-      "ast_hash": "9df1766e",
+      "ast_hash": "a7f9fe98",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "index/codeTree/anchor_engine/extract_source.py": {
       "hash": "045829f5",
-      "ast_hash": "57c6c3af",
+      "ast_hash": "0b3f466d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
     },
     "parse/codeGenome/string_dispatch/dispatches_extract.py": {
       "hash": "8d418a71",
-      "ast_hash": "043f38a9",
+      "ast_hash": "13cf7c9d",
       "language": "python",
-      "updated_at": "2026-09-05T03:59:55.012980"
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_offline_replay.py": {
+      "hash": "4858e5ec",
+      "ast_hash": "dee26833",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/extent.js": {
+      "hash": "af5f7ded",
+      "ast_hash": "7661cd29",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/prep.js": {
+      "hash": "3d4c05c8",
+      "ast_hash": "17ecc0e2",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens-pcb/src/session_trace.js": {
+      "hash": "5b7ff202",
+      "ast_hash": "db5532ae",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/panel.js": {
+      "hash": "cdc2eab8",
+      "ast_hash": "2ac25a2d",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/graph/model.js": {
+      "hash": "c8a415cc",
+      "ast_hash": "810db906",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_cdd_swe_pipeline_v1.py": {
+      "hash": "66685c37",
+      "ast_hash": "beeaa41c",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/design/6-融合成树.html": {
+      "hash": "8cced4c1",
+      "ast_hash": "8cced4c1",
+      "language": "html",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/needIndex.js": {
+      "hash": "007086b2",
+      "ast_hash": "33e1a202",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_release_language_chains_v2_0.py": {
+      "hash": "e9e5040e",
+      "ast_hash": "ae91e889",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/skins/pcb/route.js": {
+      "hash": "0209f579",
+      "ast_hash": "3fbb9c3c",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "synth/codeTree/precise_pipeline.html": {
+      "hash": "15271d57",
+      "ast_hash": "15271d57",
+      "language": "html",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_rl_trace_v1.py": {
+      "hash": "f8d3f2f6",
+      "ast_hash": "c6d42cb1",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/visualize/draw_pages.py": {
+      "hash": "bc831010",
+      "ast_hash": "960514a4",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/index_worker.js": {
+      "hash": "e22fca12",
+      "ast_hash": "babe47d1",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/index_store.js": {
+      "hash": "903b5672",
+      "ast_hash": "61239e89",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/emit.js": {
+      "hash": "35ab32ff",
+      "ast_hash": "ad3b6a08",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2_6.py": {
+      "hash": "815c6bb4",
+      "ast_hash": "08e73d02",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/record.js": {
+      "hash": "9e99f241",
+      "ast_hash": "052877e2",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/runtime/api.js": {
+      "hash": "b66595fa",
+      "ast_hash": "2ec8e2e2",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/stream.js": {
+      "hash": "4e51ea9f",
+      "ast_hash": "1ef60459",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/space.js": {
+      "hash": "0aa4d697",
+      "ast_hash": "538d9f44",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/debug_main.py": {
+      "hash": "43f430d8",
+      "ast_hash": "ffd90536",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/boundary.js": {
+      "hash": "e7180ab5",
+      "ast_hash": "8715520b",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens-pcb/lib/client.js": {
+      "hash": "8f764508",
+      "ast_hash": "411e57e4",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_multilanguage_pipeline_v1_18.py": {
+      "hash": "4d275f70",
+      "ast_hash": "3ad5618d",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "doc/doc/anchor_chains.html": {
+      "hash": "62e5c718",
+      "ast_hash": "62e5c718",
+      "language": "html",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/viewState.js": {
+      "hash": "2d448fa2",
+      "ast_hash": "a36d3cd5",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/bus.js": {
+      "hash": "d63a5869",
+      "ast_hash": "c2dba629",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/entry.js": {
+      "hash": "1251ef9a",
+      "ast_hash": "090bef23",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/lanes.js": {
+      "hash": "dedcd05a",
+      "ast_hash": "16dc2703",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/engine/gather.js": {
+      "hash": "8324393a",
+      "ast_hash": "1c3bfbec",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/state/store.js": {
+      "hash": "c8f00257",
+      "ast_hash": "9d1d0747",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "parse/codeAnalysis/analyzer/js_resolver.py": {
+      "hash": "a9652394",
+      "ast_hash": "18af04ad",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/design/7-横版.html": {
+      "hash": "05e3ab8d",
+      "ast_hash": "05e3ab8d",
+      "language": "html",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/panels.js": {
+      "hash": "4f822598",
+      "ast_hash": "dabc4fb4",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/viewToolbar.js": {
+      "hash": "668b7bd1",
+      "ast_hash": "257d08db",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/visualize/anchor_browser/context.py": {
+      "hash": "d67af185",
+      "ast_hash": "eec11cf7",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens-pcb/src/host.js": {
+      "hash": "ba00dc2d",
+      "ast_hash": "d4e4ac95",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/state/persist.js": {
+      "hash": "4f00f69b",
+      "ast_hash": "1f692ec1",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/chatSeat.js": {
+      "hash": "0f028623",
+      "ast_hash": "80b32407",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/skins/tiers/route.js": {
+      "hash": "7e9e5cfa",
+      "ast_hash": "c8794ece",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/metrics.js": {
+      "hash": "483711d1",
+      "ast_hash": "695ed844",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/graphView.js": {
+      "hash": "b6b6fc29",
+      "ast_hash": "ed811ace",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/quick_test.py": {
+      "hash": "bce08b17",
+      "ast_hash": "cad98339",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/skins/flow/group.js": {
+      "hash": "c4b96a85",
+      "ast_hash": "f4ce0dfd",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/client.golden.js": {
+      "hash": "53f61569",
+      "ast_hash": "e8bbe75d",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/geometry.js": {
+      "hash": "40d92e9d",
+      "ast_hash": "57150b5c",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "serve/api/control_flow_dispatch.py": {
+      "hash": "71d534e0",
+      "ast_hash": "8300026c",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2_2.py": {
+      "hash": "d2aac2ff",
+      "ast_hash": "f3ecd969",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/engine/explore.js": {
+      "hash": "3a51d203",
+      "ast_hash": "3cecbc75",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/node.js": {
+      "hash": "20b3e53a",
+      "ast_hash": "e7f8b8b6",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_draw_pages_v1_22.py": {
+      "hash": "f92486e4",
+      "ast_hash": "2e6d7506",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/curve.js": {
+      "hash": "5282cbb5",
+      "ast_hash": "d42dbdde",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/skins/tiers/group.js": {
+      "hash": "fe7dd48f",
+      "ast_hash": "16c2a51e",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/session/trajectory.js": {
+      "hash": "fcd95b18",
+      "ast_hash": "cc03f4d6",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens-pcb/src/index_store.js": {
+      "hash": "d072781f",
+      "ast_hash": "61239e89",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/skins/flow/route.js": {
+      "hash": "a9287306",
+      "ast_hash": "8879da96",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/gather.js": {
+      "hash": "b715a6bf",
+      "ast_hash": "5b5bdb25",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/styles/shell.js": {
+      "hash": "0cdcde67",
+      "ast_hash": "",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/design/routing-audit-repro.cjs": {
+      "hash": "2f2e1d6b",
+      "ast_hash": "2923df88",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/ortho.js": {
+      "hash": "c748240d",
+      "ast_hash": "771c89b3",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/cardBox.js": {
+      "hash": "550db570",
+      "ast_hash": "241600a4",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/design/7-竖版.html": {
+      "hash": "fc900114",
+      "ast_hash": "fc900114",
+      "language": "html",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/avoid.js": {
+      "hash": "272bd91f",
+      "ast_hash": "5db93867",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "synth/codeTree/code_tree_view.html": {
+      "hash": "85f8eaaf",
+      "ast_hash": "85f8eaaf",
+      "language": "html",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/lib/client.js": {
+      "hash": "86f76672",
+      "ast_hash": "e81097eb",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2.py": {
+      "hash": "fe713117",
+      "ast_hash": "f58aa2f6",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2_5.py": {
+      "hash": "07b1f894",
+      "ast_hash": "e7b9afb9",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/select.js": {
+      "hash": "feee6d6c",
+      "ast_hash": "ea0491ed",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_multilanguage_pipeline_v1_20.py": {
+      "hash": "284290cf",
+      "ast_hash": "62508c01",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "parse/languages/pipeline.py": {
+      "hash": "966f73b1",
+      "ast_hash": "d896f749",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/routing/hops.js": {
+      "hash": "b6ef77b4",
+      "ast_hash": "26792f5b",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/styles/graph.js": {
+      "hash": "1a1f9d5f",
+      "ast_hash": "",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/tree.js": {
+      "hash": "5036f526",
+      "ast_hash": "6011ea45",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens-pcb/src/index_worker.js": {
+      "hash": "5d187a95",
+      "ast_hash": "779e400c",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/viewCanvas.js": {
+      "hash": "c6b27920",
+      "ast_hash": "abae869d",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/engine/selection.js": {
+      "hash": "c19e5cac",
+      "ast_hash": "ba779334",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/host.js": {
+      "hash": "361d8a38",
+      "ast_hash": "13392d09",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_anchor_trace_analysis_v2.py": {
+      "hash": "e05dfe98",
+      "ast_hash": "01c49541",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/layout.js": {
+      "hash": "4b53e845",
+      "ast_hash": "016f64cc",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_incremental_update_v1_24.py": {
+      "hash": "dd9873ad",
+      "ast_hash": "83208dcb",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/grid.js": {
+      "hash": "48295497",
+      "ast_hash": "54562a2b",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2_3.py": {
+      "hash": "36c06093",
+      "ast_hash": "398fb79c",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_snapshot_and_action_session.py": {
+      "hash": "466596fd",
+      "ast_hash": "0d1237e5",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/skin.js": {
+      "hash": "7afba823",
+      "ast_hash": "913bfdcf",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/visualize/anchor_browser/write_page.py": {
+      "hash": "42a208a0",
+      "ast_hash": "571792a3",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/engine/fetch.js": {
+      "hash": "a1b298ef",
+      "ast_hash": "69b41fdd",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2_4.py": {
+      "hash": "1b959a5d",
+      "ast_hash": "d46ac289",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "relate/dataFlow/strict_dataflow.py": {
+      "hash": "7cf5b29c",
+      "ast_hash": "411c4bbd",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/session_trace.js": {
+      "hash": "20625422",
+      "ast_hash": "db5532ae",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/deep_debug.py": {
+      "hash": "03278276",
+      "ast_hash": "5e189ec3",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/render-smoke.js": {
+      "hash": "d47cce25",
+      "ast_hash": "",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/engine/engine.js": {
+      "hash": "8a9ae560",
+      "ast_hash": "9ae4149a",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_anchor_paths_v4.py": {
+      "hash": "9b565d02",
+      "ast_hash": "0647da67",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/session/trace.js": {
+      "hash": "29546a99",
+      "ast_hash": "0383a202",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/hscroll.js": {
+      "hash": "efcd9c60",
+      "ast_hash": "27f3e9d7",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/svg-geometry.cjs": {
+      "hash": "6ad8637e",
+      "ast_hash": "083c6036",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "parse/languages/registry.py": {
+      "hash": "bda58307",
+      "ast_hash": "ee23f185",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/view/outline.js": {
+      "hash": "786a5cfa",
+      "ast_hash": "9e5734f8",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/camera.js": {
+      "hash": "59bb055a",
+      "ast_hash": "9934c066",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/layout-golden.js": {
+      "hash": "2ba073ab",
+      "ast_hash": "7661cd29",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "parse/codeAnalysis/analyzer/generic_analyzer.py": {
+      "hash": "6672c0be",
+      "ast_hash": "7a7ff698",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/worker-accuracy.js": {
+      "hash": "fde97ff5",
+      "ast_hash": "f94d2ddc",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_cdd_swe_pipeline_v1_1.py": {
+      "hash": "bb0874ed",
+      "ast_hash": "55e9a6a0",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "serve/api/bridges.py": {
+      "hash": "6d9442ea",
+      "ast_hash": "09371fe6",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_swebench_runner_cdd_v2_1.py": {
+      "hash": "b2298bcc",
+      "ast_hash": "6b77f72c",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/engine/ingest.js": {
+      "hash": "50473f5d",
+      "ast_hash": "b913a14d",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/graph/visible.js": {
+      "hash": "4de06222",
+      "ast_hash": "b7bcb7b6",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/layout/channels.js": {
+      "hash": "40220f3a",
+      "ast_hash": "08a1d384",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/skins/pcb/group.js": {
+      "hash": "f97dd1ad",
+      "ast_hash": "65897f0f",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/sidebar-contract.js": {
+      "hash": "d9a236fc",
+      "ast_hash": "",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/src/client/shell/dock.js": {
+      "hash": "7db9e0de",
+      "ast_hash": "e053400d",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "view/lens/tests/layout-sanity.js": {
+      "hash": "7eed8bd2",
+      "ast_hash": "7661cd29",
+      "language": "javascript",
+      "updated_at": "2026-09-11T04:06:11.363992"
+    },
+    "tests/tests/test_evaluation_contract.py": {
+      "hash": "5ad92df3",
+      "ast_hash": "bbb4162d",
+      "language": "python",
+      "updated_at": "2026-09-11T04:06:11.363992"
     }
   }
 }

@@ -5,7 +5,7 @@ Drop-in tool definitions compatible with OpenAI / Anthropic function-calling for
 Import TOOL_DEFINITIONS and the handler to wire into your Copilot agent.
 
 Usage in your agent:
-    from synth.codeTree.agent_tools import TOOL_DEFINITIONS, handle_tool_call
+    from code_anchor.agent_tools import TOOL_DEFINITIONS, handle_tool_call
 
     # Register tools with your agent framework:
     agent.register_tools(TOOL_DEFINITIONS)
@@ -14,7 +14,7 @@ Usage in your agent:
     result = handle_tool_call(tool_name, tool_args)
 """
 
-from index.codeTree.anchor_engine import (
+from code_anchor.anchor_engine import (
     create_anchor,
     check_drift,
     refresh_anchor,

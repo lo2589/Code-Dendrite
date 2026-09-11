@@ -36,7 +36,7 @@ def test_virtual_blocks_create_parent_block_child_chain():
         encoding="utf-8",
     )
 
-    generate_all_anchors(str(tmp_path))
+    generate_all_anchors(str(tmp_path), include_virtual_blocks=True)
     generate_relations(str(tmp_path))
 
     anchors = load_anchors(str(tmp_path))

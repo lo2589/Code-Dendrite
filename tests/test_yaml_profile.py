@@ -1,9 +1,9 @@
-from serve.api.yaml_profile import (
+from tools.CodeDendrite.api.yaml_profile import (
     active_registered_keys,
     load_yaml_profile,
     yaml_component_graph,
 )
-from base.shared.types import Anchor
+from tools.CodeDendrite.shared.types import Anchor
 
 
 def test_yaml_profile_uses_project_loader(tmp_path):

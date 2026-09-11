@@ -28,50 +28,78 @@ print("\n📦 测试 1: 导入所有功能...")
 
 try:
     # 项目扫描（6 个）
-    from synth.smartAnalyzer.orchestrator import analyze_error, clear_cache, find_definition, get_cache_stats, on_files_changed, scan_project, trace_data
+    from tools.CodeDendrite import (
+        scan_project,
+        on_files_changed,
+        get_cache_stats,
+        clear_cache,
+        analyze_error,
+        find_definition,
+        trace_data,
+    )
     print("  ✅ 项目扫描模块（6 个函数）")
     
     # 代码分析（15 个）
-    from parse.codeAnalysis.analyzer import get_analyzer
-    from parse.codeAnalysis.analyzer.cpp_analyzer import CppAnalyzer
-    from parse.codeAnalysis.analyzer.go_analyzer import GoAnalyzer
-    from parse.codeAnalysis.analyzer.html_analyzer import HtmlAnalyzer
-    from parse.codeAnalysis.analyzer.java_analyzer import JavaAnalyzer
-    from parse.codeAnalysis.analyzer.kotlin_analyzer import KotlinAnalyzer
-    from parse.codeAnalysis.analyzer.php_analyzer import PhpAnalyzer
-    from parse.codeAnalysis.analyzer.python_analyzer import PythonAnalyzer
-    from parse.codeAnalysis.analyzer.ruby_analyzer import RubyAnalyzer
-    from parse.codeAnalysis.analyzer.rust_analyzer import RustAnalyzer
-    from parse.codeAnalysis.analyzer.structure_analyzer import analyze_project_structure
-    from parse.codeAnalysis.analyzer.swift_analyzer import SwiftAnalyzer
-    from parse.codeAnalysis.analyzer.typescript_analyzer import TypeScriptAnalyzer
-    from serve.api.analysis import analyze_code, search_symbol
-    from view.codeAnalysis.graph import generate_mermaid_for_project
+    from tools.CodeDendrite import (
+        analyze_code,
+        get_analyzer,
+        analyze_project_structure,
+        generate_mermaid_for_project,
+        search_symbol,
+        PythonAnalyzer,
+        TypeScriptAnalyzer,
+        CppAnalyzer,
+        JavaAnalyzer,
+        PhpAnalyzer,
+        RubyAnalyzer,
+        GoAnalyzer,
+        RustAnalyzer,
+        SwiftAnalyzer,
+        KotlinAnalyzer,
+        HtmlAnalyzer,
+    )
     print("  ✅ 代码分析模块（15 个函数/类）")
     
     # 继承追踪（12 个）
-    from index.inheritance.class_indexer import build_class_index
-    from parse.inheritance.ast_parser import parse_python_file
-    from relate.inheritance.external_lib import resolve_external_class
-    from relate.inheritance.inheritance_tracker import InheritanceTracker, create_tracker
-    from relate.inheritance.override_analyzer import build_override_chain
-    from relate.inheritance.resolver import compute_mro, find_method_origin, find_subclasses, resolve_inheritance
-    from relate.inheritance.super_analyzer import analyze_super_calls
-    from serve.api.inheritance_api import trace_inheritance
+    from tools.CodeDendrite import (
+        trace_inheritance,
+        find_subclasses,
+        analyze_super_calls,
+        build_override_chain,
+        resolve_external_class,
+        InheritanceTracker,
+        create_tracker,
+        parse_python_file,
+        build_class_index,
+        resolve_inheritance,
+        compute_mro,
+        find_method_origin,
+    )
     print("  ✅ 继承追踪模块（12 个函数/类）")
     
     # 数据流分析（7 个）
-    from relate.dataFlow.analyzer import analyze_call_chain, get_function_inputs, get_function_outputs, get_transformations, trace_variable
-    from relate.dataFlow.visualizer import generate_dataflow_html
-    from serve.api.dataflow_api import analyze_dataflow
+    from tools.CodeDendrite import (
+        analyze_dataflow,
+        analyze_call_chain,
+        trace_variable,
+        get_function_inputs,
+        get_function_outputs,
+        get_transformations,
+        generate_dataflow_html,
+    )
     print("  ✅ 数据流分析模块（7 个函数）")
     
     # 智能分析（1 个）
-    from serve.api.smart import smart_analyze
+    from tools.CodeDendrite import smart_analyze
     print("  ✅ 智能分析模块（1 个函数）")
     
     # 锚点管理（4 个）
-    from index.api.anchors import check_all_anchors, create_anchor, list_all_symbols, list_anchors
+    from tools.CodeDendrite import (
+        list_all_symbols,
+        list_anchors,
+        create_anchor,
+        check_all_anchors,
+    )
     print("  ✅ 锚点管理模块（4 个函数）")
     
     print("\n🎉 所有 45 个功能导入成功！")

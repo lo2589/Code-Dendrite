@@ -131,6 +131,18 @@ def _build_unique_symbol_ids(anchors: dict) -> dict:
         if symbol not in duplicate_symbols
     }
 
+def _build_leaf_symbol_ids(anchors: dict) -> tuple[dict, dict]:
+    """Return unique leaf targets and every candidate for ambiguity reporting."""
+    candidates: dict[str, list[str]] = {}
+    for anchor in anchors.values():
+        if anchor.symbol_type == "class" or anchor.is_virtual:
+            continue
+        leaf = str(anchor.symbol or "").replace("::", ".").rsplit(".", 1)[-1]
+        if leaf:
+            candidates.setdefault(leaf, []).append(anchor.id)
+    unique = {leaf: ids[0] for leaf, ids in candidates.items() if len(ids) == 1}
+    return unique, candidates
+
 def _call_target(raw_callee):
     if isinstance(raw_callee, dict):
         return raw_callee.get("target", "")

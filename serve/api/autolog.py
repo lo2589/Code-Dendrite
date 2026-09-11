@@ -2,8 +2,8 @@
 autolog.py — 自动插入 / 撤销调试 log
 
 用法:
-  python -m serve.api.autolog add <symbol> <target> [--depth N] [--direction down|up|both]
-  python -m serve.api.autolog remove <target>
+  python -m tools.CodeDendrite.api.autolog add <symbol> <target> [--depth N] [--direction down|up|both]
+  python -m tools.CodeDendrite.api.autolog remove <target>
 
 插入格式（函数第一行，缩进自动对齐）:
   print("[AUTOLOG] symbol_name")  # marker
@@ -115,7 +115,7 @@ def cmd_add_file(file_rel: str, target: str) -> None:
 
     n = _insert_logs_in_file(abs_path, funcs_for_insert)
     print("\n+{} logs -> {}".format(n, abs_path))
-    print("Remove: python -m serve.api.autolog remove {}".format(target))
+    print("Remove: python -m tools.CodeDendrite.api.autolog remove {}".format(target))
 
 
 def cmd_add_folder(folder_rel: str, target: str) -> None:
@@ -152,7 +152,7 @@ def cmd_add_folder(folder_rel: str, target: str) -> None:
         print("  +{:3d} logs -> {}".format(n, rel))
 
     print("\nTotal: {} logs added".format(total))
-    print("Remove: python -m serve.api.autolog remove {}".format(target))
+    print("Remove: python -m tools.CodeDendrite.api.autolog remove {}".format(target))
 
 
 def cmd_add(symbol: str, target: str, depth: int, direction: str) -> None:
@@ -204,7 +204,7 @@ def cmd_add(symbol: str, target: str, depth: int, direction: str) -> None:
         print("  +{} logs -> {}".format(n, file_path))
 
     print("\nTotal: {} logs added across {} files".format(total, len(by_file)))
-    print("Remove: python -m serve.api.autolog remove {}".format(target))
+    print("Remove: python -m tools.CodeDendrite.api.autolog remove {}".format(target))
     print("Note: CD index line numbers are now stale. Rebuild after remove.")
 
 
@@ -238,7 +238,7 @@ def cmd_remove(target: str) -> None:
 
     print("Total removed: {} lines".format(total))
     if total:
-        print("Rebuild index: python -m serve.api.cli {}".format(target))
+        print("Rebuild index: python -m tools.CodeDendrite.api.cli {}".format(target))
 
 
 def main() -> None:

@@ -8,6 +8,7 @@ load_anchors / get_anchor: 唯一读取接口
 import json
 import os
 import ast
+import posixpath
 import re as _re
 from dataclasses import asdict
 from pathlib import Path
@@ -29,7 +30,9 @@ import time as _time
 _ANCHOR_DBG = bool(os.environ.get("CD_ANCHOR_LOG"))
 
 from index.api.anchors.subscript_string import BUILTIN_NOISE
-from index.api.anchors.build_effective_methods_table import _build_unique_class_ids, _build_unique_symbol_ids, _call_target, _extract_module_call_sites, _registration_entries, _resolve_super_call
+from index.api.anchors.build_effective_methods_table import _build_leaf_symbol_ids, _build_unique_class_ids, _build_unique_symbol_ids, _call_target, _extract_module_call_sites, _registration_entries, _resolve_super_call
+
+_JS_LANGUAGES = {"javascript", "typescript", "js", "ts", "jsx", "tsx"}
 
 def _resolve_import_attribute(target: str, raw_callee: dict, anchors: dict,
                               caller_file: str | None) -> Optional[str]:
@@ -83,9 +86,83 @@ def _resolve_registered_call(key: str, receiver: str, anchors: dict,
         return exact[0]
     return fallback[0] if len(fallback) == 1 else None
 
+def _resolve_js_module_call(target: str, raw_callee: dict, anchors: dict,
+                            caller_file: str | None, root=None) -> Optional[str]:
+    """Resolve a require/import alias to the anchor it names.
+
+    A relative specifier was always handled. A bare one — `pkg/deep/path`, which
+    is what a package's own parts use to reach each other — was answered with
+    "packages remain external", so a project organised into modules produced no
+    cross-file edges at all and said nothing about it. Now the specifier goes to
+    the resolver, which answers only from what the project itself declared:
+    package.json exports, tsconfig paths, a workspace sibling's name.
+    """
+    ref = raw_callee.get("module_ref")
+    if not isinstance(ref, dict) or not caller_file:
+        return None
+    module = str(ref.get("module") or "")
+    if not module:
+        return None
+    imported = str(ref.get("imported") or "")
+    symbol = target if imported in {"", "*", "default"} else imported
+    files = []
+    if root is not None:
+        try:
+            from parse.codeAnalysis.analyzer.js_resolver import resolver_for
+            files = resolver_for(str(root)).candidates(module, caller_file.replace("\\", "/"))
+        except Exception:
+            files = []
+    if not files:
+        if not module.startswith("."):
+            return None
+        base = posixpath.dirname(caller_file.replace("\\", "/"))
+        raw_path = posixpath.normpath(posixpath.join(base, module))
+        suffix = posixpath.splitext(raw_path)[1]
+        files = [raw_path] if suffix else [
+            raw_path + ext for ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+        ]
+        if not suffix:
+            files += [posixpath.join(raw_path, "index" + ext)
+                      for ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")]
+    matches = []
+    for file_name in files:
+        exact = "{}::{}".format(file_name, symbol)
+        if exact in anchors:
+            matches.append(exact)
+        matches.extend(
+            anchor.id for anchor in anchors.values()
+            if anchor.file.replace("\\", "/") == file_name
+            and str(anchor.symbol or "").rsplit(".", 1)[-1] == symbol
+            and anchor.id != exact
+        )
+    matches = list(dict.fromkeys(matches))
+    return matches[0] if len(matches) == 1 else None
+
+def _resolve_js_factory_member(target: str, raw_callee: dict, anchors: dict,
+                               caller_file: str | None,
+                               caller_anchor=None) -> Optional[str]:
+    """Resolve `value.member()` when value came from `createThing()`."""
+    factory = str(raw_callee.get("factory_ref") or "")
+    if not factory or not caller_file:
+        return None
+    file_name = caller_file.replace("\\", "/")
+    prefixes = []
+    symbol = str(getattr(caller_anchor, "symbol", "") or "")
+    owner = symbol.rsplit(".", 1)[0] if "." in symbol else ""
+    while owner:
+        prefixes.append(owner + "." + factory)
+        owner = owner.rsplit(".", 1)[0] if "." in owner else ""
+    prefixes.append(factory)
+    for prefix in prefixes:
+        candidate = "{}::{}.{}".format(file_name, prefix, target)
+        if candidate in anchors:
+            return candidate
+    return None
+
 def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
+                     unique_leaf_ids: dict | None = None,
                      caller_file: str | None = None,
-                     caller_anchor=None) -> str | None:
+                     caller_anchor=None, root=None) -> str | None:
     target = _call_target(raw_callee)
     if not target:
         return None
@@ -117,6 +194,24 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
             anchors,
             str(raw_callee.get("registry_name") or ""),
         )
+    # Per language, because the languages do not resolve alike. Python says
+    # where a name comes from in the import statement itself, so following the
+    # import is enough. JavaScript says it in a specifier that has to be run
+    # through the project's own manifests first. Sharing one chain meant every
+    # new language's rules were appended to the same function and applied to
+    # everyone, which held only as long as no two languages disagreed.
+    language = str(getattr(caller_anchor, "language", "") or "")
+    if isinstance(raw_callee, dict) and language in _JS_LANGUAGES:
+        module_target = _resolve_js_module_call(
+            target, raw_callee, anchors, caller_file, root,
+        )
+        if module_target:
+            return module_target
+        factory_target = _resolve_js_factory_member(
+            target, raw_callee, anchors, caller_file, caller_anchor,
+        )
+        if factory_target:
+            return factory_target
     # ``receiver.method(...)`` is only a lexical attribute call.  A short
     # method name is not enough evidence to bind it to the one same-named
     # function that happens to exist elsewhere in the project.  This mirrors
@@ -145,12 +240,31 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
             return imported_target
         return None
     if caller_file:
+        if caller_anchor is not None:
+            own_nested = "{}::{}.{}".format(
+                caller_file.replace("\\", "/"),
+                str(caller_anchor.symbol or ""), target,
+            )
+            if own_nested in anchors:
+                return own_nested
+        if caller_anchor is not None and "." in str(caller_anchor.symbol or ""):
+            owner = str(caller_anchor.symbol).rsplit(".", 1)[0]
+            # Walk lexical parents from the innermost nested callback/function
+            # out to the file scope: apply.handler@343 -> apply -> file.
+            while owner:
+                owner_candidate = "{}::{}.{}".format(
+                    caller_file.replace("\\", "/"), owner, target,
+                )
+                if owner_candidate in anchors:
+                    return owner_candidate
+                owner = owner.rsplit(".", 1)[0] if "." in owner else ""
         candidate = "{}::{}".format(caller_file.replace("\\", "/"), target)
         if candidate in anchors:
             return candidate
-    return unique_symbol_ids.get(target)
+    return unique_symbol_ids.get(target) or (unique_leaf_ids or {}).get(target)
 
-def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None) -> None:
+def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None,
+                           root=None) -> None:
     """Re-resolve callees/call_sites for every anchor, or only a scoped subset.
 
     ``only_ids`` (used by the incremental update path) restricts the
@@ -164,36 +278,64 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None)
     resolves everything, which stays correct by construction (see below).
     """
     unique_symbol_ids = _build_unique_symbol_ids(anchors)
+    unique_leaf_ids, leaf_candidates = _build_leaf_symbol_ids(anchors)
+    ambiguous_names: set[str] = set()
+    registry_templates: dict[str, list[str]] = {}
     unique_class_ids = _build_unique_class_ids(anchors)
 
     def resolve_ids(resolution_ref, anchor) -> list[str]:
         if isinstance(resolution_ref, dict) and resolution_ref.get("call_kind") == "registry_template":
             template = str(resolution_ref.get("registry_template") or "")
+            # A template of nothing but wildcards matches every key there is.
+            # `**` compiled to `^.+.+$`, so an ordinary `sd.update(...)` was
+            # read as a call to the entire registry — and then the entire
+            # registry was copied into that one call site. A pattern that
+            # cannot exclude anything is not evidence; it is the absence of it.
+            if template.replace("*", "").strip() == "":
+                return []
             pattern = "^{}$".format(_re.escape(template).replace(r"\*", ".+"))
             receiver_names = {
                 str(resolution_ref.get("receiver") or ""),
                 str(resolution_ref.get("registry_name") or ""),
             } - {""}
             exact = []
-            fallback = []
+            matched = 0
+            counted = set()
+            taken = set()
             for candidate in anchors.values():
                 for entry in _registration_entries(candidate):
                     if not _re.match(pattern, entry["key"]):
                         continue
                     pair = (entry["key"], candidate.id)
-                    if pair not in fallback:
-                        fallback.append(pair)
-                    if entry["name"] in receiver_names and pair not in exact:
+                    if pair not in counted:
+                        counted.add(pair)
+                        matched += 1
+                    # One registration yields two entries: one carrying the
+                    # decorator that made it and one without. Deduplicating on
+                    # (key, id) alone let the nameless entry win the slot, so
+                    # the receiver check below never saw the name and every
+                    # template resolved to nothing.
+                    if entry["name"] in receiver_names and pair not in taken:
+                        taken.add(pair)
                         exact.append(pair)
-            selected = exact or fallback
-            resolution_ref["_registry_matches"] = selected
-            return [anchor_id for _, anchor_id in selected]
+            # No receiver match means the target is unknown. Answering with
+            # every key that fit the pattern says "all of them", which is a
+            # different claim and a false one — and it is the claim that made
+            # one anchor record grow past a hundred megabytes.
+            if not exact:
+                resolution_ref["registry_matched"] = matched
+                return []
+            resolution_ref["_registry_matches"] = exact
+            registry_templates[template] = sorted({aid for _, aid in exact})
+            return [anchor_id for _, anchor_id in exact]
         direct = _resolve_call_id(
             resolution_ref,
             anchors,
             unique_symbol_ids,
+            unique_leaf_ids,
             caller_file=anchor.file,
             caller_anchor=anchor,
+            root=root,
         )
         if direct:
             return [direct]
@@ -219,11 +361,12 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None)
         normalized_callees = []
         normalized_sites = []
         sites = list(getattr(anchor, "call_sites", []) or [])
-        for idx, raw_callee in enumerate(anchor.callees):
-            if idx < len(sites) and isinstance(sites[idx], dict):
-                site = dict(sites[idx])
-                resolution_ref = site
-            elif isinstance(raw_callee, dict):
+        # call_sites carry occurrence-level evidence and may legitimately be
+        # longer than the de-duplicated `callees` summary. Pairing the two by
+        # list index shifted every target after the first repeated call.
+        refs = sites if sites else list(anchor.callees)
+        for idx, raw_callee in enumerate(refs):
+            if isinstance(raw_callee, dict):
                 site = dict(raw_callee)
                 resolution_ref = site
             else:
@@ -242,12 +385,38 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None)
                 kept_site.setdefault("seq", idx)
                 kept_site.setdefault("line", 0)
                 kept_site.setdefault("conds", ["nocond"])
+                raw_target = str(kept_site.get("raw_target") or kept_site.get("target") or raw_callee)
+                # A receiver call such as ``ctx.get()`` is not evidence that
+                # the only project function named ``get`` is its target.  In
+                # particular this used to connect production code to test
+                # doubles. Candidate hints are useful only for unresolved
+                # bare-name calls.
+                is_attribute = kept_site.get("call_kind") == "attribute"
+                leaf_name = raw_target.replace("::", ".").rsplit(".", 1)[-1]
+                candidates = [] if is_attribute else leaf_candidates.get(leaf_name, [])
+                kept_site["resolution"] = "possible" if len(candidates) > 1 else "unresolved"
+                if candidates:
+                    # The candidate set belongs to the NAME, not to the call
+                    # site. Copying it into every site multiplied one list by
+                    # every place the name is called: with a few thousand
+                    # same-named symbols (a venv full of torch and numpy will
+                    # do it) and a hundred call sites, one anchor record grew
+                    # past a hundred megabytes. The set is written once, beside
+                    # the anchors, and a site points at it.
+                    kept_site["candidates"] = leaf_name
+                    kept_site["candidate_count"] = len(candidates)
+                    ambiguous_names.add(leaf_name)
                 normalized_sites.append(kept_site)
-                normalized_callees.append(kept_site.get("target") or raw_callee)
+                kept_target = kept_site.get("target") or raw_callee
+                if kept_target not in normalized_callees:
+                    normalized_callees.append(kept_target)
                 continue
             for target_id in target_ids:
                 resolved_site = dict(site)
                 resolved_site["target"] = target_id
+                resolved_site.setdefault("raw_target", _call_target(resolution_ref))
+                resolved_site["resolution"] = "exact"
+                resolved_site.setdefault("evidence", "canonical-id" if "::" in str(_call_target(resolution_ref)) else "unique-symbol")
                 registry_matches = (
                     resolution_ref.get("_registry_matches", [])
                     if isinstance(resolution_ref, dict) else []
@@ -256,10 +425,17 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None)
                     if candidate_id == target_id:
                         resolved_site["registry_key"] = key
                         break
+                # The pair list is how this site found its key; it is not part
+                # of the answer. Left in, it was copied into every site of every
+                # caller of a registry — one record reached 534.8KB from 87
+                # copies of the same 7,392-byte list, and one index reached
+                # 68.6GB. The key above is what a reader needs.
+                resolved_site.pop("_registry_matches", None)
                 resolved_site.setdefault("seq", idx)
                 resolved_site.setdefault("line", 0)
                 resolved_site.setdefault("conds", ["nocond"])
-                normalized_callees.append(target_id)
+                if target_id not in normalized_callees:
+                    normalized_callees.append(target_id)
                 normalized_sites.append(resolved_site)
         if anchor.symbol_type == "class":
             constructor_id = getattr(anchor, "effective_methods", {}).get("__init__")
@@ -274,6 +450,12 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None)
                 })
         anchor.callees = normalized_callees
         anchor.call_sites = normalized_sites
+
+    # Handed to the writer so the shared table lands next to the anchors.
+    _finalize_anchor_graph.last_ambiguous = {
+        "names": {name: list(leaf_candidates.get(name, [])) for name in sorted(ambiguous_names)},
+        "registry": {k: registry_templates[k] for k in sorted(registry_templates)},
+    }
 
     for anchor in anchors.values():
         anchor.callers = []

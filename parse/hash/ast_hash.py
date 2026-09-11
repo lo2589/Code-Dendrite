@@ -249,3 +249,25 @@ def get_symbol_ast_hash(file_path: str, symbol: str, language: str = "python") -
     # 计算该节点的结构哈希
     dump = ast.dump(target_node, include_attributes=False)
     return _short_hash(dump)
+
+def normalize_body(text: str) -> str:
+    """Reduce a chunk of source to what a rewrite must change and a reformat cannot.
+
+    Whitespace only. Comments are deliberately left in: stripping them means
+    finding comment starts, and `//` lives inside URLs and `#` inside strings, so
+    a naive strip turns `"http://a"` and `"http://b"` into the same text — two
+    different functions with one fingerprint. Counting a comment-only edit as a
+    change costs a needless re-index; missing a real change costs a wrong answer,
+    and the current scheme already fails that way.
+    """
+    return " ".join(str(text).split())
+
+
+def body_hash(text: str) -> str:
+    """A fingerprint of the code itself, with no file, name or line number in it.
+
+    Two identical functions therefore share a hash — that is what makes it
+    possible to notice one has moved, or that two siblings really are the same.
+    Identity is the anchor id's job; this answers only "is this the same code".
+    """
+    return _short_hash(normalize_body(text))

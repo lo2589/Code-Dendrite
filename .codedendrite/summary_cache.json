@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-09-05T10:59:54.625436Z",
+  "generated_at": "2026-09-11T11:06:10.765717Z",
   "summary_version": 3,
-  "call_structure_hash": "82111f1909af8b24bc2593a641bb0f468c48da704473b985b623e5298177e69f",
+  "call_structure_hash": "fe42cb64563d66ad69b85176c8139f1ed241924560e0a6f7eaeac579c9940e39",
   "project_name": "CodeDendrite_refactor",
-  "project_one_line": "Coordinate analyze project structur, cmd report workflows",
+  "project_one_line": "Coordinate analyze project structur, create analyzer workflows",
   "modules": [
     {
       "id": "sm_001",
@@ -12,23 +12,23 @@
     },
     {
       "id": "sm_002",
-      "name": "cmd_report",
-      "responsibility": "Coordinate cmd report, format map, trace path"
+      "name": "create_analyzer",
+      "responsibility": "Handle create analyzer"
     },
     {
       "id": "sm_003",
-      "name": "context",
-      "responsibility": "Handle tool context"
-    },
-    {
-      "id": "sm_004",
       "name": "dispatch",
       "responsibility": "Coordinate dispatch, analyze tree, run"
     },
     {
-      "id": "sm_005",
+      "id": "sm_004",
       "name": "generate_mermaid_for",
       "responsibility": "Handle generate mermaid for project"
+    },
+    {
+      "id": "sm_005",
+      "name": "context",
+      "responsibility": "Coordinate tool context, cmd report, format map"
     },
     {
       "id": "sm_006",

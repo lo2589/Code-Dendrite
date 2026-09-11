@@ -39,7 +39,14 @@ class HashDatabase:
     
     DB_FILE = ".code_hash_db.json"
     DB_VERSION = 1
-    
+    # The version of the extractors behind the stored hashes, NOT of this file's
+    # schema. A hash answers "has this file changed?", which is the wrong
+    # question after a parser fix: the file is untouched, so it is skipped, and
+    # the corrected spans never reach the index. `projectContext` in the harness
+    # sat at line 440->440 for a month for exactly this reason. Bump this
+    # whenever an extractor changes what it produces from unchanged source.
+    PARSER_VERSION = 2
+
     def __init__(self, root: str):
         """
         初始化哈希数据库
@@ -69,6 +76,14 @@ class HashDatabase:
                     data["_meta"] = {"version": self.DB_VERSION}
                 if "files" not in data:
                     data["files"] = {}
+                # Recorded, not acted on. Dropping the file hashes here looked
+                # like it would force a re-parse and did not: the anchor layer
+                # keys on file content too, so an untouched file kept its old
+                # anchors and the corrected spans never appeared —
+                # `Anchor update: created 0, removed 0` over 218,791 anchors.
+                # api/cli.py compares this and runs a full rebuild instead,
+                # which is the only thing that re-derives anything.
+                data["_meta"].setdefault("parser", self.PARSER_VERSION)
                 return data
             except json.JSONDecodeError:
                 pass
@@ -76,6 +91,7 @@ class HashDatabase:
         return {
             "_meta": {
                 "version": self.DB_VERSION,
+                "parser": self.PARSER_VERSION,
                 "created_at": datetime.now().isoformat(),
                 "file_count": 0
             },
@@ -314,26 +330,13 @@ class HashDatabase:
         return stale
     
     def _detect_language(self, file_path: Path) -> Optional[str]:
-        """根据文件扩展名检测语言"""
-        ext_map = {
-            ".py": "python",
-            ".pyw": "python",
-            ".js": "javascript",
-            ".jsx": "javascript",
-            ".ts": "typescript",
-            ".tsx": "typescript",
-            ".mjs": "javascript",
-            ".cjs": "javascript",
-            ".java": "java",
-            ".c": "cpp",
-            ".cpp": "cpp",
-            ".cc": "cpp",
-            ".cxx": "cpp",
-            ".h": "cpp",
-            ".hpp": "cpp",
-            ".hxx": "cpp",
-        }
-        return ext_map.get(file_path.suffix.lower())
+        """Use the same extension registry as full and incremental indexing."""
+        try:
+            from parse.languages.registry import language_for_path
+        except ImportError:
+            from parse.languages.registry import language_for_path
+        spec = language_for_path(file_path)
+        return spec.name if spec is not None else None
     
     def __len__(self) -> int:
         """返回数据库中的文件数量"""

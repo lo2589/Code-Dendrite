@@ -11,8 +11,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from serve.api.analysis import analyze_code
-from synth.smartAnalyzer.orchestrator import scan_project
+from tools.CodeDendrite import scan_project, analyze_code
 
 
 def main():

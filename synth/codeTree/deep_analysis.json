@@ -1,0 +1,2717 @@
+{
+  "meta": {
+    "root": ".",
+    "total_files": 16,
+    "total_functions": 71,
+    "entry_points": 23
+  },
+  "functions": {
+    "agent_tools.handle_tool_call": {
+      "id": "agent_tools.handle_tool_call",
+      "name": "handle_tool_call",
+      "qualified": "handle_tool_call",
+      "file": "agent_tools.py",
+      "line_start": 164,
+      "line_end": 180,
+      "signature": "def handle_tool_call(tool_name: str, tool_args: dict) -> dict",
+      "args": [
+        {
+          "name": "tool_name",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "tool_args",
+          "type": "dict",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "deep_analyzer.DeepAnalyzer.analyze_all": {
+      "id": "deep_analyzer.DeepAnalyzer.analyze_all",
+      "name": "analyze_all",
+      "qualified": "DeepAnalyzer.analyze_all",
+      "file": "deep_analyzer.py",
+      "line_start": 69,
+      "line_end": 108,
+      "signature": "def analyze_all(self: Any) -> Dict",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Dict",
+      "calls": [],
+      "called_by": [
+        "deep_analyzer.main"
+      ],
+      "is_entry_point": false
+    },
+    "deep_analyzer.generate_pipeline_html": {
+      "id": "deep_analyzer.generate_pipeline_html",
+      "name": "generate_pipeline_html",
+      "qualified": "generate_pipeline_html",
+      "file": "deep_analyzer.py",
+      "line_start": 329,
+      "line_end": 508,
+      "signature": "def generate_pipeline_html(result: Dict, output_path: str) -> Any",
+      "args": [
+        {
+          "name": "result",
+          "type": "Dict",
+          "default": null
+        },
+        {
+          "name": "output_path",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "deep_analyzer.main",
+        "dataflow_analyzer.main"
+      ],
+      "is_entry_point": false
+    },
+    "deep_analyzer.main": {
+      "id": "deep_analyzer.main",
+      "name": "main",
+      "qualified": "main",
+      "file": "deep_analyzer.py",
+      "line_start": 511,
+      "line_end": 538,
+      "signature": "def main() -> Any",
+      "args": [],
+      "returns": "Any",
+      "calls": [
+        "deep_analyzer.generate_pipeline_html",
+        "deep_analyzer.DeepAnalyzer.analyze_all"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor_cli.load_config": {
+      "id": "anchor_cli.load_config",
+      "name": "load_config",
+      "qualified": "load_config",
+      "file": "anchor_cli.py",
+      "line_start": 80,
+      "line_end": 85,
+      "signature": "def load_config(root: str) -> dict",
+      "args": [
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [],
+      "called_by": [
+        "anchor_cli.cmd_check",
+        "anchor_cli.cmd_coverage",
+        "anchor_cli.cmd_schedule",
+        "anchor_cli.cmd_report"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_cli.save_config": {
+      "id": "anchor_cli.save_config",
+      "name": "save_config",
+      "qualified": "save_config",
+      "file": "anchor_cli.py",
+      "line_start": 88,
+      "line_end": 93,
+      "signature": "def save_config(config: dict, root: str) -> Any",
+      "args": [
+        {
+          "name": "config",
+          "type": "dict",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor_cli.cmd_init",
+        "anchor_cli.cmd_schedule"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_cli.cmd_init": {
+      "id": "anchor_cli.cmd_init",
+      "name": "cmd_init",
+      "qualified": "cmd_init",
+      "file": "anchor_cli.py",
+      "line_start": 100,
+      "line_end": 117,
+      "signature": "def cmd_init(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor_cli.save_config"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor_cli.cmd_check": {
+      "id": "anchor_cli.cmd_check",
+      "name": "cmd_check",
+      "qualified": "cmd_check",
+      "file": "anchor_cli.py",
+      "line_start": 120,
+      "line_end": 216,
+      "signature": "def cmd_check(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor_cli.load_config"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor_cli.cmd_coverage": {
+      "id": "anchor_cli.cmd_coverage",
+      "name": "cmd_coverage",
+      "qualified": "cmd_coverage",
+      "file": "anchor_cli.py",
+      "line_start": 219,
+      "line_end": 286,
+      "signature": "def cmd_coverage(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor_cli.load_config"
+      ],
+      "called_by": [
+        "anchor_cli.cmd_report"
+      ],
+      "is_entry_point": true
+    },
+    "anchor_cli.cmd_diff": {
+      "id": "anchor_cli.cmd_diff",
+      "name": "cmd_diff",
+      "qualified": "cmd_diff",
+      "file": "anchor_cli.py",
+      "line_start": 289,
+      "line_end": 315,
+      "signature": "def cmd_diff(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor_cli.cmd_schedule": {
+      "id": "anchor_cli.cmd_schedule",
+      "name": "cmd_schedule",
+      "qualified": "cmd_schedule",
+      "file": "anchor_cli.py",
+      "line_start": 318,
+      "line_end": 347,
+      "signature": "def cmd_schedule(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor_cli.load_config",
+        "anchor_cli.save_config"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor_cli.cmd_report": {
+      "id": "anchor_cli.cmd_report",
+      "name": "cmd_report",
+      "qualified": "cmd_report",
+      "file": "anchor_cli.py",
+      "line_start": 350,
+      "line_end": 381,
+      "signature": "def cmd_report(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor_cli.load_config",
+        "anchor_cli.cmd_coverage"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor_cli.generate_report": {
+      "id": "anchor_cli.generate_report",
+      "name": "generate_report",
+      "qualified": "generate_report",
+      "file": "anchor_cli.py",
+      "line_start": 388,
+      "line_end": 420,
+      "signature": "def generate_report(all_symbols: Any, anchored: Any, unanchored: Any, core_unanchored: Any, config: Any, root: Any) -> str",
+      "args": [
+        {
+          "name": "all_symbols",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "anchored",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "unanchored",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "core_unanchored",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "str",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_cli.main": {
+      "id": "anchor_cli.main",
+      "name": "main",
+      "qualified": "main",
+      "file": "anchor_cli.py",
+      "line_start": 427,
+      "line_end": 487,
+      "signature": "def main() -> Any",
+      "args": [],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows",
+      "name": "analyze_all_flows",
+      "qualified": "DataFlowAnalyzer.analyze_all_flows",
+      "file": "dataflow_analyzer.py",
+      "line_start": 102,
+      "line_end": 118,
+      "signature": "def analyze_all_flows(self: Any) -> Dict",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Dict",
+      "calls": [],
+      "called_by": [
+        "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html",
+        "dataflow_analyzer.main"
+      ],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html",
+      "name": "generate_pipeline_html",
+      "qualified": "DataFlowAnalyzer.generate_pipeline_html",
+      "file": "dataflow_analyzer.py",
+      "line_start": 120,
+      "line_end": 291,
+      "signature": "def generate_pipeline_html(self: Any, output_path: str) -> Any",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "output_path",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows"
+      ],
+      "called_by": [
+        "dataflow_analyzer.main"
+      ],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.trace_flow_from": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.trace_flow_from",
+      "name": "trace_flow_from",
+      "qualified": "DataFlowAnalyzer.trace_flow_from",
+      "file": "dataflow_analyzer.py",
+      "line_start": 293,
+      "line_end": 346,
+      "signature": "def trace_flow_from(self: Any, entry_func_id: str, max_depth: int) -> Optional[Dict]",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "entry_func_id",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "max_depth",
+          "type": "int",
+          "default": null
+        }
+      ],
+      "returns": "Optional[Dict]",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.analyze_function_dataflow": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.analyze_function_dataflow",
+      "name": "analyze_function_dataflow",
+      "qualified": "DataFlowAnalyzer.analyze_function_dataflow",
+      "file": "dataflow_analyzer.py",
+      "line_start": 348,
+      "line_end": 368,
+      "signature": "def analyze_function_dataflow(self: Any, func_info: Dict) -> Optional[FunctionDataFlow]",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "func_info",
+          "type": "Dict",
+          "default": null
+        }
+      ],
+      "returns": "Optional[FunctionDataFlow]",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.find_function_node": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.find_function_node",
+      "name": "find_function_node",
+      "qualified": "DataFlowAnalyzer.find_function_node",
+      "file": "dataflow_analyzer.py",
+      "line_start": 370,
+      "line_end": 391,
+      "signature": "def find_function_node(self: Any, tree: Any, func_info: Dict) -> Any",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "tree",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "func_info",
+          "type": "Dict",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.extract_dataflow": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.extract_dataflow",
+      "name": "extract_dataflow",
+      "qualified": "DataFlowAnalyzer.extract_dataflow",
+      "file": "dataflow_analyzer.py",
+      "line_start": 393,
+      "line_end": 440,
+      "signature": "def extract_dataflow(self: Any, func_node: Any, func_info: Dict, source: str) -> FunctionDataFlow",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "func_node",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "func_info",
+          "type": "Dict",
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "FunctionDataFlow",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.find_next_function": {
+      "id": "dataflow_analyzer.DataFlowAnalyzer.find_next_function",
+      "name": "find_next_function",
+      "qualified": "DataFlowAnalyzer.find_next_function",
+      "file": "dataflow_analyzer.py",
+      "line_start": 556,
+      "line_end": 578,
+      "signature": "def find_next_function(self: Any, flow_data: FunctionDataFlow) -> Optional[str]",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "flow_data",
+          "type": "FunctionDataFlow",
+          "default": null
+        }
+      ],
+      "returns": "Optional[str]",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "dataflow_analyzer.main": {
+      "id": "dataflow_analyzer.main",
+      "name": "main",
+      "qualified": "main",
+      "file": "dataflow_analyzer.py",
+      "line_start": 592,
+      "line_end": 630,
+      "signature": "def main() -> Any",
+      "args": [],
+      "returns": "Any",
+      "calls": [
+        "deep_analyzer.generate_pipeline_html",
+        "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html",
+        "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "view_html.Handler.end_headers": {
+      "id": "view_html.Handler.end_headers",
+      "name": "end_headers",
+      "qualified": "Handler.end_headers",
+      "file": "view_html.py",
+      "line_start": 35,
+      "line_end": 38,
+      "signature": "def end_headers(self: Any) -> Any",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.Anchor.to_tag": {
+      "id": "anchor_engine_v2.Anchor.to_tag",
+      "name": "to_tag",
+      "qualified": "Anchor.to_tag",
+      "file": "anchor_engine_v2.py",
+      "line_start": 43,
+      "line_end": 52,
+      "signature": "def to_tag(self: Any) -> str",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "str",
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.create_anchor",
+        "anchor_engine_v2.refresh_anchor",
+        "anchor_engine.create_anchor",
+        "anchor_engine.refresh_anchor"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.DriftReport.is_ok": {
+      "id": "anchor_engine_v2.DriftReport.is_ok",
+      "name": "is_ok",
+      "qualified": "DriftReport.is_ok",
+      "file": "anchor_engine_v2.py",
+      "line_start": 68,
+      "line_end": 69,
+      "signature": "def is_ok(self: Any) -> bool",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.compute_hash_v2": {
+      "id": "anchor_engine_v2.compute_hash_v2",
+      "name": "compute_hash_v2",
+      "qualified": "compute_hash_v2",
+      "file": "anchor_engine_v2.py",
+      "line_start": 172,
+      "line_end": 219,
+      "signature": "def compute_hash_v2(file: str, symbol: Optional[str], line_start: Optional[int], line_end: Optional[int], hash_mode: str, root: Path) -> tuple[str, str, Optional[str]]",
+      "args": [
+        {
+          "name": "file",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "symbol",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "line_start",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "line_end",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "hash_mode",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "Path",
+          "default": null
+        }
+      ],
+      "returns": "tuple[str, str, Optional[str]]",
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.create_anchor",
+        "anchor_engine_v2.check_drift_v2",
+        "anchor_engine_v2.refresh_anchor",
+        "anchor_engine_v2.list_anchors"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.classify_severity": {
+      "id": "anchor_engine_v2.classify_severity",
+      "name": "classify_severity",
+      "qualified": "classify_severity",
+      "file": "anchor_engine_v2.py",
+      "line_start": 226,
+      "line_end": 251,
+      "signature": "def classify_severity(old_hash: str, new_hash: str, old_struct_hash: Optional[str], new_struct_hash: Optional[str], status: str) -> str",
+      "args": [
+        {
+          "name": "old_hash",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "new_hash",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "old_struct_hash",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "new_struct_hash",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "str",
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.check_drift_v2"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.parse_anchors_from_text": {
+      "id": "anchor_engine_v2.parse_anchors_from_text",
+      "name": "parse_anchors_from_text",
+      "qualified": "parse_anchors_from_text",
+      "file": "anchor_engine_v2.py",
+      "line_start": 293,
+      "line_end": 314,
+      "signature": "def parse_anchors_from_text(text: str) -> list[Anchor]",
+      "args": [
+        {
+          "name": "text",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "list[Anchor]",
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.check_drift_v2"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.create_anchor": {
+      "id": "anchor_engine_v2.create_anchor",
+      "name": "create_anchor",
+      "qualified": "create_anchor",
+      "file": "anchor_engine_v2.py",
+      "line_start": 321,
+      "line_end": 365,
+      "signature": "def create_anchor(anchor_id: str, file: str, symbol: Optional[str], line_start: Optional[int], line_end: Optional[int], description: str, hash_mode: str, language: str, root: str) -> dict",
+      "args": [
+        {
+          "name": "anchor_id",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "file",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "symbol",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "line_start",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "line_end",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "hash_mode",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "language",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.check_drift_v2": {
+      "id": "anchor_engine_v2.check_drift_v2",
+      "name": "check_drift_v2",
+      "qualified": "check_drift_v2",
+      "file": "anchor_engine_v2.py",
+      "line_start": 372,
+      "line_end": 478,
+      "signature": "def check_drift_v2(anchor_ids: Optional[list[str]], doc_text: Optional[str], root: str) -> dict",
+      "args": [
+        {
+          "name": "anchor_ids",
+          "type": "Optional[list[str]]",
+          "default": null
+        },
+        {
+          "name": "doc_text",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine_v2.parse_anchors_from_text",
+        "anchor_engine_v2.classify_severity",
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": [
+        "anchor_engine_v2.refresh_all_stale"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.refresh_anchor": {
+      "id": "anchor_engine_v2.refresh_anchor",
+      "name": "refresh_anchor",
+      "qualified": "refresh_anchor",
+      "file": "anchor_engine_v2.py",
+      "line_start": 485,
+      "line_end": 524,
+      "signature": "def refresh_anchor(anchor_id: str, root: str) -> dict",
+      "args": [
+        {
+          "name": "anchor_id",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": [
+        "anchor_engine_v2.refresh_all_stale"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.refresh_all_stale": {
+      "id": "anchor_engine_v2.refresh_all_stale",
+      "name": "refresh_all_stale",
+      "qualified": "refresh_all_stale",
+      "file": "anchor_engine_v2.py",
+      "line_start": 531,
+      "line_end": 563,
+      "signature": "def refresh_all_stale(root: str) -> dict",
+      "args": [
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine_v2.refresh_anchor",
+        "anchor_engine_v2.check_drift_v2"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine_v2.list_anchors": {
+      "id": "anchor_engine_v2.list_anchors",
+      "name": "list_anchors",
+      "qualified": "list_anchors",
+      "file": "anchor_engine_v2.py",
+      "line_start": 570,
+      "line_end": 593,
+      "signature": "def list_anchors(root: str) -> dict",
+      "args": [
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "test_anchor.run": {
+      "id": "test_anchor.run",
+      "name": "run",
+      "qualified": "run",
+      "file": "test_anchor.py",
+      "line_start": 28,
+      "line_end": 35,
+      "signature": "def run(label: Any, fn: Any) -> Any",
+      "args": [
+        {
+          "name": "label",
+          "type": "Any",
+          "default": null
+        },
+        {
+          "name": "fn",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "test_anchor.test_all"
+      ],
+      "is_entry_point": false
+    },
+    "test_anchor.test_all": {
+      "id": "test_anchor.test_all",
+      "name": "test_all",
+      "qualified": "test_all",
+      "file": "test_anchor.py",
+      "line_start": 38,
+      "line_end": 144,
+      "signature": "def test_all() -> Any",
+      "args": [],
+      "returns": "Any",
+      "calls": [
+        "test_anchor.run"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine.Anchor.to_tag": {
+      "id": "anchor_engine.Anchor.to_tag",
+      "name": "to_tag",
+      "qualified": "Anchor.to_tag",
+      "file": "anchor_engine.py",
+      "line_start": 40,
+      "line_end": 48,
+      "signature": "def to_tag(self: Any) -> str",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "str",
+      "calls": [],
+      "called_by": [
+        "anchor_engine.create_anchor",
+        "anchor_engine.refresh_anchor"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine.DriftReport.is_ok": {
+      "id": "anchor_engine.DriftReport.is_ok",
+      "name": "is_ok",
+      "qualified": "DriftReport.is_ok",
+      "file": "anchor_engine.py",
+      "line_start": 62,
+      "line_end": 63,
+      "signature": "def is_ok(self: Any) -> bool",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine.compute_hash": {
+      "id": "anchor_engine.compute_hash",
+      "name": "compute_hash",
+      "qualified": "compute_hash",
+      "file": "anchor_engine.py",
+      "line_start": 119,
+      "line_end": 142,
+      "signature": "def compute_hash(file: str, symbol: Optional[str], line_start: Optional[int], line_end: Optional[int], root: Path) -> tuple[str, str]",
+      "args": [
+        {
+          "name": "file",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "symbol",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "line_start",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "line_end",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "Path",
+          "default": null
+        }
+      ],
+      "returns": "tuple[str, str]",
+      "calls": [],
+      "called_by": [
+        "anchor_engine.create_anchor",
+        "anchor_engine.check_drift",
+        "anchor_engine.refresh_anchor",
+        "anchor_engine.list_anchors"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine.parse_anchors_from_text": {
+      "id": "anchor_engine.parse_anchors_from_text",
+      "name": "parse_anchors_from_text",
+      "qualified": "parse_anchors_from_text",
+      "file": "anchor_engine.py",
+      "line_start": 170,
+      "line_end": 189,
+      "signature": "def parse_anchors_from_text(text: str) -> list[Anchor]",
+      "args": [
+        {
+          "name": "text",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "list[Anchor]",
+      "calls": [],
+      "called_by": [
+        "anchor_engine.check_drift"
+      ],
+      "is_entry_point": false
+    },
+    "anchor_engine.create_anchor": {
+      "id": "anchor_engine.create_anchor",
+      "name": "create_anchor",
+      "qualified": "create_anchor",
+      "file": "anchor_engine.py",
+      "line_start": 196,
+      "line_end": 244,
+      "signature": "def create_anchor(anchor_id: str, file: str, symbol: Optional[str], line_start: Optional[int], line_end: Optional[int], description: str, root: str) -> dict",
+      "args": [
+        {
+          "name": "anchor_id",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "file",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "symbol",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "line_start",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "line_end",
+          "type": "Optional[int]",
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine.Anchor.to_tag",
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine.check_drift": {
+      "id": "anchor_engine.check_drift",
+      "name": "check_drift",
+      "qualified": "check_drift",
+      "file": "anchor_engine.py",
+      "line_start": 251,
+      "line_end": 351,
+      "signature": "def check_drift(anchor_ids: Optional[list[str]], doc_text: Optional[str], root: str) -> dict",
+      "args": [
+        {
+          "name": "anchor_ids",
+          "type": "Optional[list[str]]",
+          "default": null
+        },
+        {
+          "name": "doc_text",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine.parse_anchors_from_text",
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine.refresh_anchor": {
+      "id": "anchor_engine.refresh_anchor",
+      "name": "refresh_anchor",
+      "qualified": "refresh_anchor",
+      "file": "anchor_engine.py",
+      "line_start": 358,
+      "line_end": 405,
+      "signature": "def refresh_anchor(anchor_id: str, root: str) -> dict",
+      "args": [
+        {
+          "name": "anchor_id",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine.Anchor.to_tag",
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor_engine.list_anchors": {
+      "id": "anchor_engine.list_anchors",
+      "name": "list_anchors",
+      "qualified": "list_anchors",
+      "file": "anchor_engine.py",
+      "line_start": 412,
+      "line_end": 432,
+      "signature": "def list_anchors(root: str) -> dict",
+      "args": [
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "analyze.analyze_file": {
+      "id": "analyze.analyze_file",
+      "name": "analyze_file",
+      "qualified": "analyze_file",
+      "file": "versions/analyze.py",
+      "line_start": 224,
+      "line_end": 380,
+      "signature": "def analyze_file(filepath: Path, root: Path, module_id: str) -> Optional[ModuleIndex]",
+      "args": [
+        {
+          "name": "filepath",
+          "type": "Path",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "Path",
+          "default": null
+        },
+        {
+          "name": "module_id",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "Optional[ModuleIndex]",
+      "calls": [],
+      "called_by": [
+        "analyze.analyze_project"
+      ],
+      "is_entry_point": false
+    },
+    "analyze.build_call_graph": {
+      "id": "analyze.build_call_graph",
+      "name": "build_call_graph",
+      "qualified": "build_call_graph",
+      "file": "versions/analyze.py",
+      "line_start": 387,
+      "line_end": 425,
+      "signature": "def build_call_graph(modules: list[ModuleIndex]) -> dict",
+      "args": [
+        {
+          "name": "modules",
+          "type": "list[ModuleIndex]",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [],
+      "called_by": [
+        "analyze.analyze_project"
+      ],
+      "is_entry_point": false
+    },
+    "analyze.trace_data_flows": {
+      "id": "analyze.trace_data_flows",
+      "name": "trace_data_flows",
+      "qualified": "trace_data_flows",
+      "file": "versions/analyze.py",
+      "line_start": 432,
+      "line_end": 478,
+      "signature": "def trace_data_flows(modules: list[ModuleIndex], call_graph: dict, max_depth: int) -> list[dict]",
+      "args": [
+        {
+          "name": "modules",
+          "type": "list[ModuleIndex]",
+          "default": null
+        },
+        {
+          "name": "call_graph",
+          "type": "dict",
+          "default": null
+        },
+        {
+          "name": "max_depth",
+          "type": "int",
+          "default": null
+        }
+      ],
+      "returns": "list[dict]",
+      "calls": [],
+      "called_by": [
+        "analyze.analyze_project"
+      ],
+      "is_entry_point": false
+    },
+    "analyze.analyze_project": {
+      "id": "analyze.analyze_project",
+      "name": "analyze_project",
+      "qualified": "analyze_project",
+      "file": "versions/analyze.py",
+      "line_start": 485,
+      "line_end": 548,
+      "signature": "def analyze_project(root: str, include_patterns: list[str], exclude_patterns: list[str]) -> dict",
+      "args": [
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "include_patterns",
+          "type": "list[str]",
+          "default": null
+        },
+        {
+          "name": "exclude_patterns",
+          "type": "list[str]",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "analyze.build_call_graph",
+        "analyze.trace_data_flows",
+        "analyze.analyze_file"
+      ],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "anchor.red": {
+      "id": "anchor.red",
+      "name": "red",
+      "qualified": "red",
+      "file": "versions/anchor.py",
+      "line_start": 35,
+      "line_end": 35,
+      "signature": "def red(t: Any) -> Any",
+      "args": [
+        {
+          "name": "t",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_status",
+        "anchor.cmd_patrol",
+        "anchor.cmd_deep",
+        "anchor.cmd_bind",
+        "anchor.cmd_unbind",
+        "anchor.cmd_refresh",
+        "anchor.cmd_repair",
+        "anchor.cmd_watch"
+      ],
+      "is_entry_point": false
+    },
+    "anchor.yellow": {
+      "id": "anchor.yellow",
+      "name": "yellow",
+      "qualified": "yellow",
+      "file": "versions/anchor.py",
+      "line_start": 36,
+      "line_end": 36,
+      "signature": "def yellow(t: Any) -> Any",
+      "args": [
+        {
+          "name": "t",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_status",
+        "anchor.cmd_refresh",
+        "anchor.cmd_watch"
+      ],
+      "is_entry_point": false
+    },
+    "anchor.green": {
+      "id": "anchor.green",
+      "name": "green",
+      "qualified": "green",
+      "file": "versions/anchor.py",
+      "line_start": 37,
+      "line_end": 37,
+      "signature": "def green(t: Any) -> Any",
+      "args": [
+        {
+          "name": "t",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_init",
+        "anchor.cmd_status",
+        "anchor.cmd_deep",
+        "anchor.cmd_bind",
+        "anchor.cmd_unbind",
+        "anchor.cmd_refresh",
+        "anchor.cmd_report",
+        "anchor.cmd_repair"
+      ],
+      "is_entry_point": false
+    },
+    "anchor.cyan": {
+      "id": "anchor.cyan",
+      "name": "cyan",
+      "qualified": "cyan",
+      "file": "versions/anchor.py",
+      "line_start": 38,
+      "line_end": 38,
+      "signature": "def cyan(t: Any) -> Any",
+      "args": [
+        {
+          "name": "t",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_init",
+        "anchor.cmd_status",
+        "anchor.cmd_deep",
+        "anchor.cmd_bind",
+        "anchor.cmd_repair"
+      ],
+      "is_entry_point": false
+    },
+    "anchor.bold": {
+      "id": "anchor.bold",
+      "name": "bold",
+      "qualified": "bold",
+      "file": "versions/anchor.py",
+      "line_start": 39,
+      "line_end": 39,
+      "signature": "def bold(t: Any) -> Any",
+      "args": [
+        {
+          "name": "t",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_init",
+        "anchor.cmd_status",
+        "anchor.cmd_bind",
+        "anchor.cmd_repair"
+      ],
+      "is_entry_point": false
+    },
+    "anchor.dim": {
+      "id": "anchor.dim",
+      "name": "dim",
+      "qualified": "dim",
+      "file": "versions/anchor.py",
+      "line_start": 40,
+      "line_end": 40,
+      "signature": "def dim(t: Any) -> Any",
+      "args": [
+        {
+          "name": "t",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_status",
+        "anchor.cmd_refresh"
+      ],
+      "is_entry_point": false
+    },
+    "anchor.cmd_init": {
+      "id": "anchor.cmd_init",
+      "name": "cmd_init",
+      "qualified": "cmd_init",
+      "file": "versions/anchor.py",
+      "line_start": 60,
+      "line_end": 118,
+      "signature": "def cmd_init(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.bold",
+        "anchor.green",
+        "anchor.cyan"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_status": {
+      "id": "anchor.cmd_status",
+      "name": "cmd_status",
+      "qualified": "cmd_status",
+      "file": "versions/anchor.py",
+      "line_start": 121,
+      "line_end": 166,
+      "signature": "def cmd_status(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.green",
+        "anchor.yellow",
+        "anchor.red",
+        "anchor.cyan",
+        "anchor.dim",
+        "anchor.bold"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_patrol": {
+      "id": "anchor.cmd_patrol",
+      "name": "cmd_patrol",
+      "qualified": "cmd_patrol",
+      "file": "versions/anchor.py",
+      "line_start": 169,
+      "line_end": 183,
+      "signature": "def cmd_patrol(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_deep": {
+      "id": "anchor.cmd_deep",
+      "name": "cmd_deep",
+      "qualified": "cmd_deep",
+      "file": "versions/anchor.py",
+      "line_start": 186,
+      "line_end": 204,
+      "signature": "def cmd_deep(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red",
+        "anchor.cyan",
+        "anchor.green"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_bind": {
+      "id": "anchor.cmd_bind",
+      "name": "cmd_bind",
+      "qualified": "cmd_bind",
+      "file": "versions/anchor.py",
+      "line_start": 207,
+      "line_end": 224,
+      "signature": "def cmd_bind(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red",
+        "anchor.bold",
+        "anchor.green",
+        "anchor.cyan"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_unbind": {
+      "id": "anchor.cmd_unbind",
+      "name": "cmd_unbind",
+      "qualified": "cmd_unbind",
+      "file": "versions/anchor.py",
+      "line_start": 227,
+      "line_end": 236,
+      "signature": "def cmd_unbind(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red",
+        "anchor.green"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_refresh": {
+      "id": "anchor.cmd_refresh",
+      "name": "cmd_refresh",
+      "qualified": "cmd_refresh",
+      "file": "versions/anchor.py",
+      "line_start": 239,
+      "line_end": 259,
+      "signature": "def cmd_refresh(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red",
+        "anchor.dim",
+        "anchor.green",
+        "anchor.yellow"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_report": {
+      "id": "anchor.cmd_report",
+      "name": "cmd_report",
+      "qualified": "cmd_report",
+      "file": "versions/anchor.py",
+      "line_start": 262,
+      "line_end": 299,
+      "signature": "def cmd_report(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.green"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_repair": {
+      "id": "anchor.cmd_repair",
+      "name": "cmd_repair",
+      "qualified": "cmd_repair",
+      "file": "versions/anchor.py",
+      "line_start": 302,
+      "line_end": 338,
+      "signature": "def cmd_repair(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red",
+        "anchor.bold",
+        "anchor.green",
+        "anchor.cyan"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.cmd_watch": {
+      "id": "anchor.cmd_watch",
+      "name": "cmd_watch",
+      "qualified": "cmd_watch",
+      "file": "versions/anchor.py",
+      "line_start": 406,
+      "line_end": 451,
+      "signature": "def cmd_watch(args: Any) -> Any",
+      "args": [
+        {
+          "name": "args",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [
+        "anchor.red",
+        "anchor.yellow"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "anchor.main": {
+      "id": "anchor.main",
+      "name": "main",
+      "qualified": "main",
+      "file": "versions/anchor.py",
+      "line_start": 458,
+      "line_end": 543,
+      "signature": "def main() -> Any",
+      "args": [],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "install_hooks.install_hook": {
+      "id": "install_hooks.install_hook",
+      "name": "install_hook",
+      "qualified": "install_hook",
+      "file": "versions/install_hooks.py",
+      "line_start": 108,
+      "line_end": 117,
+      "signature": "def install_hook(hooks_dir: Path, name: str, content: str, overwrite: bool) -> Any",
+      "args": [
+        {
+          "name": "hooks_dir",
+          "type": "Path",
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "content",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "overwrite",
+          "type": "bool",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [
+        "install_hooks.main"
+      ],
+      "is_entry_point": false
+    },
+    "install_hooks.main": {
+      "id": "install_hooks.main",
+      "name": "main",
+      "qualified": "main",
+      "file": "versions/install_hooks.py",
+      "line_start": 120,
+      "line_end": 170,
+      "signature": "def main() -> Any",
+      "args": [],
+      "returns": "Any",
+      "calls": [
+        "install_hooks.install_hook"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "repair.ChangeUnit.estimated_tokens": {
+      "id": "repair.ChangeUnit.estimated_tokens",
+      "name": "estimated_tokens",
+      "qualified": "ChangeUnit.estimated_tokens",
+      "file": "versions/repair.py",
+      "line_start": 52,
+      "line_end": 57,
+      "signature": "def estimated_tokens(self: Any) -> int",
+      "args": [
+        {
+          "name": "self",
+          "type": "Any",
+          "default": null
+        }
+      ],
+      "returns": "int",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    },
+    "repair.build_repair_context": {
+      "id": "repair.build_repair_context",
+      "name": "build_repair_context",
+      "qualified": "build_repair_context",
+      "file": "versions/repair.py",
+      "line_start": 249,
+      "line_end": 351,
+      "signature": "def build_repair_context(root: str, since: str, max_tokens_per_unit: int, include_added: bool) -> dict",
+      "args": [
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "since",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "max_tokens_per_unit",
+          "type": "int",
+          "default": null
+        },
+        {
+          "name": "include_added",
+          "type": "bool",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [],
+      "called_by": [
+        "repair.handle_repair_tool_call"
+      ],
+      "is_entry_point": false
+    },
+    "repair.apply_repair": {
+      "id": "repair.apply_repair",
+      "name": "apply_repair",
+      "qualified": "apply_repair",
+      "file": "versions/repair.py",
+      "line_start": 456,
+      "line_end": 528,
+      "signature": "def apply_repair(actions: list[dict], root: str) -> dict",
+      "args": [
+        {
+          "name": "actions",
+          "type": "list[dict]",
+          "default": null
+        },
+        {
+          "name": "root",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [],
+      "called_by": [
+        "repair.handle_repair_tool_call"
+      ],
+      "is_entry_point": false
+    },
+    "repair.handle_repair_tool_call": {
+      "id": "repair.handle_repair_tool_call",
+      "name": "handle_repair_tool_call",
+      "qualified": "handle_repair_tool_call",
+      "file": "versions/repair.py",
+      "line_start": 591,
+      "line_end": 596,
+      "signature": "def handle_repair_tool_call(tool_name: str, tool_args: dict) -> dict",
+      "args": [
+        {
+          "name": "tool_name",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "tool_args",
+          "type": "dict",
+          "default": null
+        }
+      ],
+      "returns": "dict",
+      "calls": [
+        "repair.apply_repair",
+        "repair.build_repair_context"
+      ],
+      "called_by": [],
+      "is_entry_point": true
+    },
+    "visualize.generate_html": {
+      "id": "visualize.generate_html",
+      "name": "generate_html",
+      "qualified": "generate_html",
+      "file": "versions/visualize.py",
+      "line_start": 803,
+      "line_end": 806,
+      "signature": "def generate_html(index: dict, out_path: str) -> Any",
+      "args": [
+        {
+          "name": "index",
+          "type": "dict",
+          "default": null
+        },
+        {
+          "name": "out_path",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "returns": "Any",
+      "calls": [],
+      "called_by": [],
+      "is_entry_point": false
+    }
+  },
+  "call_graph": {
+    "agent_tools.handle_tool_call": {
+      "calls": [],
+      "called_by": []
+    },
+    "deep_analyzer.DeepAnalyzer.analyze_all": {
+      "calls": [],
+      "called_by": [
+        "deep_analyzer.main"
+      ]
+    },
+    "deep_analyzer.generate_pipeline_html": {
+      "calls": [],
+      "called_by": [
+        "deep_analyzer.main",
+        "dataflow_analyzer.main"
+      ]
+    },
+    "deep_analyzer.main": {
+      "calls": [
+        "deep_analyzer.generate_pipeline_html",
+        "deep_analyzer.DeepAnalyzer.analyze_all"
+      ],
+      "called_by": []
+    },
+    "anchor_cli.load_config": {
+      "calls": [],
+      "called_by": [
+        "anchor_cli.cmd_check",
+        "anchor_cli.cmd_coverage",
+        "anchor_cli.cmd_schedule",
+        "anchor_cli.cmd_report"
+      ]
+    },
+    "anchor_cli.save_config": {
+      "calls": [],
+      "called_by": [
+        "anchor_cli.cmd_init",
+        "anchor_cli.cmd_schedule"
+      ]
+    },
+    "anchor_cli.cmd_init": {
+      "calls": [
+        "anchor_cli.save_config"
+      ],
+      "called_by": []
+    },
+    "anchor_cli.cmd_check": {
+      "calls": [
+        "anchor_cli.load_config"
+      ],
+      "called_by": []
+    },
+    "anchor_cli.cmd_coverage": {
+      "calls": [
+        "anchor_cli.load_config"
+      ],
+      "called_by": [
+        "anchor_cli.cmd_report"
+      ]
+    },
+    "anchor_cli.cmd_diff": {
+      "calls": [],
+      "called_by": []
+    },
+    "anchor_cli.cmd_schedule": {
+      "calls": [
+        "anchor_cli.load_config",
+        "anchor_cli.save_config"
+      ],
+      "called_by": []
+    },
+    "anchor_cli.cmd_report": {
+      "calls": [
+        "anchor_cli.load_config",
+        "anchor_cli.cmd_coverage"
+      ],
+      "called_by": []
+    },
+    "anchor_cli.generate_report": {
+      "calls": [],
+      "called_by": []
+    },
+    "anchor_cli.main": {
+      "calls": [],
+      "called_by": []
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows": {
+      "calls": [],
+      "called_by": [
+        "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html",
+        "dataflow_analyzer.main"
+      ]
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html": {
+      "calls": [
+        "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows"
+      ],
+      "called_by": [
+        "dataflow_analyzer.main"
+      ]
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.trace_flow_from": {
+      "calls": [],
+      "called_by": []
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.analyze_function_dataflow": {
+      "calls": [],
+      "called_by": []
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.find_function_node": {
+      "calls": [],
+      "called_by": []
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.extract_dataflow": {
+      "calls": [],
+      "called_by": []
+    },
+    "dataflow_analyzer.DataFlowAnalyzer.find_next_function": {
+      "calls": [],
+      "called_by": []
+    },
+    "dataflow_analyzer.main": {
+      "calls": [
+        "deep_analyzer.generate_pipeline_html",
+        "dataflow_analyzer.DataFlowAnalyzer.generate_pipeline_html",
+        "dataflow_analyzer.DataFlowAnalyzer.analyze_all_flows"
+      ],
+      "called_by": []
+    },
+    "view_html.Handler.end_headers": {
+      "calls": [],
+      "called_by": []
+    },
+    "anchor_engine_v2.Anchor.to_tag": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.create_anchor",
+        "anchor_engine_v2.refresh_anchor",
+        "anchor_engine.create_anchor",
+        "anchor_engine.refresh_anchor"
+      ]
+    },
+    "anchor_engine_v2.DriftReport.is_ok": {
+      "calls": [],
+      "called_by": []
+    },
+    "anchor_engine_v2.compute_hash_v2": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.create_anchor",
+        "anchor_engine_v2.check_drift_v2",
+        "anchor_engine_v2.refresh_anchor",
+        "anchor_engine_v2.list_anchors"
+      ]
+    },
+    "anchor_engine_v2.classify_severity": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.check_drift_v2"
+      ]
+    },
+    "anchor_engine_v2.parse_anchors_from_text": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine_v2.check_drift_v2"
+      ]
+    },
+    "anchor_engine_v2.create_anchor": {
+      "calls": [
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": []
+    },
+    "anchor_engine_v2.check_drift_v2": {
+      "calls": [
+        "anchor_engine_v2.parse_anchors_from_text",
+        "anchor_engine_v2.classify_severity",
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": [
+        "anchor_engine_v2.refresh_all_stale"
+      ]
+    },
+    "anchor_engine_v2.refresh_anchor": {
+      "calls": [
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": [
+        "anchor_engine_v2.refresh_all_stale"
+      ]
+    },
+    "anchor_engine_v2.refresh_all_stale": {
+      "calls": [
+        "anchor_engine_v2.refresh_anchor",
+        "anchor_engine_v2.check_drift_v2"
+      ],
+      "called_by": []
+    },
+    "anchor_engine_v2.list_anchors": {
+      "calls": [
+        "anchor_engine_v2.compute_hash_v2"
+      ],
+      "called_by": []
+    },
+    "test_anchor.run": {
+      "calls": [],
+      "called_by": [
+        "test_anchor.test_all"
+      ]
+    },
+    "test_anchor.test_all": {
+      "calls": [
+        "test_anchor.run"
+      ],
+      "called_by": []
+    },
+    "anchor_engine.Anchor.to_tag": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine.create_anchor",
+        "anchor_engine.refresh_anchor"
+      ]
+    },
+    "anchor_engine.DriftReport.is_ok": {
+      "calls": [],
+      "called_by": []
+    },
+    "anchor_engine.compute_hash": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine.create_anchor",
+        "anchor_engine.check_drift",
+        "anchor_engine.refresh_anchor",
+        "anchor_engine.list_anchors"
+      ]
+    },
+    "anchor_engine.parse_anchors_from_text": {
+      "calls": [],
+      "called_by": [
+        "anchor_engine.check_drift"
+      ]
+    },
+    "anchor_engine.create_anchor": {
+      "calls": [
+        "anchor_engine.Anchor.to_tag",
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": []
+    },
+    "anchor_engine.check_drift": {
+      "calls": [
+        "anchor_engine.parse_anchors_from_text",
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": []
+    },
+    "anchor_engine.refresh_anchor": {
+      "calls": [
+        "anchor_engine.Anchor.to_tag",
+        "anchor_engine_v2.Anchor.to_tag",
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": []
+    },
+    "anchor_engine.list_anchors": {
+      "calls": [
+        "anchor_engine.compute_hash"
+      ],
+      "called_by": []
+    },
+    "analyze.analyze_file": {
+      "calls": [],
+      "called_by": [
+        "analyze.analyze_project"
+      ]
+    },
+    "analyze.build_call_graph": {
+      "calls": [],
+      "called_by": [
+        "analyze.analyze_project"
+      ]
+    },
+    "analyze.trace_data_flows": {
+      "calls": [],
+      "called_by": [
+        "analyze.analyze_project"
+      ]
+    },
+    "analyze.analyze_project": {
+      "calls": [
+        "analyze.build_call_graph",
+        "analyze.trace_data_flows",
+        "analyze.analyze_file"
+      ],
+      "called_by": []
+    },
+    "anchor.red": {
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_status",
+        "anchor.cmd_patrol",
+        "anchor.cmd_deep",
+        "anchor.cmd_bind",
+        "anchor.cmd_unbind",
+        "anchor.cmd_refresh",
+        "anchor.cmd_repair",
+        "anchor.cmd_watch"
+      ]
+    },
+    "anchor.yellow": {
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_status",
+        "anchor.cmd_refresh",
+        "anchor.cmd_watch"
+      ]
+    },
+    "anchor.green": {
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_init",
+        "anchor.cmd_status",
+        "anchor.cmd_deep",
+        "anchor.cmd_bind",
+        "anchor.cmd_unbind",
+        "anchor.cmd_refresh",
+        "anchor.cmd_report",
+        "anchor.cmd_repair"
+      ]
+    },
+    "anchor.cyan": {
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_init",
+        "anchor.cmd_status",
+        "anchor.cmd_deep",
+        "anchor.cmd_bind",
+        "anchor.cmd_repair"
+      ]
+    },
+    "anchor.bold": {
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_init",
+        "anchor.cmd_status",
+        "anchor.cmd_bind",
+        "anchor.cmd_repair"
+      ]
+    },
+    "anchor.dim": {
+      "calls": [],
+      "called_by": [
+        "anchor.cmd_status",
+        "anchor.cmd_refresh"
+      ]
+    },
+    "anchor.cmd_init": {
+      "calls": [
+        "anchor.bold",
+        "anchor.green",
+        "anchor.cyan"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_status": {
+      "calls": [
+        "anchor.green",
+        "anchor.yellow",
+        "anchor.red",
+        "anchor.cyan",
+        "anchor.dim",
+        "anchor.bold"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_patrol": {
+      "calls": [
+        "anchor.red"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_deep": {
+      "calls": [
+        "anchor.red",
+        "anchor.cyan",
+        "anchor.green"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_bind": {
+      "calls": [
+        "anchor.red",
+        "anchor.bold",
+        "anchor.green",
+        "anchor.cyan"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_unbind": {
+      "calls": [
+        "anchor.red",
+        "anchor.green"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_refresh": {
+      "calls": [
+        "anchor.red",
+        "anchor.dim",
+        "anchor.green",
+        "anchor.yellow"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_report": {
+      "calls": [
+        "anchor.green"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_repair": {
+      "calls": [
+        "anchor.red",
+        "anchor.bold",
+        "anchor.green",
+        "anchor.cyan"
+      ],
+      "called_by": []
+    },
+    "anchor.cmd_watch": {
+      "calls": [
+        "anchor.red",
+        "anchor.yellow"
+      ],
+      "called_by": []
+    },
+    "anchor.main": {
+      "calls": [],
+      "called_by": []
+    },
+    "install_hooks.install_hook": {
+      "calls": [],
+      "called_by": [
+        "install_hooks.main"
+      ]
+    },
+    "install_hooks.main": {
+      "calls": [
+        "install_hooks.install_hook"
+      ],
+      "called_by": []
+    },
+    "repair.ChangeUnit.estimated_tokens": {
+      "calls": [],
+      "called_by": []
+    },
+    "repair.build_repair_context": {
+      "calls": [],
+      "called_by": [
+        "repair.handle_repair_tool_call"
+      ]
+    },
+    "repair.apply_repair": {
+      "calls": [],
+      "called_by": [
+        "repair.handle_repair_tool_call"
+      ]
+    },
+    "repair.handle_repair_tool_call": {
+      "calls": [
+        "repair.apply_repair",
+        "repair.build_repair_context"
+      ],
+      "called_by": []
+    },
+    "visualize.generate_html": {
+      "calls": [],
+      "called_by": []
+    }
+  },
+  "data_flows": [
+    {
+      "entry_point": "deep_analyzer.main",
+      "steps": [
+        "deep_analyzer.main",
+        "deep_analyzer.generate_pipeline_html"
+      ],
+      "edges": [
+        {
+          "from_func": "deep_analyzer.main",
+          "to_func": "deep_analyzer.generate_pipeline_html",
+          "var_name": "result",
+          "var_type": "Dict",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor_cli.cmd_init",
+      "steps": [
+        "anchor_cli.cmd_init",
+        "anchor_cli.save_config"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor_cli.cmd_init",
+          "to_func": "anchor_cli.save_config",
+          "var_name": "result",
+          "var_type": "dict",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor_cli.cmd_check",
+      "steps": [
+        "anchor_cli.cmd_check",
+        "anchor_cli.load_config"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor_cli.cmd_check",
+          "to_func": "anchor_cli.load_config",
+          "var_name": "result",
+          "var_type": "str",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor_cli.cmd_coverage",
+      "steps": [
+        "anchor_cli.cmd_coverage",
+        "anchor_cli.load_config"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor_cli.cmd_coverage",
+          "to_func": "anchor_cli.load_config",
+          "var_name": "result",
+          "var_type": "str",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor_cli.cmd_schedule",
+      "steps": [
+        "anchor_cli.cmd_schedule",
+        "anchor_cli.load_config"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor_cli.cmd_schedule",
+          "to_func": "anchor_cli.load_config",
+          "var_name": "result",
+          "var_type": "str",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor_cli.cmd_report",
+      "steps": [
+        "anchor_cli.cmd_report",
+        "anchor_cli.load_config"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor_cli.cmd_report",
+          "to_func": "anchor_cli.load_config",
+          "var_name": "result",
+          "var_type": "str",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "dataflow_analyzer.main",
+      "steps": [
+        "dataflow_analyzer.main",
+        "deep_analyzer.generate_pipeline_html"
+      ],
+      "edges": [
+        {
+          "from_func": "dataflow_analyzer.main",
+          "to_func": "deep_analyzer.generate_pipeline_html",
+          "var_name": "result",
+          "var_type": "Dict",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_init",
+      "steps": [
+        "anchor.cmd_init",
+        "anchor.bold"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_init",
+          "to_func": "anchor.bold",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_status",
+      "steps": [
+        "anchor.cmd_status",
+        "anchor.green"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_status",
+          "to_func": "anchor.green",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_patrol",
+      "steps": [
+        "anchor.cmd_patrol",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_patrol",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_deep",
+      "steps": [
+        "anchor.cmd_deep",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_deep",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_bind",
+      "steps": [
+        "anchor.cmd_bind",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_bind",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_unbind",
+      "steps": [
+        "anchor.cmd_unbind",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_unbind",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_refresh",
+      "steps": [
+        "anchor.cmd_refresh",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_refresh",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_report",
+      "steps": [
+        "anchor.cmd_report",
+        "anchor.green"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_report",
+          "to_func": "anchor.green",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_repair",
+      "steps": [
+        "anchor.cmd_repair",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_repair",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "anchor.cmd_watch",
+      "steps": [
+        "anchor.cmd_watch",
+        "anchor.red"
+      ],
+      "edges": [
+        {
+          "from_func": "anchor.cmd_watch",
+          "to_func": "anchor.red",
+          "var_name": "result",
+          "var_type": "Any",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "install_hooks.main",
+      "steps": [
+        "install_hooks.main",
+        "install_hooks.install_hook"
+      ],
+      "edges": [
+        {
+          "from_func": "install_hooks.main",
+          "to_func": "install_hooks.install_hook",
+          "var_name": "result",
+          "var_type": "Path",
+          "transform": ""
+        }
+      ]
+    },
+    {
+      "entry_point": "repair.handle_repair_tool_call",
+      "steps": [
+        "repair.handle_repair_tool_call",
+        "repair.apply_repair"
+      ],
+      "edges": [
+        {
+          "from_func": "repair.handle_repair_tool_call",
+          "to_func": "repair.apply_repair",
+          "var_name": "result",
+          "var_type": "list[dict]",
+          "transform": ""
+        }
+      ]
+    }
+  ]
+}

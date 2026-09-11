@@ -168,8 +168,13 @@ def get_downward_chain(
         for site in sites:
             if isinstance(site, dict) and str(site.get("target") or "").endswith("::create"):
                 factory_selected_keys.update(factory_keys_for_site(site))
-        for index, raw in enumerate(anchor.callees):
-            site = sites[index] if index < len(sites) and isinstance(sites[index], dict) else {}
+        # ``call_sites`` are occurrence-level while ``callees`` are a unique
+        # summary.  Index-zipping them shifts targets after any repeated call
+        # and can turn an unresolved ``ctx.get`` into an unrelated project
+        # function.  Traverse the evidence records themselves when present.
+        refs = sites if sites else list(anchor.callees)
+        for index, raw in enumerate(refs):
+            site = raw if isinstance(raw, dict) else {}
             template = site.get("registry_template")
             registry_key = site.get("registry_key")
             selected = active_by_template.get(template, set()) if template else set()
@@ -190,6 +195,10 @@ def get_downward_chain(
             target = str(target or "")
             if not target or target in seen:
                 continue
+            # A finalized occurrence without a canonical id is explicitly
+            # unresolved. Never feed that bare name into fuzzy anchor lookup.
+            if sites and "::" not in target and "#" not in target:
+                continue
             seen.add(target)
             if "#" in target:
                 for leaf in flatten_virtual(target, all_anchors):
@@ -209,7 +218,7 @@ def get_downward_chain(
             else:
                 norm = target.replace("\\", "/")
                 ca = all_anchors.get(norm) or all_anchors.get(target)
-                if ca is None:
+                if ca is None and ("::" in target or "#" in target):
                     ca = get_anchor(target, root)
                 if ca and not ca.is_virtual:
                     child = {

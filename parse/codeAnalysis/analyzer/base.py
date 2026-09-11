@@ -20,13 +20,23 @@ class FunctionInfo:
     is_async: bool = False
     is_method: bool = False
     class_name: Optional[str] = None
+    # Qualified lexical parent for nested JS/TS functions.  This is separate
+    # from class_name: a nested function is not a method and must not create a
+    # fake class container in the Anchor graph.
+    parent_function: Optional[str] = None
     decorators: List[str] = field(default_factory=list)
     docstring: Optional[str] = None
+    line_end: int = 0
+    column_start: int = 0
+    column_end: int = 0
+    call_sites: List[dict] = field(default_factory=list)
 
     @property
     def full_name(self) -> str:
         if self.class_name:
             return f"{self.class_name}.{self.name}"
+        if self.parent_function:
+            return f"{self.parent_function}.{self.name}"
         return self.name
 
     @property
@@ -46,7 +56,12 @@ class FunctionInfo:
             "is_async": self.is_async,
             "is_method": self.is_method,
             "class_name": self.class_name,
+            "parent_function": self.parent_function,
             "decorators": self.decorators,
+            "line_end": self.line_end,
+            "column_start": self.column_start,
+            "column_end": self.column_end,
+            "call_sites": self.call_sites,
         }
 
 

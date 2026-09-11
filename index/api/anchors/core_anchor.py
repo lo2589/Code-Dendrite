@@ -29,7 +29,7 @@ import time as _time
 _ANCHOR_DBG = bool(os.environ.get("CD_ANCHOR_LOG"))
 
 from index.api.anchors.build_effective_methods_table import _anchor_to_storage, _apply_inheritance_refs, _build_effective_methods_table, _code_anchor_symbol, _extract_call_sites_from_tree, _extract_function_io_from_tree, _extract_registered_as
-from index.api.anchors.resolve import _module_anchor_for_file, _normalize_file_ref, _normalize_registration_decorators
+from index.api.anchors.resolve import _finalize_anchor_graph, _module_anchor_for_file, _normalize_file_ref, _normalize_registration_decorators
 
 def _merge_code_anchor(anchors: dict, ca, root: Path) -> None:
     try:
@@ -62,13 +62,50 @@ def _merge_code_anchor(anchors: dict, ca, root: Path) -> None:
         block_metadata={"decorators": dec_meta} if dec_meta else {},
     )
 
+def _merge_parsed_anchor(anchors: dict, parsed) -> None:
+    """Merge one language-adapter record without weakening a richer anchor."""
+    existing = anchors.get(parsed.id)
+    if existing is None:
+        anchors[parsed.id] = Anchor(
+            id=parsed.id,
+            symbol=parsed.symbol,
+            file=parsed.file,
+            line_start=parsed.line_start,
+            line_end=parsed.line_end,
+            hash=parsed.hash,
+            language=parsed.language,
+            symbol_type=parsed.symbol_type,
+            qualified_name=parsed.symbol,
+            signature=parsed.signature,
+            imports=list(parsed.imports),
+            parent_anchor=parsed.parent_anchor,
+            callees=list(parsed.callees),
+            call_sites=[dict(site) for site in parsed.call_sites],
+        )
+        return
+    if parsed.line_end > existing.line_end:
+        existing.line_end = parsed.line_end
+    if not existing.parent_anchor and parsed.parent_anchor:
+        existing.parent_anchor = parsed.parent_anchor
+    if not existing.qualified_name:
+        existing.qualified_name = parsed.symbol
+    if not existing.signature:
+        existing.signature = parsed.signature
+    if not existing.imports:
+        existing.imports = list(parsed.imports)
+    # Analyzer call sites are useful even when codeGenome supplied the anchor.
+    if parsed.call_sites and not existing.call_sites:
+        existing.call_sites = [dict(site) for site in parsed.call_sites]
+        existing.callees = list(parsed.callees)
+
 def _generate_anchors_for_paths(
     root: Path,
     file_paths: list[Path],
     include_virtual_blocks: bool = False,
-) -> tuple[dict, list]:
+) -> tuple[dict, list, set[str]]:
     anchors: dict = {}
     failed = []
+    completed: set[str] = set()
 
     try:
         from parse.codeGenome.python_extractor import extract_python_file
@@ -83,10 +120,21 @@ def _generate_anchors_for_paths(
                     continue
                 for ca in index.anchors.values():
                     _merge_code_anchor(anchors, ca, root)
+                completed.add(_normalize_file_ref(root, file_path))
             except Exception as e:
                 failed.append("{}: {}".format(file_path, e))
     except Exception as e:
         failed.append("codeGenome: {}".format(e))
+
+    try:
+        from parse.languages.pipeline import parse_paths
+        parsed, language_failures, language_completed = parse_paths(root, file_paths)
+        for parsed_anchor in parsed.values():
+            _merge_parsed_anchor(anchors, parsed_anchor)
+        failed.extend(language_failures)
+        completed.update(language_completed)
+    except Exception as e:
+        failed.append("language_pipeline: {}".format(e))
 
     py_files = [p for p in file_paths if p.suffix == ".py"]
     try:
@@ -137,6 +185,8 @@ def _generate_anchors_for_paths(
                             )
             except Exception as e:
                 failed.append("{}: {}".format(py_file, e))
+            else:
+                completed.add(rel)
     except Exception as e:
         failed.append("codeAnalysis: {}".format(e))
 
@@ -290,18 +340,18 @@ def _generate_anchors_for_paths(
 
     if include_virtual_blocks:
         try:
-            from index.api.control_flow_blocks import _ControlFlowBlockExtractor
-            for py_file in py_files:
+            from serve.api.control_flow_dispatch import extract_file_control_flow
+            for source_file in file_paths:
                 try:
-                    rel = _normalize_file_ref(root, py_file)
-                    source = py_file.read_text(encoding="utf-8", errors="replace")
-                    anchors.update(_ControlFlowBlockExtractor(root, rel, source).extract())
+                    rel = _normalize_file_ref(root, source_file)
+                    source = source_file.read_text(encoding="utf-8", errors="replace")
+                    anchors.update(extract_file_control_flow(root, rel, source))
                 except Exception:
                     continue
         except Exception as e:
             failed.append("control_flow_blocks: {}".format(e))
 
-    return anchors, failed
+    return anchors, failed, completed
 
 def _slow_warn(phase: str, rel: str, dt: float, thresh: float = 1.0):
     """逐文件计时；超过阈值的单独标 SLOW，方便一眼揪出卡的文件。"""
@@ -315,6 +365,15 @@ def _write_anchors(root: Path, anchors: dict) -> None:
     data = {k: _anchor_to_storage(v) for k, v in anchors.items()}
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+    # One file for every ambiguous name, instead of one copy per call site.
+    # A site carries the name; this is what the name means. Kept beside the
+    # anchors rather than inside them so nothing that walks anchors.json as a
+    # flat map of anchors has to learn about a new top-level key.
+    table = getattr(_finalize_anchor_graph, "last_ambiguous", None)
+    if isinstance(table, dict):
+        with open(output_path.parent / "candidates.json", "w", encoding="utf-8") as f:
+            json.dump(table, f, ensure_ascii=False, indent=2)
 
 def check_all_anchors(root):
     from synth.anchorRepair import check_all_anchors as _check_all_anchors

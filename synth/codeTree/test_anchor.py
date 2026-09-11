@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from index.codeTree.anchor_engine import (
+from code_anchor.anchor_engine import (
     create_anchor, check_drift, refresh_anchor, list_anchors, parse_anchors_from_text
 )
 

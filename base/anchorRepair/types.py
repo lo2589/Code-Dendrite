@@ -15,7 +15,7 @@ if str(_CODE_TREE_PATH) not in sys.path:
     sys.path.insert(0, str(_CODE_TREE_PATH))
 
 try:
-    from index.codeTree.anchor_engine_v2 import Anchor
+    from anchor_engine_v2 import Anchor
 except ImportError:
     # 回退：定义一个简化版 Anchor
     @dataclass

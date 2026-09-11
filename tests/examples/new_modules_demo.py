@@ -194,7 +194,7 @@ print("""
 # python integration_test.py --project /your/project
 
 # 步骤 3: 在实际中使用
-from serve.api import SmartCodeAnalyzerV2
+from tools.CodeDendrite import SmartCodeAnalyzerV2
 
 analyzer = SmartCodeAnalyzerV2("/path/to/project")
 

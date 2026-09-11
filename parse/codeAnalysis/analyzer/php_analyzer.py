@@ -139,9 +139,11 @@ class PhpAnalyzer(BaseAnalyzer):
             )
             
             # 提取方法体中的调用
-            method_end = self._find_matching_brace(class_body, match.end())
-            method_body = class_body[match.end():method_end]
+            opening = class_body.find('{', match.end())
+            method_end = self._find_matching_brace(class_body, opening)
+            method_body = class_body[opening + 1:method_end - 1]
             func_info.calls = self._extract_calls(method_body)
+            func_info.line_end = line_num + method_body.count('\n') + 1
             
             methods.append(func_info)
         
@@ -181,6 +183,11 @@ class PhpAnalyzer(BaseAnalyzer):
                 parameters=params,
                 is_method=False
             )
+            opening = preprocessed.find('{', match.end())
+            function_end = self._find_matching_brace(preprocessed, opening)
+            function_body = preprocessed[opening + 1:function_end - 1]
+            func_info.calls = self._extract_calls(function_body)
+            func_info.line_end = func_info.line_number + function_body.count('\n') + 1
             
             functions.append(func_info)
         

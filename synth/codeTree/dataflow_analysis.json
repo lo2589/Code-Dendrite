@@ -1,0 +1,356 @@
+{
+  "meta": {
+    "total_flows": 2,
+    "entry_points": 5
+  },
+  "flows": [
+    {
+      "entry": "versions.install_hooks.main",
+      "entry_name": "main",
+      "depth": 2,
+      "steps": [
+        {
+          "step": 0,
+          "function": "versions.install_hooks.main",
+          "inputs": [],
+          "outputs": [],
+          "transformations": [
+            {
+              "from_var": "ArgumentParser()",
+              "to_var": "parser",
+              "operation": "assignment",
+              "line": 121
+            },
+            {
+              "from_var": "parse_args()",
+              "to_var": "args",
+              "operation": "assignment",
+              "line": 129
+            },
+            {
+              "from_var": "resolve()",
+              "to_var": "root",
+              "operation": "assignment",
+              "line": 131
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "git_dir",
+              "operation": "assignment",
+              "line": 132
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "hooks_dir",
+              "operation": "assignment",
+              "line": 138
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "warn",
+              "operation": "assignment",
+              "line": 152
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "hooks",
+              "operation": "assignment",
+              "line": 154
+            },
+            {
+              "from_var": "literal:0",
+              "to_var": "installed",
+              "operation": "assignment",
+              "line": 160
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "p",
+              "operation": "assignment",
+              "line": 143
+            }
+          ],
+          "next": "versions.install_hooks.install_hook"
+        },
+        {
+          "step": 1,
+          "function": "versions.install_hooks.install_hook",
+          "inputs": [
+            {
+              "name": "hooks_dir",
+              "type": "Path",
+              "source": "parameter"
+            },
+            {
+              "name": "name",
+              "type": "str",
+              "source": "parameter"
+            },
+            {
+              "name": "content",
+              "type": "str",
+              "source": "parameter"
+            },
+            {
+              "name": "overwrite",
+              "type": "bool",
+              "source": "parameter"
+            }
+          ],
+          "outputs": [],
+          "transformations": [
+            {
+              "from_var": "unknown",
+              "to_var": "hook_path",
+              "operation": "assignment",
+              "line": 109
+            }
+          ],
+          "next": null
+        }
+      ]
+    },
+    {
+      "entry": "versions.repair.handle_repair_tool_call",
+      "entry_name": "handle_repair_tool_call",
+      "depth": 3,
+      "steps": [
+        {
+          "step": 0,
+          "function": "versions.repair.handle_repair_tool_call",
+          "inputs": [
+            {
+              "name": "tool_name",
+              "type": "str",
+              "source": "parameter"
+            },
+            {
+              "name": "tool_args",
+              "type": "dict",
+              "source": "parameter"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "ret_0",
+              "type": "dict"
+            }
+          ],
+          "transformations": [],
+          "next": "versions.repair.build_repair_context"
+        },
+        {
+          "step": 1,
+          "function": "versions.repair.build_repair_context",
+          "inputs": [
+            {
+              "name": "root",
+              "type": "str",
+              "source": "parameter"
+            },
+            {
+              "name": "since",
+              "type": "str",
+              "source": "parameter"
+            },
+            {
+              "name": "max_tokens_per_unit",
+              "type": "int",
+              "source": "parameter"
+            },
+            {
+              "name": "include_added",
+              "type": "bool",
+              "source": "parameter"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "ret_0",
+              "type": "dict"
+            }
+          ],
+          "transformations": [
+            {
+              "from_var": "Path()",
+              "to_var": "rp",
+              "operation": "assignment",
+              "line": 266
+            },
+            {
+              "from_var": "_load_db()",
+              "to_var": "db",
+              "operation": "assignment",
+              "line": 267
+            },
+            {
+              "from_var": "check_drift()",
+              "to_var": "drift",
+              "operation": "assignment",
+              "line": 269
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "added",
+              "operation": "assignment",
+              "line": 336
+            },
+            {
+              "from_var": "sum()",
+              "to_var": "total_tokens",
+              "operation": "assignment",
+              "line": 340
+            },
+            {
+              "from_var": "_build_repair_prompt()",
+              "to_var": "prompt",
+              "operation": "assignment",
+              "line": 343
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "aid",
+              "operation": "assignment",
+              "line": 274
+            },
+            {
+              "from_var": "Anchor()",
+              "to_var": "anchor",
+              "operation": "assignment",
+              "line": 277
+            },
+            {
+              "from_var": "literal:None",
+              "to_var": "diff",
+              "operation": "assignment",
+              "line": 279
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "aid",
+              "operation": "assignment",
+              "line": 299
+            },
+            {
+              "from_var": "Anchor()",
+              "to_var": "anchor",
+              "operation": "assignment",
+              "line": 302
+            },
+            {
+              "from_var": "literal:None",
+              "to_var": "old_code",
+              "operation": "assignment",
+              "line": 304
+            },
+            {
+              "from_var": "_fuzzy_candidates()",
+              "to_var": "candidates",
+              "operation": "assignment",
+              "line": 310
+            },
+            {
+              "from_var": "literal:None",
+              "to_var": "new_code",
+              "operation": "assignment",
+              "line": 313
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "change_type",
+              "operation": "assignment",
+              "line": 322
+            },
+            {
+              "from_var": "_get_untracked_new_symbols()",
+              "to_var": "added",
+              "operation": "assignment",
+              "line": 338
+            },
+            {
+              "from_var": "_symbol_diff()",
+              "to_var": "diff",
+              "operation": "assignment",
+              "line": 281
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "diff",
+              "operation": "assignment",
+              "line": 283
+            },
+            {
+              "from_var": "_get_symbol_from_git()",
+              "to_var": "old_code",
+              "operation": "assignment",
+              "line": 306
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "top",
+              "operation": "assignment",
+              "line": 315
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "fp",
+              "operation": "assignment",
+              "line": 316
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "diff",
+              "operation": "assignment",
+              "line": 286
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "old_code",
+              "operation": "assignment",
+              "line": 308
+            },
+            {
+              "from_var": "_extract_symbol_source()",
+              "to_var": "extracted",
+              "operation": "assignment",
+              "line": 318
+            },
+            {
+              "from_var": "unknown",
+              "to_var": "new_code",
+              "operation": "assignment",
+              "line": 320
+            }
+          ],
+          "next": "anchor_engine._load_db"
+        },
+        {
+          "step": 2,
+          "function": "anchor_engine._load_db",
+          "inputs": [
+            {
+              "name": "root",
+              "type": "Path",
+              "source": "parameter"
+            }
+          ],
+          "outputs": [
+            {
+              "name": "ret_0",
+              "type": "dict[str, dict]"
+            }
+          ],
+          "transformations": [
+            {
+              "from_var": "unknown",
+              "to_var": "db_path",
+              "operation": "assignment",
+              "line": 152
+            }
+          ],
+          "next": null
+        }
+      ]
+    }
+  ]
+}

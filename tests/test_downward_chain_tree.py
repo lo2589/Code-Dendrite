@@ -1,6 +1,6 @@
 import json
 
-from serve.api.inspector import get_downward_chain, get_upward_chain
+from tools.CodeDendrite.api.inspector import get_downward_chain, get_upward_chain
 
 
 def _anchor(anchor_id, symbol, callees):

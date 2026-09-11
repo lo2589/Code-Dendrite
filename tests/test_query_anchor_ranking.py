@@ -1,5 +1,5 @@
-from serve.api.query import _rank_anchor_matches
-from base.shared.types import Anchor
+from tools.CodeDendrite.api.query import _rank_anchor_matches
+from tools.CodeDendrite.shared.types import Anchor
 
 
 def _anchor(anchor_id, symbol, file, line):

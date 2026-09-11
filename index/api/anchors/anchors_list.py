@@ -141,24 +141,28 @@ def update_anchors_for_files(root=".", changed_files=None, include_virtual_block
         for key, anchor in anchors.items()
         if _normalize_file_ref(root, anchor.file) in normalized_changed
     }
-    anchors = {
-        key: anchor
-        for key, anchor in anchors.items()
-        if key not in old_ids_in_changed_files
-    }
-    removed = before - len(anchors)
-
     file_paths = []
     for rel in sorted(normalized_changed):
         path = root / rel
         if path.exists() and path.is_file() and ignore.should_scan(path):
             file_paths.append(path)
 
-    new_anchors, failed = _generate_anchors_for_paths(
+    new_anchors, failed, completed_files = _generate_anchors_for_paths(
         root,
         file_paths,
         include_virtual_blocks=include_virtual_blocks,
     )
+    # Replace a file atomically only after its adapter completed.  A parser
+    # error therefore cannot erase the last known-good anchors for that file.
+    removable_ids = {
+        key for key in old_ids_in_changed_files
+        if _normalize_file_ref(root, anchors[key].file) in completed_files
+    }
+    anchors = {
+        key: anchor for key, anchor in anchors.items()
+        if key not in removable_ids
+    }
+    removed = len(removable_ids)
     anchors.update(new_anchors)
 
     # Self, callers, and callees all need a fresh resolve pass — not the
@@ -176,9 +180,14 @@ def update_anchors_for_files(root=".", changed_files=None, include_virtual_block
     #              kept (not dropped) by _finalize_anchor_graph specifically
     #              so this retry is possible.
     new_ids = set(new_anchors.keys())
-    removed_ids = old_ids_in_changed_files - new_ids
+    removed_ids = removable_ids - new_ids
     touched_ids = new_ids | removed_ids
     affected_ids = set(new_ids)
+    try:
+        from serve.api.bridges import apply_runtime_bridges
+        affected_ids.update(apply_runtime_bridges(root, anchors))
+    except Exception as e:
+        failed.append("runtime_bridges: {}".format(e))
     for anchor in anchors.values():
         if anchor.id in affected_ids:
             continue
@@ -202,7 +211,7 @@ def update_anchors_for_files(root=".", changed_files=None, include_virtual_block
         _build_effective_methods_table(anchors)
     except Exception as e:
         failed.append("inheritance: {}".format(e))
-    _finalize_anchor_graph(anchors, only_ids=affected_ids)
+    _finalize_anchor_graph(anchors, only_ids=affected_ids, root=root)
     _write_anchors(root, anchors)
 
     return {

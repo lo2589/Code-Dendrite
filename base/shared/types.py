@@ -139,6 +139,11 @@ class Anchor:
     line_start: int
     line_end: int
     hash: str                            # 结构哈希
+    column_start: int = 0
+    column_end: int = 0
+    qualified_name: str = ""
+    signature: str = ""
+    imports: List[str] = field(default_factory=list)
     code: str = ""                       # 代码体（codeGenome）
     # 调用关系（codeGenome + dataFlow）
     callers: List[str] = field(default_factory=list)
@@ -168,7 +173,10 @@ class Anchor:
     registered_as: Optional[str] = None  # @register_io("name") 注册的 io 名
 
 
-EdgeType = Literal["call", "inherit", "dataflow", "impact", "dispatch"]
+EdgeType = Literal[
+    "call", "inherit", "dataflow", "impact", "dispatch", "config",
+    "http", "ffi", "process", "sql",
+]
 
 
 @dataclass
@@ -187,3 +195,8 @@ class Edge:
     is_conditional: bool = False          # 是否为条件边
     scope_label: Optional[str] = None     # body / case:0 / default / finally
     seq: List[int] = field(default_factory=list)  # 在 caller.callees 中的位置序号（重复调用有多个）
+    call_line: int = 0
+    call_column: int = 0
+    resolution: str = "exact"             # exact / possible / unresolved
+    evidence: str = ""
+    bridge_kind: Optional[str] = None

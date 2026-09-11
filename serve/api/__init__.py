@@ -4,7 +4,7 @@ CodeDendrite 公开 API 层
 所有对外接口统一在此导出，与源码实现完全解耦。
 
 使用方式:
-    from serve.api import scan_project, analyze_code, search_symbol
+    from tools.CodeDendrite import scan_project, analyze_code, search_symbol
 """
 
 # ─── 项目扫描 (7 个) ───

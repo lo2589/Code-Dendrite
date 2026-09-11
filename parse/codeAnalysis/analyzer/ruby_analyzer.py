@@ -146,6 +146,7 @@ class RubyAnalyzer(BaseAnalyzer):
             # 提取方法体中的调用
             method_body = self._extract_method_body(class_body, match.end())
             func_info.calls = self._extract_calls(method_body)
+            func_info.line_end = line_num + method_body.count('\n') + 1
             
             methods.append(func_info)
         
@@ -203,6 +204,9 @@ class RubyAnalyzer(BaseAnalyzer):
                 parameters=params,
                 is_method=False
             )
+            method_body = self._extract_method_body(preprocessed, match.end())
+            func_info.calls = self._extract_calls(method_body)
+            func_info.line_end = func_info.line_number + method_body.count('\n') + 1
             
             functions.append(func_info)
         

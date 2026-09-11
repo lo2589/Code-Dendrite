@@ -163,7 +163,7 @@ class AnchorDatabase:
         try:
             from base.shared.dblock import db_lock
         except ImportError:
-            from base.shared.dblock import db_lock
+            from tools.CodeDendrite.shared.dblock import db_lock
 
         with db_lock(self.db_path):
             self._merge_concurrent_writes()
