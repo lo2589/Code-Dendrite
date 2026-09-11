@@ -13,10 +13,15 @@ import ast
 from pathlib import Path
 from typing import List, Optional
 
+# 上行链的基础节点阈值：被这么多不同 anchor 调用的东西是公共基础件，
+# 从它往上追没有意义（详见 get_upward_chain 的 docstring）。
+BASE_FAN_IN = 20
+
 def get_upward_chain(
     symbol: str,
     root: str = ".",
     max_depth: int = 6,
+    base_fan_in: int = BASE_FAN_IN,
 ) -> List[dict]:
     """
     从 symbol 出发，沿 callers 方向往上追，返回整条上行调用树。
@@ -25,13 +30,27 @@ def get_upward_chain(
 
     同一入口可以经不同调用者重复出现；只在当前路径内防环。
 
+    扇入（被多少个不同 anchor 调用）达到 base_fan_in 的节点视为**基础节点**：
+    工具函数、公共类型这类几乎被所有东西调用的东西，从它再往上追没有意义，
+    而且它的每个 caller 都会引出一整棵子树，结果集会按路径数炸开。这类节点
+    照常出现在结果里，但标上 is_base / stop 说明为什么到此为止，不再往下展开。
+
+    Args:
+        base_fan_in: 基础节点判定阈值。本仓库实测扇入分布——>=20 的只有 70 个
+            节点（2.7%），>=50 的 5 个；调小会裁得更狠，调大则保留更多上行层。
+
     Returns:
         [
-          {"symbol": "Session.get_adapter", "file": "sessions.py", "line": 802, "depth": 0},
-          {"symbol": "Session.send",        "file": "sessions.py", "line": 703, "depth": 1},
+          {"symbol": "Session.send", "file": "sessions.py", "line": 703,
+           "depth": 1, "parent_id": "...", "caller_count": 4},
+          {"symbol": "load_anchors", "file": "core_load.py", "line": 33,
+           "depth": 2, "parent_id": "...", "caller_count": 102,
+           "is_base": True, "stop": "base_node"},
           ...
         ]
         depth=0 是入口本身，depth 越大越往上。
+        caller_count 是被多少个不同 anchor 调用；
+        is_base=True 表示这是基础节点、已停止继续上行。
     """
     from index.api.anchors import get_anchor, load_anchors
     from relate.api.relations import load_relations
@@ -46,6 +65,20 @@ def get_upward_chain(
         all_anchors = load_anchors(root)
     except Exception:
         all_anchors = {}
+
+    # 扇入表：每个 to_id 被哪些不同的 anchor 调用过。一次 O(E) 扫完，
+    # 供 visit() 判定基础节点用。
+    caller_ids: dict = {}
+    for edge in edges:
+        if edge.get("edge_type") not in ("call", "dataflow"):
+            continue
+        to_id = edge.get("to_id", "").replace("\\", "/")
+        from_id = edge.get("from_id", "").replace("\\", "/")
+        if to_id and from_id:
+            caller_ids.setdefault(to_id, set()).add(from_id)
+
+    def caller_count(anchor_id: str) -> int:
+        return len(caller_ids.get(anchor_id.replace("\\", "/"), ()))
 
     def _vblock_real_parent(vblock_id: str):
         visited_vb: set = set()
@@ -124,7 +157,19 @@ def get_upward_chain(
 
     def visit(node: dict, depth: int, path: tuple, parent_id: Optional[str]) -> None:
         node_id = node["id"]
-        chain.append({**node, "depth": depth, "parent_id": parent_id})
+        count = caller_count(node_id)
+        row = {**node, "depth": depth, "parent_id": parent_id, "caller_count": count}
+
+        # 基础节点：被足够多的东西调用，说明它是公共底座而不是某条业务链的
+        # 中间环节。标出来停住——再往上每个 caller 都会引出一整棵子树，
+        # 而那一层信息对「这东西被谁用」没有增量。
+        if count >= base_fan_in:
+            row["is_base"] = True
+            row["stop"] = "base_node"
+            chain.append(row)
+            return
+
+        chain.append(row)
         if depth >= max_depth:
             return
         next_path = path + (node_id,)

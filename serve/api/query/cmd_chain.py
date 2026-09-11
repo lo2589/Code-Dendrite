@@ -278,8 +278,16 @@ def cmd_chain(symbol: str, root: str = ".", depth: int = 10, direction: str = "d
         if entry.get("yaml_selected"):
             display_symbol += "*"
             yaml_marker = "  [YAML → {}]".format(entry.get("registry_key"))
-        print("{}[{}] {}  {}{}".format(
-            indent, entry.get("depth", 0), display_symbol, file_loc, yaml_marker,
+        # 基础节点：被足够多的东西调用，是公共底座而不是业务链的中间环节，
+        # 上行到此为止。这里标出来，省得看的人以为链断了。
+        base_marker = ""
+        if entry.get("is_base"):
+            base_marker = "  [基础节点 ← 被 {} 处调用，不再上行]".format(
+                entry.get("caller_count", 0),
+            )
+        print("{}[{}] {}  {}{}{}".format(
+            indent, entry.get("depth", 0), display_symbol, file_loc,
+            yaml_marker, base_marker,
         ))
 
     is_method = entry_anchor.symbol_type == "method" or "." in entry_anchor.symbol
