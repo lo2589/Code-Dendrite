@@ -46,16 +46,16 @@
         "from_module": "serve"
       }
     },
-    "__init__.py::import:__all__": {
-      "id": "__init__.py::import:__all__",
+    "__init__.py::import:_SERVE_ALL": {
+      "id": "__init__.py::import:_SERVE_ALL",
       "language": "py",
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/__init__.py",
       "line_start": 1,
       "line_end": 27,
-      "name": "__all__",
-      "code": "from serve import __all__",
-      "hash": "3062125fddbb",
+      "name": "_SERVE_ALL",
+      "code": "from serve import __all__ as _SERVE_ALL",
+      "hash": "1e5c91d49a62",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -68,18 +68,19 @@
       "category": "assigns",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/__init__.py",
       "line_start": 22,
-      "line_end": 22,
+      "line_end": 29,
       "name": "block_1",
-      "code": "_ROOT = str(_Path(__file__).parent)",
-      "hash": "ad94e2c9c941",
+      "code": "_ROOT = str(_Path(__file__).parent)\n\n__all__ = list(_SERVE_ALL)",
+      "hash": "8b5d35ac0827",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "targets": [
-          "_ROOT"
+          "_ROOT",
+          "__all__"
         ],
         "is_merged": true,
-        "statement_count": 1
+        "statement_count": 2
       }
     },
     "__init__.py::statement:block_1": {
@@ -88,16 +89,311 @@
       "category": "statements",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/__init__.py",
       "line_start": 1,
-      "line_end": 24,
+      "line_end": 50,
       "name": "block_1",
-      "code": "\"\"\"CodeDendrite - 基于 AST 的代码因果导航系统。\n\n公开接口全部经由 serve/ 层导出，与源码实现解耦：\n\n    from CodeDendrite import scan_project, analyze_code, search_symbol\n    from CodeDendrite import list_all_symbols, list_anchors, create_anchor\n    from CodeDendrite import find_subclasses, analyze_super_calls, build_override_chain\n    from CodeDendrite import analyze_call_chain, trace_variable, generate_dataflow_html\n    from CodeDendrite import ContextBuilder, SymbolExpander\n    from CodeDendrite import PathTracer, NodeReplacer\n    from CodeDendrite import AnchorMemory, Observation\n\n实现分布在 base / parse / index / relate / synth / view / serve 七层，\n新代码应直接 import 归属层（例如 `from index.api.anchors import load_anchors`），\n本文件只为外部调用方保留稳定的顶层入口。\n\"\"\"\n\nif _ROOT not in _sys.path:\n    _sys.path.insert(0, _ROOT)",
-      "hash": "efd47f2b3b51",
+      "code": "\"\"\"CodeDendrite - 基于 AST 的代码因果导航系统。\n\n公开接口全部经由 serve/ 层导出，与源码实现解耦：\n\n    from CodeDendrite import scan_project, analyze_code, search_symbol\n    from CodeDendrite import list_all_symbols, list_anchors, create_anchor\n    from CodeDendrite import find_subclasses, analyze_super_calls, build_override_chain\n    from CodeDendrite import analyze_call_chain, trace_variable, generate_dataflow_html\n    from CodeDendrite import ContextBuilder, SymbolExpander\n    from CodeDendrite import PathTracer, NodeReplacer\n    from CodeDendrite import AnchorMemory, Observation\n\n实现分布在 base / parse / index / relate / synth / view / serve 七层，\n新代码应直接 import 归属层（例如 `from index.api.anchors import load_anchors`），\n本文件只为外部调用方保留稳定的顶层入口。\n\"\"\"\n\nif _ROOT not in _sys.path:\n    _sys.path.insert(0, _ROOT)\n\ntry:\n    from synth.context_builder import ContextBuilder, SymbolExpander  # noqa: F401,E402\n    __all__ += [\"ContextBuilder\", \"SymbolExpander\"]\nexcept ImportError:\n    pass\n\ntry:\n    from relate.pathTracer import PathTracer, NodeReplacer  # noqa: F401,E402\n    __all__ += [\"PathTracer\", \"NodeReplacer\"]\nexcept ImportError:\n    pass\n\ntry:\n    from synth.anchorMemory import AnchorMemory, Observation  # noqa: F401,E402\n    __all__ += [\"AnchorMemory\", \"Observation\"]\nexcept ImportError:\n    pass",
+      "hash": "a8fec49c88a3",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "context": "top_level",
-        "statement_count": 2,
+        "statement_count": 5,
         "is_merged": true
+      }
+    },
+    "_smoke_fixture/pkg/flow.py::import:Dog": {
+      "id": "_smoke_fixture/pkg/flow.py::import:Dog",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/flow.py",
+      "line_start": 1,
+      "line_end": 1,
+      "name": "Dog",
+      "code": "from pkg.base import Dog",
+      "hash": "0f12ba1be6e3",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "pkg.base"
+      }
+    },
+    "_smoke_fixture/pkg/flow.py::load_config": {
+      "id": "_smoke_fixture/pkg/flow.py::load_config",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/flow.py",
+      "line_start": 4,
+      "line_end": 6,
+      "name": "load_config",
+      "code": "def load_config(path):\n    with open(path, encoding=\"utf-8\") as handle:\n        return json.load(handle) if False else {}",
+      "hash": "b559a46ca22e",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "path"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/flow.py::build_dog": {
+      "id": "_smoke_fixture/pkg/flow.py::build_dog",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/flow.py",
+      "line_start": 9,
+      "line_end": 12,
+      "name": "build_dog",
+      "code": "def build_dog(raw):\n    cfg = load_config(raw)\n    dog = Dog(cfg.get(\"name\", \"rex\"), cfg.get(\"breed\", \"corgi\"))\n    return dog.describe()",
+      "hash": "78a133f2f939",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "raw"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/flow.py::dispatch": {
+      "id": "_smoke_fixture/pkg/flow.py::dispatch",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/flow.py",
+      "line_start": 15,
+      "line_end": 17,
+      "name": "dispatch",
+      "code": "def dispatch(kind):\n    handlers = {\"a\": build_dog, \"b\": load_config}\n    return handlers[kind]",
+      "hash": "408b3585368a",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "kind"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/base.py::import:json": {
+      "id": "_smoke_fixture/pkg/base.py::import:json",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 1,
+      "line_end": 2,
+      "name": "json",
+      "code": "import json",
+      "hash": "f2f4a1237dbd",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    "_smoke_fixture/pkg/base.py::statement:block_1": {
+      "id": "_smoke_fixture/pkg/base.py::statement:block_1",
+      "language": "py",
+      "category": "statements",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 1,
+      "line_end": 1,
+      "name": "block_1",
+      "code": "\"\"\"Fixture: 继承链 + 数据流 + dispatch。\"\"\"",
+      "hash": "16d3afbc347c",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "context": "top_level",
+        "statement_count": 1,
+        "is_merged": true
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Animal": {
+      "id": "_smoke_fixture/pkg/base.py::Animal",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 5,
+      "line_end": 13,
+      "name": "Animal",
+      "code": "class Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def speak(self):\n        return \"...\"\n\n    def describe(self):\n        return self.speak() + \" \" + self.name",
+      "hash": "4214179f70dd",
+      "parent_id": "",
+      "children_ids": [
+        "_smoke_fixture/pkg/base.py::Animal.__init__",
+        "_smoke_fixture/pkg/base.py::Animal.speak",
+        "_smoke_fixture/pkg/base.py::Animal.describe"
+      ],
+      "metadata": {
+        "bases": [],
+        "decorators": []
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Animal.__init__": {
+      "id": "_smoke_fixture/pkg/base.py::Animal.__init__",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 6,
+      "line_end": 7,
+      "name": "__init__",
+      "code": "def __init__(self, name):\n        self.name = name",
+      "hash": "b2255274ed7f",
+      "parent_id": "_smoke_fixture/pkg/base.py::Animal",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self",
+          "name"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Animal.speak": {
+      "id": "_smoke_fixture/pkg/base.py::Animal.speak",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 9,
+      "line_end": 10,
+      "name": "speak",
+      "code": "def speak(self):\n        return \"...\"",
+      "hash": "949567d136df",
+      "parent_id": "_smoke_fixture/pkg/base.py::Animal",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Animal.describe": {
+      "id": "_smoke_fixture/pkg/base.py::Animal.describe",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 12,
+      "line_end": 13,
+      "name": "describe",
+      "code": "def describe(self):\n        return self.speak() + \" \" + self.name",
+      "hash": "bdc4094d5c53",
+      "parent_id": "_smoke_fixture/pkg/base.py::Animal",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Dog": {
+      "id": "_smoke_fixture/pkg/base.py::Dog",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 16,
+      "line_end": 22,
+      "name": "Dog",
+      "code": "class Dog(Animal):\n    def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed\n\n    def speak(self):\n        return \"woof\"",
+      "hash": "4fda56cc86f9",
+      "parent_id": "",
+      "children_ids": [
+        "_smoke_fixture/pkg/base.py::Dog.__init__",
+        "_smoke_fixture/pkg/base.py::Dog.speak"
+      ],
+      "metadata": {
+        "bases": [
+          "Animal"
+        ],
+        "decorators": []
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Dog.__init__": {
+      "id": "_smoke_fixture/pkg/base.py::Dog.__init__",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 17,
+      "line_end": 19,
+      "name": "__init__",
+      "code": "def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed",
+      "hash": "ab85ea8682a3",
+      "parent_id": "_smoke_fixture/pkg/base.py::Dog",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self",
+          "name",
+          "breed"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Dog.speak": {
+      "id": "_smoke_fixture/pkg/base.py::Dog.speak",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 21,
+      "line_end": 22,
+      "name": "speak",
+      "code": "def speak(self):\n        return \"woof\"",
+      "hash": "8afbb889fadb",
+      "parent_id": "_smoke_fixture/pkg/base.py::Dog",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Puppy": {
+      "id": "_smoke_fixture/pkg/base.py::Puppy",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 25,
+      "line_end": 27,
+      "name": "Puppy",
+      "code": "class Puppy(Dog):\n    def speak(self):\n        return \"yip\"",
+      "hash": "2ea41389bbbc",
+      "parent_id": "",
+      "children_ids": [
+        "_smoke_fixture/pkg/base.py::Puppy.speak"
+      ],
+      "metadata": {
+        "bases": [
+          "Dog"
+        ],
+        "decorators": []
+      }
+    },
+    "_smoke_fixture/pkg/base.py::Puppy.speak": {
+      "id": "_smoke_fixture/pkg/base.py::Puppy.speak",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py",
+      "line_start": 26,
+      "line_end": 27,
+      "name": "speak",
+      "code": "def speak(self):\n        return \"yip\"",
+      "hash": "815babdcee90",
+      "parent_id": "_smoke_fixture/pkg/base.py::Puppy",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
       }
     },
     "parse/hash/git_diff.py::import:subprocess": {
@@ -31445,12 +31741,12 @@
       "line_start": 1,
       "line_end": 13,
       "name": "create_anchor",
-      "code": "from code_anchor.anchor_engine import (\n    create_anchor, check_drift, refresh_anchor, list_anchors, parse_anchors_from_text\n)",
-      "hash": "589e1df119db",
+      "code": "from index.codeTree.anchor_engine import (\n    create_anchor, check_drift, refresh_anchor, list_anchors, parse_anchors_from_text\n)",
+      "hash": "13ecac2c0b9d",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "from_module": "code_anchor.anchor_engine"
+        "from_module": "index.codeTree.anchor_engine"
       }
     },
     "synth/codeTree/test_anchor.py::assign:block_1": {
@@ -31497,8 +31793,8 @@
       "line_start": 1,
       "line_end": 10,
       "name": "block_1",
-      "code": "\"\"\"\nTests for CodeAnchor engine.\nRun: python test_anchor.py\n\"\"\"\n\nsys.path.insert(0, str(Path(__file__).parent))",
-      "hash": "0162a2582499",
+      "code": "\"\"\"\nTests for CodeAnchor engine.\nRun: python test_anchor.py\n\"\"\"\n\nsys.path.insert(0, str(Path(__file__).resolve().parents[2]))",
+      "hash": "368749295b20",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -31554,12 +31850,12 @@
       "line_start": 1,
       "line_end": 22,
       "name": "create_anchor",
-      "code": "from code_anchor.anchor_engine import (\n    create_anchor,\n    check_drift,\n    refresh_anchor,\n    list_anchors,\n)",
-      "hash": "fe668cb18d03",
+      "code": "from index.codeTree.anchor_engine import (\n    create_anchor,\n    check_drift,\n    refresh_anchor,\n    list_anchors,\n)",
+      "hash": "d0c361a549d4",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "from_module": "code_anchor.anchor_engine"
+        "from_module": "index.codeTree.anchor_engine"
       }
     },
     "synth/codeTree/agent_tools.py::assign:block_1": {
@@ -31591,8 +31887,8 @@
       "line_start": 1,
       "line_end": 15,
       "name": "block_1",
-      "code": "\"\"\"\nAgent Tool Registry for CodeAnchor\n------------------------------------\nDrop-in tool definitions compatible with OpenAI / Anthropic function-calling format.\nImport TOOL_DEFINITIONS and the handler to wire into your Copilot agent.\n\nUsage in your agent:\n    from code_anchor.agent_tools import TOOL_DEFINITIONS, handle_tool_call\n\n    # Register tools with your agent framework:\n    agent.register_tools(TOOL_DEFINITIONS)\n\n    # In your tool execution handler:\n    result = handle_tool_call(tool_name, tool_args)\n\"\"\"",
-      "hash": "4cb178738589",
+      "code": "\"\"\"\nAgent Tool Registry for CodeAnchor\n------------------------------------\nDrop-in tool definitions compatible with OpenAI / Anthropic function-calling format.\nImport TOOL_DEFINITIONS and the handler to wire into your Copilot agent.\n\nUsage in your agent:\n    from synth.codeTree.agent_tools import TOOL_DEFINITIONS, handle_tool_call\n\n    # Register tools with your agent framework:\n    agent.register_tools(TOOL_DEFINITIONS)\n\n    # In your tool execution handler:\n    result = handle_tool_call(tool_name, tool_args)\n\"\"\"",
+      "hash": "124130d1975e",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -34770,27 +35066,13 @@
         "is_merged": true
       }
     },
-    "synth/anchorRepair/repair.py::import:sys": {
-      "id": "synth/anchorRepair/repair.py::import:sys",
-      "language": "py",
-      "category": "imports",
-      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
-      "line_start": 1,
-      "line_end": 6,
-      "name": "sys",
-      "code": "import sys",
-      "hash": "83d8e9e427df",
-      "parent_id": "",
-      "children_ids": [],
-      "metadata": {}
-    },
     "synth/anchorRepair/repair.py::import:time": {
       "id": "synth/anchorRepair/repair.py::import:time",
       "language": "py",
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
       "line_start": 1,
-      "line_end": 7,
+      "line_end": 6,
       "name": "time",
       "code": "import time",
       "hash": "e6125c442fc3",
@@ -34804,7 +35086,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
       "line_start": 1,
-      "line_end": 8,
+      "line_end": 7,
       "name": "Path",
       "code": "from pathlib import Path",
       "hash": "9b5c42011415",
@@ -34820,7 +35102,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
       "line_start": 1,
-      "line_end": 9,
+      "line_end": 8,
       "name": "List",
       "code": "from typing import List, Tuple, Dict, Any",
       "hash": "117d51c6ac83",
@@ -34836,7 +35118,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
       "line_start": 1,
-      "line_end": 11,
+      "line_end": 10,
       "name": "AnchorStatusType",
       "code": "from base.anchorRepair.types import AnchorStatusType, AnchorStatus, RepairResult, SyncResult",
       "hash": "589019490d05",
@@ -34852,34 +35134,14 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
       "line_start": 1,
-      "line_end": 21,
-      "name": "Anchor",
-      "code": "from anchor_engine_v2 import (\n    Anchor, compute_hash_v2, classify_severity,\n    _load_db, _save_db, ANCHOR_DB\n)",
-      "hash": "1a3a05b9024b",
-      "parent_id": "",
-      "children_ids": [],
-      "metadata": {
-        "from_module": "anchor_engine_v2"
-      }
-    },
-    "synth/anchorRepair/repair.py::assign:block_1": {
-      "id": "synth/anchorRepair/repair.py::assign:block_1",
-      "language": "py",
-      "category": "assigns",
-      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
-      "line_start": 14,
       "line_end": 14,
-      "name": "block_1",
-      "code": "_CODE_TREE_PATH = Path(__file__).parent.parent / \"codeTree\"",
-      "hash": "36fcae326490",
+      "name": "Anchor",
+      "code": "from index.codeTree.anchor_engine_v2 import (\n    Anchor, compute_hash_v2, classify_severity,\n    _load_db, _save_db, ANCHOR_DB\n)",
+      "hash": "505200347ede",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "targets": [
-          "_CODE_TREE_PATH"
-        ],
-        "is_merged": true,
-        "statement_count": 1
+        "from_module": "index.codeTree.anchor_engine_v2"
       }
     },
     "synth/anchorRepair/repair.py::statement:block_1": {
@@ -34888,15 +35150,15 @@
       "category": "statements",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
       "line_start": 1,
-      "line_end": 16,
+      "line_end": 4,
       "name": "block_1",
-      "code": "\"\"\"\nrepair.py - 锚点批量修复 (Hard L2-001, Medium L2-004, L2-005)\n==============================================================\n\"\"\"\n\nif str(_CODE_TREE_PATH) not in sys.path:\n    sys.path.insert(0, str(_CODE_TREE_PATH))",
-      "hash": "42c425a3f09e",
+      "code": "\"\"\"\nrepair.py - 锚点批量修复 (Hard L2-001, Medium L2-004, L2-005)\n==============================================================\n\"\"\"",
+      "hash": "e8508062e3d1",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "context": "top_level",
-        "statement_count": 2,
+        "statement_count": 1,
         "is_merged": true
       }
     },
@@ -34905,8 +35167,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
-      "line_start": 24,
-      "line_end": 115,
+      "line_start": 17,
+      "line_end": 108,
       "name": "repair_anchors",
       "code": "def repair_anchors(changed_files: List[str], root: str) -> List[RepairResult]:\n    \"\"\"\n    批量修复锚点 (Hard L2-001)\n    \n    参数:\n        changed_files: 变更文件的相对路径列表\n        root: 项目根目录\n    \n    返回:\n        修复结果列表\n    \n    流程:\n        1. 加载锚点数据库\n        2. 找出受影响的锚点（文件在changed_files中）\n        3. 对每个受影响锚点:\n           a. 重新计算哈希\n           b. 如果文件/符号存在，更新哈希\n           c. 如果文件/符号不存在，标记为失败\n        4. 保存数据库\n        5. 返回修复结果\n    \n    同步执行，预期耗时 < 1秒（10个文件）\n    \"\"\"\n    results = []\n    root_path = Path(root)\n    \n    # 加载数据库\n    db_data = _load_db(root_path)\n    anchors_db = db_data.get(\"anchors\", {})\n    \n    if not anchors_db:\n        # 数据库为空或格式不对\n        return results\n    \n    # 收集受影响的锚点\n    affected = find_affected_anchors(changed_files, anchors_db)\n    \n    for anchor_id, anchor_data in affected:\n        try:\n            # 重新计算哈希\n            new_hash, status, struct_hash = compute_hash_v2(\n                file=anchor_data.get(\"file\", \"\"),\n                symbol=anchor_data.get(\"symbol\"),\n                line_start=anchor_data.get(\"line_start\"),\n                line_end=anchor_data.get(\"line_end\"),\n                hash_mode=anchor_data.get(\"hash_mode\", \"struct\"),\n                root=root_path\n            )\n            \n            old_hash = anchor_data.get(\"hash\", \"\")\n            \n            if status == \"ok\":\n                # 更新哈希\n                anchor_data[\"hash\"] = new_hash\n                anchors_db[anchor_id] = anchor_data\n                \n                action = \"updated\" if old_hash != new_hash else \"unchanged\"\n                results.append(RepairResult(\n                    anchor_id=anchor_id,\n                    success=True,\n                    action=action,\n                    old_hash=old_hash,\n                    new_hash=new_hash,\n                    error=None\n                ))\n            else:\n                # 文件或符号不存在\n                results.append(RepairResult(\n                    anchor_id=anchor_id,\n                    success=False,\n                    action=\"skipped\",\n                    old_hash=old_hash,\n                    new_hash=\"\",\n                    error=f\"Status: {status}\"\n                ))\n        \n        except Exception as e:\n            results.append(RepairResult(\n                anchor_id=anchor_id,\n                success=False,\n                action=\"error\",\n                old_hash=anchor_data.get(\"hash\", \"\"),\n                new_hash=\"\",\n                error=str(e)\n            ))\n    \n    # 保存更新后的数据库\n    if any(r.success for r in results):\n        db_data[\"anchors\"] = anchors_db\n        _save_db(root_path, db_data)\n    \n    return results",
       "hash": "7547095cb3fa",
@@ -34926,8 +35188,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
-      "line_start": 118,
-      "line_end": 177,
+      "line_start": 111,
+      "line_end": 170,
       "name": "find_affected_anchors",
       "code": "def find_affected_anchors(\n    changed_files: List[str],\n    anchors_db: Dict[str, Any]\n) -> List[Tuple[str, Dict]]:\n    \"\"\"\n    找出受变更文件影响的锚点 (Medium L2-004)\n    \n    参数:\n        changed_files: 变更文件列表\n        anchors_db: 锚点数据库字典（不含_meta等元数据键）\n    \n    返回:\n        受影响的锚点列表: [(anchor_id, anchor_data), ...]\n    \n    匹配规则:\n        - 锚点的file字段与changed_files中的任一文件匹配\n        - 支持相对路径和绝对路径\n        - 路径规范化后比较\n    \"\"\"\n    affected = []\n    \n    # 规范化变更文件路径\n    normalized_changed = set()\n    for f in changed_files:\n        # 统一使用正斜杠\n        normalized = f.replace(\"\\\\\", \"/\")\n        normalized_changed.add(normalized)\n        # 也添加不带前导./的版本\n        if normalized.startswith(\"./\"):\n            normalized_changed.add(normalized[2:])\n    \n    for anchor_id, anchor_data in anchors_db.items():\n        # 跳过元数据键\n        if anchor_id.startswith(\"_\"):\n            continue\n        \n        if not isinstance(anchor_data, dict):\n            continue\n        \n        anchor_file = anchor_data.get(\"file\", \"\")\n        if not anchor_file:\n            continue\n        \n        # 规范化锚点文件路径\n        normalized_anchor = anchor_file.replace(\"\\\\\", \"/\")\n        if normalized_anchor.startswith(\"./\"):\n            normalized_anchor = normalized_anchor[2:]\n        \n        # 精确匹配\n        if normalized_anchor in normalized_changed:\n            affected.append((anchor_id, anchor_data))\n            continue\n        \n        # 后缀匹配（处理相对/绝对路径混用）\n        for changed_file in normalized_changed:\n            if normalized_anchor.endswith(changed_file) or changed_file.endswith(normalized_anchor):\n                affected.append((anchor_id, anchor_data))\n                break\n    \n    return affected",
       "hash": "c1589d4927a6",
@@ -34947,8 +35209,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
-      "line_start": 180,
-      "line_end": 216,
+      "line_start": 173,
+      "line_end": 209,
       "name": "on_files_changed",
       "code": "def on_files_changed(changed_files: List[str], root: str) -> SyncResult:\n    \"\"\"\n    对话结束后的同步修复入口 (Medium L2-005)\n    \n    参数:\n        changed_files: 变更文件列表\n        root: 项目根目录\n    \n    返回:\n        同步修复结果\n    \n    设计原则:\n        - 同步执行，不异步\n        - 只处理变更文件的锚点\n        - 秒级完成\n    \"\"\"\n    start = time.time()\n    \n    root_path = Path(root)\n    db_data = _load_db(root_path)\n    anchors_db = db_data.get(\"anchors\", {})\n    \n    # 计算总锚点数（排除元数据键）\n    total = len([k for k in anchors_db if not k.startswith(\"_\")])\n    \n    # 执行修复\n    results = repair_anchors(changed_files, root)\n    \n    elapsed_ms = int((time.time() - start) * 1000)\n    \n    return SyncResult(\n        total_anchors=total,\n        checked=len(results),\n        updated=sum(1 for r in results if r.success and r.action == \"updated\"),\n        failed=sum(1 for r in results if not r.success),\n        elapsed_ms=elapsed_ms\n    )",
       "hash": "e72726c56886",
@@ -34968,8 +35230,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py",
-      "line_start": 219,
-      "line_end": 256,
+      "line_start": 212,
+      "line_end": 249,
       "name": "repair_all_stale",
       "code": "def repair_all_stale(root: str) -> SyncResult:\n    \"\"\"\n    修复所有过期锚点\n    \n    参数:\n        root: 项目根目录\n    \n    返回:\n        同步修复结果\n    \"\"\"\n    start = time.time()\n    \n    root_path = Path(root)\n    db_data = _load_db(root_path)\n    anchors_db = db_data.get(\"anchors\", {})\n    \n    # 获取所有锚点文件\n    all_files = set()\n    for anchor_id, anchor_data in anchors_db.items():\n        if anchor_id.startswith(\"_\"):\n            continue\n        if isinstance(anchor_data, dict) and \"file\" in anchor_data:\n            all_files.add(anchor_data[\"file\"])\n    \n    # 修复所有涉及的文件\n    results = repair_anchors(list(all_files), root)\n    \n    elapsed_ms = int((time.time() - start) * 1000)\n    \n    total = len([k for k in anchors_db if not k.startswith(\"_\")])\n    \n    return SyncResult(\n        total_anchors=total,\n        checked=len(results),\n        updated=sum(1 for r in results if r.success and r.action == \"updated\"),\n        failed=sum(1 for r in results if not r.success),\n        elapsed_ms=elapsed_ms\n    )",
       "hash": "87e099006aba",
@@ -34983,27 +35245,13 @@
         "is_async": false
       }
     },
-    "synth/anchorRepair/database.py::import:sys": {
-      "id": "synth/anchorRepair/database.py::import:sys",
-      "language": "py",
-      "category": "imports",
-      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 1,
-      "line_end": 7,
-      "name": "sys",
-      "code": "import sys",
-      "hash": "83d8e9e427df",
-      "parent_id": "",
-      "children_ids": [],
-      "metadata": {}
-    },
     "synth/anchorRepair/database.py::import:Path": {
       "id": "synth/anchorRepair/database.py::import:Path",
       "language": "py",
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
       "line_start": 1,
-      "line_end": 8,
+      "line_end": 7,
       "name": "Path",
       "code": "from pathlib import Path",
       "hash": "9b5c42011415",
@@ -35019,7 +35267,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
       "line_start": 1,
-      "line_end": 9,
+      "line_end": 8,
       "name": "List",
       "code": "from typing import List, Optional, Dict, Any",
       "hash": "aa3ed525d7a4",
@@ -35035,7 +35283,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
       "line_start": 1,
-      "line_end": 10,
+      "line_end": 9,
       "name": "asdict",
       "code": "from dataclasses import asdict",
       "hash": "fe74492d649d",
@@ -35051,34 +35299,14 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
       "line_start": 1,
-      "line_end": 19,
-      "name": "Anchor",
-      "code": "from anchor_engine_v2 import (\n    Anchor, _load_db, _save_db, ANCHOR_DB\n)",
-      "hash": "9ab67a1565e1",
-      "parent_id": "",
-      "children_ids": [],
-      "metadata": {
-        "from_module": "anchor_engine_v2"
-      }
-    },
-    "synth/anchorRepair/database.py::assign:block_1": {
-      "id": "synth/anchorRepair/database.py::assign:block_1",
-      "language": "py",
-      "category": "assigns",
-      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 13,
       "line_end": 13,
-      "name": "block_1",
-      "code": "_CODE_TREE_PATH = Path(__file__).parent.parent / \"codeTree\"",
-      "hash": "36fcae326490",
+      "name": "Anchor",
+      "code": "from index.codeTree.anchor_engine_v2 import (\n    Anchor, _load_db, _save_db, ANCHOR_DB\n)",
+      "hash": "7500cd581cdb",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "targets": [
-          "_CODE_TREE_PATH"
-        ],
-        "is_merged": true,
-        "statement_count": 1
+        "from_module": "index.codeTree.anchor_engine_v2"
       }
     },
     "synth/anchorRepair/database.py::statement:block_1": {
@@ -35087,15 +35315,15 @@
       "category": "statements",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
       "line_start": 1,
-      "line_end": 15,
+      "line_end": 5,
       "name": "block_1",
-      "code": "\"\"\"\ndatabase.py - 锚点数据库管理\n============================\n对 anchor_engine_v2 的封装，提供更友好的接口。\n\"\"\"\n\nif str(_CODE_TREE_PATH) not in sys.path:\n    sys.path.insert(0, str(_CODE_TREE_PATH))",
-      "hash": "db3898506e5a",
+      "code": "\"\"\"\ndatabase.py - 锚点数据库管理\n============================\n对 anchor_engine_v2 的封装，提供更友好的接口。\n\"\"\"",
+      "hash": "5cc83982e645",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "context": "top_level",
-        "statement_count": 2,
+        "statement_count": 1,
         "is_merged": true
       }
     },
@@ -35104,8 +35332,8 @@
       "language": "py",
       "category": "classes",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 22,
-      "line_end": 195,
+      "line_start": 16,
+      "line_end": 189,
       "name": "AnchorDatabase",
       "code": "class AnchorDatabase:\n    \"\"\"\n    锚点数据库管理类\n    \n    封装 anchor_engine_v2 的数据库操作，提供更易用的接口。\n    \"\"\"\n    \n    def __init__(self, root: str):\n        \"\"\"\n        初始化锚点数据库\n        \n        参数:\n            root: 项目根目录\n        \"\"\"\n        self.root = Path(root)\n        self._db_data = None\n    \n    @property\n    def db_data(self) -> Dict:\n        \"\"\"懒加载数据库\"\"\"\n        if self._db_data is None:\n            self._db_data = _load_db(self.root)\n        return self._db_data\n    \n    @property\n    def anchors(self) -> Dict[str, Dict]:\n        \"\"\"获取锚点字典（不含元数据）\"\"\"\n        return self.db_data.get(\"anchors\", {})\n    \n    def reload(self) -> List[Anchor]:\n        \"\"\"\n        重新加载锚点数据库\n        \n        返回:\n            锚点对象列表\n        \"\"\"\n        self._db_data = _load_db(self.root)\n        return self.get_all_anchors()\n    \n    def get_all_anchors(self) -> List[Anchor]:\n        \"\"\"\n        获取所有锚点\n        \n        返回:\n            Anchor对象列表\n        \"\"\"\n        anchors = []\n        for anchor_id, data in self.anchors.items():\n            if anchor_id.startswith(\"_\"):\n                continue\n            if not isinstance(data, dict):\n                continue\n            \n            anchors.append(Anchor(\n                id=anchor_id,\n                file=data.get(\"file\", \"\"),\n                symbol=data.get(\"symbol\"),\n                line_start=data.get(\"line_start\"),\n                line_end=data.get(\"line_end\"),\n                hash=data.get(\"hash\", \"\"),\n                hash_mode=data.get(\"hash_mode\", \"struct\"),\n                description=data.get(\"description\", \"\"),\n                language=data.get(\"language\", \"python\")\n            ))\n        \n        return anchors\n    \n    def get_anchor(self, anchor_id: str) -> Optional[Anchor]:\n        \"\"\"\n        获取单个锚点\n        \n        参数:\n            anchor_id: 锚点ID\n        \n        返回:\n            Anchor对象，不存在返回None\n        \"\"\"\n        data = self.anchors.get(anchor_id)\n        if not data or not isinstance(data, dict):\n            return None\n        \n        return Anchor(\n            id=anchor_id,\n            file=data.get(\"file\", \"\"),\n            symbol=data.get(\"symbol\"),\n            line_start=data.get(\"line_start\"),\n            line_end=data.get(\"line_end\"),\n            hash=data.get(\"hash\", \"\"),\n            hash_mode=data.get(\"hash_mode\", \"struct\"),\n            description=data.get(\"description\", \"\"),\n            language=data.get(\"language\", \"python\")\n        )\n    \n    def update_anchor(self, anchor: Anchor):\n        \"\"\"\n        更新或创建锚点\n        \n        参数:\n            anchor: Anchor对象\n        \"\"\"\n        if \"anchors\" not in self.db_data:\n            self.db_data[\"anchors\"] = {}\n        \n        self.db_data[\"anchors\"][anchor.id] = asdict(anchor)\n        _save_db(self.root, self.db_data)\n    \n    def delete_anchor(self, anchor_id: str) -> bool:\n        \"\"\"\n        删除锚点\n        \n        参数:\n            anchor_id: 锚点ID\n        \n        返回:\n            是否成功删除\n        \"\"\"\n        if anchor_id in self.anchors:\n            del self.db_data[\"anchors\"][anchor_id]\n            _save_db(self.root, self.db_data)\n            return True\n        return False\n    \n    def get_anchors_by_file(self, file_path: str) -> List[Anchor]:\n        \"\"\"\n        获取指定文件的所有锚点\n        \n        参数:\n            file_path: 文件相对路径\n        \n        返回:\n            Anchor对象列表\n        \"\"\"\n        # 规范化路径\n        normalized = file_path.replace(\"\\\\\", \"/\")\n        if normalized.startswith(\"./\"):\n            normalized = normalized[2:]\n        \n        result = []\n        for anchor in self.get_all_anchors():\n            anchor_file = anchor.file.replace(\"\\\\\", \"/\")\n            if anchor_file.startswith(\"./\"):\n                anchor_file = anchor_file[2:]\n            \n            if anchor_file == normalized or \\\n               anchor_file.endswith(normalized) or \\\n               normalized.endswith(anchor_file):\n                result.append(anchor)\n        \n        return result\n    \n    def get_anchors_by_symbol(self, symbol: str) -> List[Anchor]:\n        \"\"\"\n        获取指定符号的所有锚点\n        \n        参数:\n            symbol: 符号名（如 \"ClassName.method\"）\n        \n        返回:\n            Anchor对象列表\n        \"\"\"\n        return [\n            a for a in self.get_all_anchors()\n            if a.symbol == symbol\n        ]\n    \n    def count(self) -> int:\n        \"\"\"获取锚点总数\"\"\"\n        return len([k for k in self.anchors if not k.startswith(\"_\")])\n    \n    def __len__(self) -> int:\n        return self.count()\n    \n    def __contains__(self, anchor_id: str) -> bool:\n        return anchor_id in self.anchors",
       "hash": "dfdb74ccaadc",
@@ -35135,8 +35363,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 29,
-      "line_end": 37,
+      "line_start": 23,
+      "line_end": 31,
       "name": "__init__",
       "code": "def __init__(self, root: str):\n        \"\"\"\n        初始化锚点数据库\n        \n        参数:\n            root: 项目根目录\n        \"\"\"\n        self.root = Path(root)\n        self._db_data = None",
       "hash": "cd6ee3f85d76",
@@ -35156,8 +35384,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 40,
-      "line_end": 44,
+      "line_start": 34,
+      "line_end": 38,
       "name": "db_data",
       "code": "def db_data(self) -> Dict:\n        \"\"\"懒加载数据库\"\"\"\n        if self._db_data is None:\n            self._db_data = _load_db(self.root)\n        return self._db_data",
       "hash": "b584f0470832",
@@ -35182,8 +35410,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 47,
-      "line_end": 49,
+      "line_start": 41,
+      "line_end": 43,
       "name": "anchors",
       "code": "def anchors(self) -> Dict[str, Dict]:\n        \"\"\"获取锚点字典（不含元数据）\"\"\"\n        return self.db_data.get(\"anchors\", {})",
       "hash": "0d5f623315c6",
@@ -35208,8 +35436,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 51,
-      "line_end": 59,
+      "line_start": 45,
+      "line_end": 53,
       "name": "reload",
       "code": "def reload(self) -> List[Anchor]:\n        \"\"\"\n        重新加载锚点数据库\n        \n        返回:\n            锚点对象列表\n        \"\"\"\n        self._db_data = _load_db(self.root)\n        return self.get_all_anchors()",
       "hash": "bb8ef693917d",
@@ -35228,8 +35456,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 61,
-      "line_end": 87,
+      "line_start": 55,
+      "line_end": 81,
       "name": "get_all_anchors",
       "code": "def get_all_anchors(self) -> List[Anchor]:\n        \"\"\"\n        获取所有锚点\n        \n        返回:\n            Anchor对象列表\n        \"\"\"\n        anchors = []\n        for anchor_id, data in self.anchors.items():\n            if anchor_id.startswith(\"_\"):\n                continue\n            if not isinstance(data, dict):\n                continue\n            \n            anchors.append(Anchor(\n                id=anchor_id,\n                file=data.get(\"file\", \"\"),\n                symbol=data.get(\"symbol\"),\n                line_start=data.get(\"line_start\"),\n                line_end=data.get(\"line_end\"),\n                hash=data.get(\"hash\", \"\"),\n                hash_mode=data.get(\"hash_mode\", \"struct\"),\n                description=data.get(\"description\", \"\"),\n                language=data.get(\"language\", \"python\")\n            ))\n        \n        return anchors",
       "hash": "f80bebc04c04",
@@ -35248,8 +35476,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 89,
-      "line_end": 113,
+      "line_start": 83,
+      "line_end": 107,
       "name": "get_anchor",
       "code": "def get_anchor(self, anchor_id: str) -> Optional[Anchor]:\n        \"\"\"\n        获取单个锚点\n        \n        参数:\n            anchor_id: 锚点ID\n        \n        返回:\n            Anchor对象，不存在返回None\n        \"\"\"\n        data = self.anchors.get(anchor_id)\n        if not data or not isinstance(data, dict):\n            return None\n        \n        return Anchor(\n            id=anchor_id,\n            file=data.get(\"file\", \"\"),\n            symbol=data.get(\"symbol\"),\n            line_start=data.get(\"line_start\"),\n            line_end=data.get(\"line_end\"),\n            hash=data.get(\"hash\", \"\"),\n            hash_mode=data.get(\"hash_mode\", \"struct\"),\n            description=data.get(\"description\", \"\"),\n            language=data.get(\"language\", \"python\")\n        )",
       "hash": "22489047f5ed",
@@ -35269,8 +35497,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 115,
-      "line_end": 126,
+      "line_start": 109,
+      "line_end": 120,
       "name": "update_anchor",
       "code": "def update_anchor(self, anchor: Anchor):\n        \"\"\"\n        更新或创建锚点\n        \n        参数:\n            anchor: Anchor对象\n        \"\"\"\n        if \"anchors\" not in self.db_data:\n            self.db_data[\"anchors\"] = {}\n        \n        self.db_data[\"anchors\"][anchor.id] = asdict(anchor)\n        _save_db(self.root, self.db_data)",
       "hash": "7e6fd1a336fe",
@@ -35290,8 +35518,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 128,
-      "line_end": 142,
+      "line_start": 122,
+      "line_end": 136,
       "name": "delete_anchor",
       "code": "def delete_anchor(self, anchor_id: str) -> bool:\n        \"\"\"\n        删除锚点\n        \n        参数:\n            anchor_id: 锚点ID\n        \n        返回:\n            是否成功删除\n        \"\"\"\n        if anchor_id in self.anchors:\n            del self.db_data[\"anchors\"][anchor_id]\n            _save_db(self.root, self.db_data)\n            return True\n        return False",
       "hash": "bad8999bb5a8",
@@ -35311,8 +35539,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 144,
-      "line_end": 170,
+      "line_start": 138,
+      "line_end": 164,
       "name": "get_anchors_by_file",
       "code": "def get_anchors_by_file(self, file_path: str) -> List[Anchor]:\n        \"\"\"\n        获取指定文件的所有锚点\n        \n        参数:\n            file_path: 文件相对路径\n        \n        返回:\n            Anchor对象列表\n        \"\"\"\n        # 规范化路径\n        normalized = file_path.replace(\"\\\\\", \"/\")\n        if normalized.startswith(\"./\"):\n            normalized = normalized[2:]\n        \n        result = []\n        for anchor in self.get_all_anchors():\n            anchor_file = anchor.file.replace(\"\\\\\", \"/\")\n            if anchor_file.startswith(\"./\"):\n                anchor_file = anchor_file[2:]\n            \n            if anchor_file == normalized or \\\n               anchor_file.endswith(normalized) or \\\n               normalized.endswith(anchor_file):\n                result.append(anchor)\n        \n        return result",
       "hash": "5a5b91f6da34",
@@ -35332,8 +35560,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 172,
-      "line_end": 185,
+      "line_start": 166,
+      "line_end": 179,
       "name": "get_anchors_by_symbol",
       "code": "def get_anchors_by_symbol(self, symbol: str) -> List[Anchor]:\n        \"\"\"\n        获取指定符号的所有锚点\n        \n        参数:\n            symbol: 符号名（如 \"ClassName.method\"）\n        \n        返回:\n            Anchor对象列表\n        \"\"\"\n        return [\n            a for a in self.get_all_anchors()\n            if a.symbol == symbol\n        ]",
       "hash": "b042374b63b1",
@@ -35353,8 +35581,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 187,
-      "line_end": 189,
+      "line_start": 181,
+      "line_end": 183,
       "name": "count",
       "code": "def count(self) -> int:\n        \"\"\"获取锚点总数\"\"\"\n        return len([k for k in self.anchors if not k.startswith(\"_\")])",
       "hash": "ee7504757412",
@@ -35373,8 +35601,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 191,
-      "line_end": 192,
+      "line_start": 185,
+      "line_end": 186,
       "name": "__len__",
       "code": "def __len__(self) -> int:\n        return self.count()",
       "hash": "16547e4816f8",
@@ -35393,8 +35621,8 @@
       "language": "py",
       "category": "methods",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py",
-      "line_start": 194,
-      "line_end": 195,
+      "line_start": 188,
+      "line_end": 189,
       "name": "__contains__",
       "code": "def __contains__(self, anchor_id: str) -> bool:\n        return anchor_id in self.anchors",
       "hash": "aba0baa71972",
@@ -35511,27 +35739,13 @@
         "is_merged": true
       }
     },
-    "synth/anchorRepair/batch_check.py::import:sys": {
-      "id": "synth/anchorRepair/batch_check.py::import:sys",
-      "language": "py",
-      "category": "imports",
-      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 1,
-      "line_end": 6,
-      "name": "sys",
-      "code": "import sys",
-      "hash": "83d8e9e427df",
-      "parent_id": "",
-      "children_ids": [],
-      "metadata": {}
-    },
     "synth/anchorRepair/batch_check.py::import:Path": {
       "id": "synth/anchorRepair/batch_check.py::import:Path",
       "language": "py",
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
       "line_start": 1,
-      "line_end": 7,
+      "line_end": 6,
       "name": "Path",
       "code": "from pathlib import Path",
       "hash": "9b5c42011415",
@@ -35547,7 +35761,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
       "line_start": 1,
-      "line_end": 8,
+      "line_end": 7,
       "name": "List",
       "code": "from typing import List, Optional",
       "hash": "f8f905e01f75",
@@ -35563,7 +35777,7 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
       "line_start": 1,
-      "line_end": 10,
+      "line_end": 9,
       "name": "AnchorStatusType",
       "code": "from base.anchorRepair.types import AnchorStatusType, AnchorStatus",
       "hash": "382ac8a0c9c3",
@@ -35579,34 +35793,14 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
       "line_start": 1,
-      "line_end": 20,
-      "name": "Anchor",
-      "code": "from anchor_engine_v2 import (\n    Anchor, compute_hash_v2, classify_severity,\n    _load_db\n)",
-      "hash": "c4360421ce80",
-      "parent_id": "",
-      "children_ids": [],
-      "metadata": {
-        "from_module": "anchor_engine_v2"
-      }
-    },
-    "synth/anchorRepair/batch_check.py::assign:block_1": {
-      "id": "synth/anchorRepair/batch_check.py::assign:block_1",
-      "language": "py",
-      "category": "assigns",
-      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 13,
       "line_end": 13,
-      "name": "block_1",
-      "code": "_CODE_TREE_PATH = Path(__file__).parent.parent / \"codeTree\"",
-      "hash": "36fcae326490",
+      "name": "Anchor",
+      "code": "from index.codeTree.anchor_engine_v2 import (\n    Anchor, compute_hash_v2, classify_severity,\n    _load_db\n)",
+      "hash": "aca19927296b",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "targets": [
-          "_CODE_TREE_PATH"
-        ],
-        "is_merged": true,
-        "statement_count": 1
+        "from_module": "index.codeTree.anchor_engine_v2"
       }
     },
     "synth/anchorRepair/batch_check.py::statement:block_1": {
@@ -35615,15 +35809,15 @@
       "category": "statements",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
       "line_start": 1,
-      "line_end": 15,
+      "line_end": 4,
       "name": "block_1",
-      "code": "\"\"\"\nbatch_check.py - 锚点批量检查 (Medium L2-002, L2-003)\n======================================================\n\"\"\"\n\nif str(_CODE_TREE_PATH) not in sys.path:\n    sys.path.insert(0, str(_CODE_TREE_PATH))",
-      "hash": "a98dcf1ce083",
+      "code": "\"\"\"\nbatch_check.py - 锚点批量检查 (Medium L2-002, L2-003)\n======================================================\n\"\"\"",
+      "hash": "065f4a7b9c29",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "context": "top_level",
-        "statement_count": 2,
+        "statement_count": 1,
         "is_merged": true
       }
     },
@@ -35632,8 +35826,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 23,
-      "line_end": 99,
+      "line_start": 16,
+      "line_end": 92,
       "name": "check_anchor",
       "code": "def check_anchor(anchor: Anchor, root: str) -> AnchorStatus:\n    \"\"\"\n    检查单个锚点状态 (Medium L2-002)\n    \n    参数:\n        anchor: Anchor对象\n        root: 项目根目录\n    \n    返回:\n        AnchorStatus对象\n    \"\"\"\n    root_path = Path(root)\n    \n    # 计算当前哈希\n    current_hash, status, struct_hash = compute_hash_v2(\n        file=anchor.file,\n        symbol=anchor.symbol,\n        line_start=anchor.line_start,\n        line_end=anchor.line_end,\n        hash_mode=anchor.hash_mode,\n        root=root_path\n    )\n    \n    old_hash = anchor.hash\n    \n    # 判断状态\n    if status == \"missing_file\":\n        return AnchorStatus(\n            anchor_id=anchor.id,\n            status=AnchorStatusType.MISSING_FILE,\n            old_hash=old_hash,\n            new_hash=\"\",\n            severity=\"critical\",\n            message=f\"文件不存在: {anchor.file}\",\n            suggested_fix=\"检查文件是否被删除或重命名\"\n        )\n    \n    if status == \"missing_symbol\":\n        return AnchorStatus(\n            anchor_id=anchor.id,\n            status=AnchorStatusType.MISSING_SYMBOL,\n            old_hash=old_hash,\n            new_hash=\"\",\n            severity=\"critical\",\n            message=f\"符号不存在: {anchor.symbol} in {anchor.file}\",\n            suggested_fix=\"检查符号是否被删除或重命名\"\n        )\n    \n    if current_hash == old_hash:\n        return AnchorStatus(\n            anchor_id=anchor.id,\n            status=AnchorStatusType.VALID,\n            old_hash=old_hash,\n            new_hash=current_hash,\n            severity=\"low\",\n            message=\"锚点有效\",\n            suggested_fix=None\n        )\n    \n    # 哈希不匹配，进一步分类严重程度\n    severity = classify_severity(\n        old_hash=old_hash,\n        new_hash=current_hash,\n        old_struct_hash=None,  # 旧结构哈希未存储\n        new_struct_hash=struct_hash,\n        status=\"stale\"\n    )\n    \n    return AnchorStatus(\n        anchor_id=anchor.id,\n        status=AnchorStatusType.DRIFTED,\n        old_hash=old_hash,\n        new_hash=current_hash,\n        severity=severity,\n        message=f\"锚点漂移: {old_hash} → {current_hash}\",\n        suggested_fix=\"运行 repair_anchors 更新哈希\"\n    )",
       "hash": "0b18c6287470",
@@ -35653,8 +35847,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 102,
-      "line_end": 157,
+      "line_start": 95,
+      "line_end": 150,
       "name": "check_anchors_batch",
       "code": "def check_anchors_batch(file_path: str, root: str) -> List[AnchorStatus]:\n    \"\"\"\n    批量检查指定文件的所有锚点 (Medium L2-003)\n    \n    参数:\n        file_path: 文件相对路径\n        root: 项目根目录\n    \n    返回:\n        该文件所有锚点的状态列表\n    \"\"\"\n    root_path = Path(root)\n    db_data = _load_db(root_path)\n    anchors_db = db_data.get(\"anchors\", {})\n    \n    # 规范化路径\n    normalized_path = file_path.replace(\"\\\\\", \"/\")\n    if normalized_path.startswith(\"./\"):\n        normalized_path = normalized_path[2:]\n    \n    results = []\n    \n    for anchor_id, anchor_data in anchors_db.items():\n        if anchor_id.startswith(\"_\"):\n            continue\n        \n        if not isinstance(anchor_data, dict):\n            continue\n        \n        anchor_file = anchor_data.get(\"file\", \"\")\n        normalized_anchor = anchor_file.replace(\"\\\\\", \"/\")\n        if normalized_anchor.startswith(\"./\"):\n            normalized_anchor = normalized_anchor[2:]\n        \n        # 检查是否匹配目标文件\n        if normalized_anchor == normalized_path or \\\n           normalized_anchor.endswith(normalized_path) or \\\n           normalized_path.endswith(normalized_anchor):\n            \n            # 构建Anchor对象\n            anchor = Anchor(\n                id=anchor_id,\n                file=anchor_data.get(\"file\", \"\"),\n                symbol=anchor_data.get(\"symbol\"),\n                line_start=anchor_data.get(\"line_start\"),\n                line_end=anchor_data.get(\"line_end\"),\n                hash=anchor_data.get(\"hash\", \"\"),\n                hash_mode=anchor_data.get(\"hash_mode\", \"struct\"),\n                description=anchor_data.get(\"description\", \"\"),\n                language=anchor_data.get(\"language\", \"python\")\n            )\n            \n            status = check_anchor(anchor, root)\n            results.append(status)\n    \n    return results",
       "hash": "b4dd542695fa",
@@ -35674,8 +35868,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 160,
-      "line_end": 198,
+      "line_start": 153,
+      "line_end": 191,
       "name": "check_all_anchors",
       "code": "def check_all_anchors(root: str) -> List[AnchorStatus]:\n    \"\"\"\n    检查所有锚点状态\n    \n    参数:\n        root: 项目根目录\n    \n    返回:\n        所有锚点的状态列表\n    \"\"\"\n    root_path = Path(root)\n    db_data = _load_db(root_path)\n    anchors_db = db_data.get(\"anchors\", {})\n    \n    results = []\n    \n    for anchor_id, anchor_data in anchors_db.items():\n        if anchor_id.startswith(\"_\"):\n            continue\n        \n        if not isinstance(anchor_data, dict):\n            continue\n        \n        anchor = Anchor(\n            id=anchor_id,\n            file=anchor_data.get(\"file\", \"\"),\n            symbol=anchor_data.get(\"symbol\"),\n            line_start=anchor_data.get(\"line_start\"),\n            line_end=anchor_data.get(\"line_end\"),\n            hash=anchor_data.get(\"hash\", \"\"),\n            hash_mode=anchor_data.get(\"hash_mode\", \"struct\"),\n            description=anchor_data.get(\"description\", \"\"),\n            language=anchor_data.get(\"language\", \"python\")\n        )\n        \n        status = check_anchor(anchor, root)\n        results.append(status)\n    \n    return results",
       "hash": "012f3024032e",
@@ -35694,8 +35888,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 201,
-      "line_end": 212,
+      "line_start": 194,
+      "line_end": 205,
       "name": "get_stale_anchors",
       "code": "def get_stale_anchors(root: str) -> List[AnchorStatus]:\n    \"\"\"\n    获取所有过期锚点\n    \n    参数:\n        root: 项目根目录\n    \n    返回:\n        过期锚点的状态列表\n    \"\"\"\n    all_statuses = check_all_anchors(root)\n    return [s for s in all_statuses if s.needs_repair or s.is_broken]",
       "hash": "c5d1964de389",
@@ -35714,8 +35908,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py",
-      "line_start": 215,
-      "line_end": 226,
+      "line_start": 208,
+      "line_end": 219,
       "name": "get_broken_anchors",
       "code": "def get_broken_anchors(root: str) -> List[AnchorStatus]:\n    \"\"\"\n    获取所有损坏的锚点（文件/符号不存在）\n    \n    参数:\n        root: 项目根目录\n    \n    返回:\n        损坏锚点的状态列表\n    \"\"\"\n    all_statuses = check_all_anchors(root)\n    return [s for s in all_statuses if s.is_broken]",
       "hash": "4158c6a9f5ef",
@@ -42871,14 +43065,14 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
       "line_start": 1,
-      "line_end": 15,
+      "line_end": 20,
       "name": "PythonAnalyzer",
-      "code": "from tools.codeAnalysis.analyzer import PythonAnalyzer, CppAnalyzer, JavaAnalyzer",
-      "hash": "f04ee97f0a28",
+      "code": "from parse.codeAnalysis.analyzer import PythonAnalyzer, CppAnalyzer, JavaAnalyzer",
+      "hash": "6bb6c31ddbfd",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "from_module": "tools.codeAnalysis.analyzer"
+        "from_module": "parse.codeAnalysis.analyzer"
       }
     },
     "view/codeAnalysis/main.py::import:ProjectStructureAnalyzer": {
@@ -42887,14 +43081,14 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
       "line_start": 1,
-      "line_end": 16,
+      "line_end": 21,
       "name": "ProjectStructureAnalyzer",
-      "code": "from tools.codeAnalysis.analyzer.structure_analyzer import ProjectStructureAnalyzer, analyze_project_structure",
-      "hash": "45cb93bcbf00",
+      "code": "from parse.codeAnalysis.analyzer.structure_analyzer import ProjectStructureAnalyzer, analyze_project_structure",
+      "hash": "6313a510b2a7",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "from_module": "tools.codeAnalysis.analyzer.structure_analyzer"
+        "from_module": "parse.codeAnalysis.analyzer.structure_analyzer"
       }
     },
     "view/codeAnalysis/main.py::import:MermaidGenerator": {
@@ -42903,14 +43097,34 @@
       "category": "imports",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
       "line_start": 1,
-      "line_end": 17,
+      "line_end": 22,
       "name": "MermaidGenerator",
-      "code": "from tools.codeAnalysis.graph import MermaidGenerator, generate_mermaid_for_project",
-      "hash": "1f3cb58c012e",
+      "code": "from view.codeAnalysis.graph import MermaidGenerator, generate_mermaid_for_project",
+      "hash": "cac304ef0a1a",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "from_module": "tools.codeAnalysis.graph"
+        "from_module": "view.codeAnalysis.graph"
+      }
+    },
+    "view/codeAnalysis/main.py::assign:block_1": {
+      "id": "view/codeAnalysis/main.py::assign:block_1",
+      "language": "py",
+      "category": "assigns",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
+      "line_start": 15,
+      "line_end": 15,
+      "name": "block_1",
+      "code": "_ROOT = str(Path(__file__).resolve().parents[2])",
+      "hash": "a880c04b7e17",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "targets": [
+          "_ROOT"
+        ],
+        "is_merged": true,
+        "statement_count": 1
       }
     },
     "view/codeAnalysis/main.py::__main__:guard": {
@@ -42918,8 +43132,8 @@
       "language": "py",
       "category": "__main__",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
-      "line_start": 132,
-      "line_end": 133,
+      "line_start": 137,
+      "line_end": 138,
       "name": "__main__ guard",
       "code": "if __name__ == \"__main__\":\n    main()",
       "hash": "b60851f8e384",
@@ -42935,15 +43149,15 @@
       "category": "statements",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
       "line_start": 2,
-      "line_end": 7,
+      "line_end": 17,
       "name": "block_1",
-      "code": "\"\"\"\n代码可视化工具 - 主入口\n功能：\n1. 函数调用图分析 - 生成 Mermaid 甘特图\n2. 项目结构分析 - 扫描目录结构并统计\n\"\"\"",
-      "hash": "2ede001a9ea4",
+      "code": "\"\"\"\n代码可视化工具 - 主入口\n功能：\n1. 函数调用图分析 - 生成 Mermaid 甘特图\n2. 项目结构分析 - 扫描目录结构并统计\n\"\"\"\n\nif _ROOT not in sys.path:\n    sys.path.insert(0, _ROOT)",
+      "hash": "12d9afa937ba",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "context": "top_level",
-        "statement_count": 1,
+        "statement_count": 2,
         "is_merged": true
       }
     },
@@ -42952,8 +43166,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
-      "line_start": 20,
-      "line_end": 33,
+      "line_start": 25,
+      "line_end": 38,
       "name": "detect_language",
       "code": "def detect_language(project_path: str) -> str:\n    \"\"\"自动检测项目语言\"\"\"\n    extensions = {}\n    for root, dirs, files in os.walk(project_path):\n        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['__pycache__', 'node_modules', 'venv', '.venv', 'build', 'dist']]\n        for file in files:\n            ext = Path(file).suffix.lower()\n            if ext in ['.py', '.c', '.cpp', '.h', '.hpp', '.cc', '.java', '.js', '.ts']:\n                extensions[ext] = extensions.get(ext, 0) + 1\n    if not extensions:\n        return \"unknown\"\n    most_common = max(extensions.items(), key=lambda x: x[1])\n    ext_to_lang = {'.py': 'python', '.js': 'javascript', '.ts': 'typescript', '.c': 'cpp', '.cpp': 'cpp', '.h': 'cpp', '.hpp': 'cpp', '.cc': 'cpp', '.java': 'java'}\n    return ext_to_lang.get(most_common[0], 'unknown')",
       "hash": "4d0213b1703c",
@@ -42972,8 +43186,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
-      "line_start": 36,
-      "line_end": 54,
+      "line_start": 41,
+      "line_end": 59,
       "name": "analyze_project",
       "code": "def analyze_project(project_path: str, language: Optional[str] = None):\n    \"\"\"分析项目\"\"\"\n    if not os.path.exists(project_path):\n        print(f\"[ERROR] Path not found: {project_path}\")\n        sys.exit(1)\n\n    if not language:\n        language = detect_language(project_path)\n        print(f\"[INFO] Detected language: {language}\")\n\n    analyzers = {'python': PythonAnalyzer, 'javascript': PythonAnalyzer, 'typescript': PythonAnalyzer, 'cpp': CppAnalyzer, 'java': JavaAnalyzer}\n    analyzer_class = analyzers.get(language)\n    if not analyzer_class:\n        print(f\"[ERROR] Unsupported language: {language}\")\n        sys.exit(1)\n\n    print(f\"[INFO] Analyzing: {project_path}\")\n    analyzer = analyzer_class(project_path)\n    return analyzer.analyze()",
       "hash": "9e17a01145ea",
@@ -42993,8 +43207,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
-      "line_start": 57,
-      "line_end": 76,
+      "line_start": 62,
+      "line_end": 81,
       "name": "print_statistics",
       "code": "def print_statistics(project_info):\n    \"\"\"打印统计信息\"\"\"\n    print(\"\\n\" + \"=\"*60)\n    print(\"[STATISTICS]\")\n    print(f\"  Language: {project_info.language}\")\n    print(f\"  Files: {len(project_info.files)}\")\n    print(f\"  Functions: {len(project_info.functions)}\")\n    print(f\"  Modules: {len(project_info.modules)}\")\n    print(f\"  Calls: {len(project_info.call_graph)}\")\n    print(\"=\"*60)\n\n    if project_info.functions:\n        print(\"\\n[FUNCTIONS]\")\n        for func in project_info.functions[:10]:\n            print(f\"  - {func.full_name}\")\n            print(f\"    @ {func.file_path}:{func.line_number}\")\n            if func.parameters:\n                print(f\"    Params: {', '.join(func.parameters)}\")\n            if func.calls:\n                print(f\"    Calls: {', '.join(func.calls[:5])}\")",
       "hash": "09bc7d6609b7",
@@ -43013,8 +43227,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/view/codeAnalysis/main.py",
-      "line_start": 79,
-      "line_end": 129,
+      "line_start": 84,
+      "line_end": 134,
       "name": "main",
       "code": "def main():\n    parser = argparse.ArgumentParser(description='Code to Flowchart - Convert code to Mermaid diagrams')\n    parser.add_argument('path', nargs='?', help='Project path')\n    parser.add_argument('--language', '-l', choices=['python', 'cpp', 'java', 'javascript', 'typescript'], help='Specify language')\n    parser.add_argument('--output', '-o', help='Output file')\n    parser.add_argument('--stats', '-s', action='store_true', help='Show statistics only')\n    parser.add_argument('--format', '-f', choices=['full', 'gantt', 'callgraph', 'sequence', 'flow', 'structure', 'tree', 'json'], default='full', help='Output format')\n    parser.add_argument('--entry', '-e', help='Entry function')\n    parser.add_argument('--depth', '-d', type=int, default=8, help='Max depth for structure analysis')\n\n    args = parser.parse_args()\n\n    if not args.path:\n        parser.print_help()\n        sys.exit(1)\n\n    # 如果是结构分析格式，使用新的分析器\n    if args.format in ['structure', 'tree', 'json']:\n        print(f\"\\n[INFO] Analyzing project structure...\")\n        result = analyze_project_structure(args.path, output_format=args.format, max_depth=args.depth)\n        \n        if args.output:\n            with open(args.output, 'w', encoding='utf-8') as f:\n                f.write(result)\n            print(f\"[OK] Saved to: {args.output}\")\n        else:\n            print(\"\\n\" + \"=\"*60)\n            print(\"[OUTPUT]\")\n            print(\"=\"*60)\n            print(result)\n        return\n\n    # 原有的函数调用图分析逻辑\n    project_info = analyze_project(args.path, args.language)\n    print_statistics(project_info)\n\n    if args.stats:\n        return\n\n    print(f\"\\n[INFO] Generating {args.format} format...\")\n    report = generate_mermaid_for_project(project_info, output_format=args.format, entry_func=args.entry)\n\n    if args.output:\n        with open(args.output, 'w', encoding='utf-8') as f:\n            f.write(report)\n        print(f\"[OK] Saved to: {args.output}\")\n    else:\n        print(\"\\n\" + \"=\"*60)\n        print(\"[OUTPUT]\")\n        print(\"=\"*60)\n        print(report)",
       "hash": "a22a82a20e62",
@@ -50277,10 +50491,10 @@
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/index/codeTree/anchor_engine_v2/load_db.py",
       "line_start": 347,
-      "line_end": 370,
+      "line_end": 374,
       "name": "list_anchors",
-      "code": "def list_anchors(root: str = \".\") -> dict:\n    \"\"\"\n    AGENT TOOL — List all registered anchors with their current status.\n    Useful for giving an agent a full picture of what's tracked.\n    \"\"\"\n    rp = Path(root)\n    db_data = _load_db(rp)\n    db = db_data.get(\"anchors\", db_data)\n    \n    result = []\n    for aid, data in db.items():\n        a = Anchor(**data)\n        h, status, _ = compute_hash_v2(a.file, a.symbol, a.line_start, a.line_end, a.hash_mode, rp)\n        drift = \"ok\" if (status == \"ok\" and h == a.hash) else status if status != \"ok\" else \"stale\"\n        result.append({\n            \"anchor_id\": aid,\n            \"file\": a.file,\n            \"symbol\": a.symbol,\n            \"hash\": a.hash,\n            \"drift\": drift,\n            \"description\": a.description,\n            \"hash_mode\": a.hash_mode,\n        })\n    return {\"anchors\": result, \"total\": len(result)}",
-      "hash": "0fb98126bf5d",
+      "code": "def list_anchors(root: str = \".\") -> dict:\n    \"\"\"\n    AGENT TOOL — List all registered anchors with their current status.\n    Useful for giving an agent a full picture of what's tracked.\n    \"\"\"\n    rp = Path(root)\n    db_data = _load_db(rp)\n    db = db_data.get(\"anchors\", db_data)\n    \n    result = []\n    for aid, data in db.items():\n        # `_meta` 是库版本头，不是锚点。空库时 _load_db 只返回 {\"_meta\": ...}，\n        # 原来会把它当锚点塞进 Anchor(**data) 直接 TypeError。\n        if aid.startswith(\"_\") or not isinstance(data, dict):\n            continue\n        a = Anchor(**data)\n        h, status, _ = compute_hash_v2(a.file, a.symbol, a.line_start, a.line_end, a.hash_mode, rp)\n        drift = \"ok\" if (status == \"ok\" and h == a.hash) else status if status != \"ok\" else \"stale\"\n        result.append({\n            \"anchor_id\": aid,\n            \"file\": a.file,\n            \"symbol\": a.symbol,\n            \"hash\": a.hash,\n            \"drift\": drift,\n            \"description\": a.description,\n            \"hash_mode\": a.hash_mode,\n        })\n    return {\"anchors\": result, \"total\": len(result)}",
+      "hash": "e9aabcd71d18",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -50296,8 +50510,8 @@
       "language": "py",
       "category": "functions",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/index/codeTree/anchor_engine_v2/load_db.py",
-      "line_start": 372,
-      "line_end": 450,
+      "line_start": 376,
+      "line_end": 454,
       "name": "generate_all_anchors",
       "code": "def generate_all_anchors(\n    root: str = \".\",\n    exclude_dirs: Optional[list] = None,\n) -> dict:\n    \"\"\"\n    一键为项目所有符号生成锚点。\n\n    参数:\n        root: 项目根目录\n        exclude_dirs: 要排除的目录名列表，None 时使用默认排除列表\n\n    返回:\n        {\n            \"created\": 新建锚点数,\n            \"skipped\": 已存在跳过数,\n            \"failed\": 失败数,\n            \"total_symbols\": 发现符号总数,\n            \"total_anchors\": 锚点总数,\n            \"errors\": [失败详情列表],\n        }\n    \"\"\"\n    from synth.codeTree.deep_drift import _list_all_symbols, _DEFAULT_EXCLUDE_DIRS\n\n    rp = Path(root)\n    skip_set = set(exclude_dirs) if exclude_dirs else _DEFAULT_EXCLUDE_DIRS.copy()\n\n    # 第 1 步：获取所有符号\n    symbols = _list_all_symbols(rp, exclude_dirs=skip_set)\n\n    # 第 2 步：加载已有锚点\n    db = _load_db(rp)\n    existing = set(db.get(\"anchors\", {}).keys())\n\n    created = 0\n    skipped = 0\n    failed = 0\n    errors = []\n\n    for sym in symbols:\n        # 生成 anchor_id：相对路径(去掉.py) + 符号名\n        file_stem = sym[\"file\"].replace(\"/\", \".\").replace(\".py\", \"\")\n        anchor_id = f\"{file_stem}.{sym['symbol']}\"\n\n        if anchor_id in existing:\n            skipped += 1\n            continue\n\n        # 提取符号行号（_list_all_symbols 已返回 line/line_end 字段）\n        sym_start = sym.get(\"line\")\n        sym_end = sym.get(\"line_end\", sym_start)\n\n        try:\n            result = create_anchor(\n                anchor_id=anchor_id,\n                file=sym[\"file\"],\n                symbol=sym[\"symbol\"],\n                line_start=sym_start,\n                line_end=sym_end,\n                description=f\"{sym['type']}: {sym['symbol']}\",\n                root=root,\n            )\n            if result.get(\"status\") == \"created\":\n                existing.add(anchor_id)\n                created += 1\n            else:\n                failed += 1\n                errors.append({\"anchor_id\": anchor_id, \"reason\": result.get(\"status\", \"unknown\")})\n        except Exception as e:\n            failed += 1\n            errors.append({\"anchor_id\": anchor_id, \"reason\": str(e)})\n\n    return {\n        \"created\": created,\n        \"skipped\": skipped,\n        \"failed\": failed,\n        \"total_symbols\": len(symbols),\n        \"total_anchors\": created + skipped,\n        \"errors\": errors[:20],  # 最多返回 20 条错误\n    }",
       "hash": "a9e703bd1e55",
@@ -55940,21 +56154,103 @@
         "is_async": false
       }
     },
+    "serve/__init__.py::import:_sys": {
+      "id": "serve/__init__.py::import:_sys",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py",
+      "line_start": 1,
+      "line_end": 13,
+      "name": "_sys",
+      "code": "import sys as _sys",
+      "hash": "c6af92354eea",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    "serve/__init__.py::import:_Path": {
+      "id": "serve/__init__.py::import:_Path",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py",
+      "line_start": 1,
+      "line_end": 14,
+      "name": "_Path",
+      "code": "from pathlib import Path as _Path",
+      "hash": "4a332d8667e6",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "pathlib"
+      }
+    },
+    "serve/__init__.py::import:*": {
+      "id": "serve/__init__.py::import:*",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py",
+      "line_start": 1,
+      "line_end": 21,
+      "name": "*",
+      "code": "from serve.api import *",
+      "hash": "2b856039dc8c",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "serve.api"
+      }
+    },
+    "serve/__init__.py::import:__all__": {
+      "id": "serve/__init__.py::import:__all__",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py",
+      "line_start": 1,
+      "line_end": 22,
+      "name": "__all__",
+      "code": "from serve.api import __all__",
+      "hash": "2b261fddd70f",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "serve.api"
+      }
+    },
+    "serve/__init__.py::assign:block_1": {
+      "id": "serve/__init__.py::assign:block_1",
+      "language": "py",
+      "category": "assigns",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py",
+      "line_start": 17,
+      "line_end": 17,
+      "name": "block_1",
+      "code": "_ROOT = str(_Path(__file__).resolve().parent.parent)",
+      "hash": "bf2c1e85591a",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "targets": [
+          "_ROOT"
+        ],
+        "is_merged": true,
+        "statement_count": 1
+      }
+    },
     "serve/__init__.py::statement:block_1": {
       "id": "serve/__init__.py::statement:block_1",
       "language": "py",
       "category": "statements",
       "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py",
       "line_start": 1,
-      "line_end": 5,
+      "line_end": 19,
       "name": "block_1",
-      "code": "\"\"\"\nCodeDendrite 测试模块\n====================\n测试 L1-L5 所有功能模块。\n\"\"\"",
-      "hash": "5ce987eb7da2",
+      "code": "\"\"\"\nCodeDendrite 服务层\n==================\n对外公开接口的唯一出口。真正的导出清单在 ``serve/api/__init__.py``，\n这里原样再导出一遍，好让 ``import serve`` 与 ``import serve.api`` 等价：\n\n    from serve import scan_project, analyze_code, search_symbol\n\n七个桶（base / parse / index / relate / synth / view / serve）是本目录下的\n顶层包，被当作库 import 时需要让它们可见。\n\"\"\"\n\nif _ROOT not in _sys.path:\n    _sys.path.insert(0, _ROOT)",
+      "hash": "bc490af4054c",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
         "context": "top_level",
-        "statement_count": 1,
+        "statement_count": 2,
         "is_merged": true
       }
     },
@@ -56098,8 +56394,8 @@
       "line_start": 22,
       "line_end": 216,
       "name": "block_1",
-      "code": "_HERE = os.path.dirname(os.path.abspath(__file__))\n\n_PARENT = os.path.dirname(os.path.dirname(_HERE))\n\nROOT = _parse_root()\n\n_cache: dict = {}\n\napp = Server(\"codedendrite\")",
-      "hash": "b968c1413a8d",
+      "code": "_HERE = os.path.dirname(os.path.abspath(__file__))\n\n_PARENT = os.path.dirname(_HERE)\n\nROOT = _parse_root()\n\n_cache: dict = {}\n\napp = Server(\"codedendrite\")",
+      "hash": "a9f3d28fdf6a",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -56174,8 +56470,8 @@
       "line_start": 47,
       "line_end": 51,
       "name": "_anchors",
-      "code": "def _anchors():\n    if \"anchors\" not in _cache:\n        from tools.CodeDendrite.api.anchors import load_anchors\n        _cache[\"anchors\"] = load_anchors(ROOT)\n    return _cache[\"anchors\"]",
-      "hash": "a240d0ac6d8d",
+      "code": "def _anchors():\n    if \"anchors\" not in _cache:\n        from index.api.anchors import load_anchors\n        _cache[\"anchors\"] = load_anchors(ROOT)\n    return _cache[\"anchors\"]",
+      "hash": "996f45346475",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -56246,8 +56542,8 @@
       "line_start": 84,
       "line_end": 109,
       "name": "tool_context",
-      "code": "def tool_context(query: str, level: str = \"l2\") -> str:\n    \"\"\"Task context packet for a symbol / keyword.\"\"\"\n    from tools.CodeDendrite.api.task_context_packet import (\n        resolve_task_anchor, build_level0, build_level1, build_level2, build_anchor_packet,\n    )\n    anchors = _anchors()\n    relations = _relations()\n    module_tree = _module_tree()\n\n    matches = resolve_task_anchor(query, anchors)\n    if not matches:\n        return f\"No anchor found for: {query}\"\n\n    lv = level.lower()\n    if lv == \"l0\":\n        result = build_level0(ROOT, module_tree)\n        return json.dumps(result, ensure_ascii=False, indent=2)\n    if lv == \"l1\":\n        anchor_id, anchor_obj, _ = matches[0]\n        result = build_level1(anchor_id, anchor_obj, anchors, relations, module_tree)\n        return json.dumps(result, ensure_ascii=False, indent=2)\n\n    # default l2\n    anchor_id, anchor_obj, _ = matches[0]\n    result = build_level2(anchor_id, anchor_obj, anchors, relations, module_tree)\n    return json.dumps(result, ensure_ascii=False, indent=2)",
-      "hash": "5fead0687a3e",
+      "code": "def tool_context(query: str, level: str = \"l2\") -> str:\n    \"\"\"Task context packet for a symbol / keyword.\"\"\"\n    from synth.api.task_context_packet import (\n        resolve_task_anchor, build_level0, build_level1, build_level2, build_anchor_packet,\n    )\n    anchors = _anchors()\n    relations = _relations()\n    module_tree = _module_tree()\n\n    matches = resolve_task_anchor(query, anchors)\n    if not matches:\n        return f\"No anchor found for: {query}\"\n\n    lv = level.lower()\n    if lv == \"l0\":\n        result = build_level0(ROOT, module_tree)\n        return json.dumps(result, ensure_ascii=False, indent=2)\n    if lv == \"l1\":\n        anchor_id, anchor_obj, _ = matches[0]\n        result = build_level1(anchor_id, anchor_obj, anchors, relations, module_tree)\n        return json.dumps(result, ensure_ascii=False, indent=2)\n\n    # default l2\n    anchor_id, anchor_obj, _ = matches[0]\n    result = build_level2(anchor_id, anchor_obj, anchors, relations, module_tree)\n    return json.dumps(result, ensure_ascii=False, indent=2)",
+      "hash": "8e0c2cedae98",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -56267,8 +56563,8 @@
       "line_start": 112,
       "line_end": 123,
       "name": "tool_symbol",
-      "code": "def tool_symbol(symbol: str) -> str:\n    \"\"\"Look up a symbol: file, line, callers, callees.\"\"\"\n    from tools.CodeDendrite.api.task_context_packet import (\n        resolve_task_anchor, build_anchor_packet,\n    )\n    anchors = _anchors()\n    relations = _relations()\n    matches = resolve_task_anchor(symbol, anchors)\n    if not matches:\n        return f\"Symbol not found: {symbol}\"\n    packet = build_anchor_packet(matches, anchors, relations)\n    return json.dumps(packet, ensure_ascii=False, indent=2)",
-      "hash": "27f5726ac093",
+      "code": "def tool_symbol(symbol: str) -> str:\n    \"\"\"Look up a symbol: file, line, callers, callees.\"\"\"\n    from synth.api.task_context_packet import (\n        resolve_task_anchor, build_anchor_packet,\n    )\n    anchors = _anchors()\n    relations = _relations()\n    matches = resolve_task_anchor(symbol, anchors)\n    if not matches:\n        return f\"Symbol not found: {symbol}\"\n    packet = build_anchor_packet(matches, anchors, relations)\n    return json.dumps(packet, ensure_ascii=False, indent=2)",
+      "hash": "e78a30b05b56",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -56287,8 +56583,8 @@
       "line_start": 126,
       "line_end": 147,
       "name": "tool_search",
-      "code": "def tool_search(keyword: str, limit: int = 20) -> str:\n    \"\"\"Search anchors by keyword (symbol name, file path, or free text).\"\"\"\n    from tools.CodeDendrite.api.task_context_packet import resolve_task_anchor\n    anchors = _anchors()\n    matches = resolve_task_anchor(keyword, anchors)\n    rows = []\n    for aid, anchor, match_type in matches[:limit]:\n        rows.append({\n            \"id\": aid,\n            \"file\": getattr(anchor, \"file\", anchor.get(\"file\", \"\") if isinstance(anchor, dict) else \"\"),\n            \"line\": getattr(anchor, \"line_start\", anchor.get(\"line_start\", 0) if isinstance(anchor, dict) else 0),\n            \"match\": match_type,\n        })\n    if not rows:\n        # fallback: substring search on all anchor ids\n        kw = keyword.lower()\n        for aid, anchor in anchors.items():\n            if kw in aid.lower():\n                rows.append({\"id\": aid, \"match\": \"substring\"})\n            if len(rows) >= limit:\n                break\n    return json.dumps(rows, ensure_ascii=False, indent=2)",
-      "hash": "7cf57f5fffb6",
+      "code": "def tool_search(keyword: str, limit: int = 20) -> str:\n    \"\"\"Search anchors by keyword (symbol name, file path, or free text).\"\"\"\n    from synth.api.task_context_packet import resolve_task_anchor\n    anchors = _anchors()\n    matches = resolve_task_anchor(keyword, anchors)\n    rows = []\n    for aid, anchor, match_type in matches[:limit]:\n        rows.append({\n            \"id\": aid,\n            \"file\": getattr(anchor, \"file\", anchor.get(\"file\", \"\") if isinstance(anchor, dict) else \"\"),\n            \"line\": getattr(anchor, \"line_start\", anchor.get(\"line_start\", 0) if isinstance(anchor, dict) else 0),\n            \"match\": match_type,\n        })\n    if not rows:\n        # fallback: substring search on all anchor ids\n        kw = keyword.lower()\n        for aid, anchor in anchors.items():\n            if kw in aid.lower():\n                rows.append({\"id\": aid, \"match\": \"substring\"})\n            if len(rows) >= limit:\n                break\n    return json.dumps(rows, ensure_ascii=False, indent=2)",
+      "hash": "e4a06a002c5d",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
@@ -58484,12 +58780,12 @@
       "line_start": 1,
       "line_end": 6,
       "name": "load_anchors",
-      "code": "from tools.CodeDendrite.api.anchors import load_anchors",
-      "hash": "61a4a74fd04c",
+      "code": "from index.api.anchors import load_anchors",
+      "hash": "3e332d4133aa",
       "parent_id": "",
       "children_ids": [],
       "metadata": {
-        "from_module": "tools.CodeDendrite.api.anchors"
+        "from_module": "index.api.anchors"
       }
     },
     "serve/api/outline.py::assign:block_1": {
@@ -76130,6 +76426,928 @@
         "is_async": false
       }
     },
+    ".cache/smoke_public_api.py::import:inspect": {
+      "id": ".cache/smoke_public_api.py::import:inspect",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 7,
+      "name": "inspect",
+      "code": "import inspect",
+      "hash": "32ee1b60eac5",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_public_api.py::import:sys": {
+      "id": ".cache/smoke_public_api.py::import:sys",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 8,
+      "name": "sys",
+      "code": "import sys",
+      "hash": "83d8e9e427df",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_public_api.py::import:traceback": {
+      "id": ".cache/smoke_public_api.py::import:traceback",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 9,
+      "name": "traceback",
+      "code": "import traceback",
+      "hash": "c3ce868984ab",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_public_api.py::import:Path": {
+      "id": ".cache/smoke_public_api.py::import:Path",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 10,
+      "name": "Path",
+      "code": "from pathlib import Path",
+      "hash": "9b5c42011415",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "pathlib"
+      }
+    },
+    ".cache/smoke_public_api.py::import:serve": {
+      "id": ".cache/smoke_public_api.py::import:serve",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 20,
+      "name": "serve",
+      "code": "import serve",
+      "hash": "89c47e92dcbc",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_public_api.py::import:CD": {
+      "id": ".cache/smoke_public_api.py::import:CD",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 165,
+      "name": "CD",
+      "code": "import CodeDendrite_refactor as CD",
+      "hash": "60ca87493297",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_public_api.py::assign:block_1": {
+      "id": ".cache/smoke_public_api.py::assign:block_1",
+      "language": "py",
+      "category": "assigns",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 12,
+      "line_end": 148,
+      "name": "block_1",
+      "code": "_REPO = Path(__file__).resolve().parent.parent\n\nROOT = \"_smoke_fixture\"\n\nPKG = \"pkg/base.py\"\n\nFLOW = \"pkg/flow.py\"\n\nRESULTS = []\n\n_index = serve.build_class_index(ROOT)\n\n_chain = serve.trace_inheritance(\"Puppy\", root=ROOT)\n\n_chain = _chain.get(\"chain\", []) if isinstance(_chain, dict) else []\n\n_wf = dict(error_msg=\"boom\", file_path=PKG, root=ROOT, refresh=False)\n\n_node = \"pkg/flow.py::build_dog\"\n\n_mt = serve.load_module_tree(ROOT)\n\n_mods = _mt.get(\"semantic_modules\") or _mt.get(\"modules\") or []\n\n_mid = (_mods[0].get(\"id\") or _mods[0].get(\"name\")) if _mods else \"nope\"",
+      "hash": "4d086b1dcbff",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "targets": [
+          "_REPO",
+          "ROOT",
+          "PKG",
+          "FLOW",
+          "RESULTS",
+          "_index",
+          "_chain",
+          "_chain",
+          "_wf",
+          "_node",
+          "_mt",
+          "_mods",
+          "_mid"
+        ],
+        "is_merged": true,
+        "statement_count": 13
+      }
+    },
+    ".cache/smoke_public_api.py::__main__:guard": {
+      "id": ".cache/smoke_public_api.py::__main__:guard",
+      "language": "py",
+      "category": "__main__",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 196,
+      "line_end": 197,
+      "name": "__main__ guard",
+      "code": "if __name__ == \"__main__\":\n    raise SystemExit(main())",
+      "hash": "a19977043f22",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "is_main_guard": true
+      }
+    },
+    ".cache/smoke_public_api.py::statement:block_1": {
+      "id": ".cache/smoke_public_api.py::statement:block_1",
+      "language": "py",
+      "category": "statements",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 1,
+      "line_end": 175,
+      "name": "block_1",
+      "code": "\"\"\"公开 API 全量功能冒烟。对 _smoke_fixture 工程逐点调用，打 OK/FAIL。\n\n用法：\n    PY=~/Workspace/SOFTWARE/env/miniforge3/envs/parallm/bin/python\n    $PY .cache/smoke_public_api.py\n\"\"\"\n\nsys.path.insert(0, str(_REPO))\n\nsys.path.insert(0, str(_REPO.parent))\n\nsection(\"项目扫描\")\n\ncheck(\"scan_project\", lambda: serve.scan_project(root=ROOT))\n\ncheck(\"on_files_changed\", lambda: serve.on_files_changed([PKG], root=ROOT))\n\ncheck(\"analyze_error\", lambda: serve.analyze_error(\"boom\", file_path=PKG, root=ROOT))\n\ncheck(\"find_definition\", lambda: serve.find_definition(\"Dog\", PKG, root=ROOT))\n\ncheck(\"trace_data\", lambda: serve.trace_data(\"name\", \"describe\", f\"{ROOT}/{PKG}\", root=ROOT))\n\ncheck(\"get_cache_stats\", lambda: serve.get_cache_stats(root=ROOT))\n\ncheck(\"clear_cache\", lambda: serve.clear_cache(root=ROOT))\n\nsection(\"代码分析\")\n\ncheck(\"analyze_code\", lambda: serve.analyze_code(str(Path(ROOT) / PKG), root=ROOT))\n\ncheck(\"search_symbol\", lambda: serve.search_symbol(\"Dog\", root=ROOT))\n\ncheck(\"get_analyzer\", lambda: serve.get_analyzer(ROOT, \"python\"))\n\ncheck(\"analyze_project_structure\", lambda: serve.analyze_project_structure(ROOT))\n\nfor _name in (\"PythonAnalyzer\", \"TypeScriptAnalyzer\", \"CppAnalyzer\", \"JavaAnalyzer\",\n              \"PhpAnalyzer\", \"RubyAnalyzer\", \"GoAnalyzer\", \"RustAnalyzer\",\n              \"SwiftAnalyzer\", \"KotlinAnalyzer\", \"HtmlAnalyzer\"):\n    check(_name, (lambda n=_name: getattr(serve, n)(ROOT)))\n\ncheck(\"generate_mermaid_for_project\", lambda: serve.generate_mermaid_for_project(_project_info()))\n\nsection(\"继承追踪\")\n\ncheck(\"parse_python_file\", lambda: serve.parse_python_file(PKG))\n\ncheck(\"build_class_index\", lambda: serve.build_class_index(ROOT))\n\ncheck(\"trace_inheritance\", lambda: serve.trace_inheritance(\"Puppy\", root=ROOT))\n\ncheck(\"create_tracker\", lambda: serve.create_tracker(ROOT))\n\ncheck(\"resolve_external_class\", lambda: serve.resolve_external_class(\"Animal\", PKG))\n\ncheck(\"find_subclasses\", lambda: serve.find_subclasses(_index, \"Animal\"))\n\ncheck(\"resolve_inheritance\", lambda: serve.resolve_inheritance(\"Puppy\", _index))\n\ncheck(\"compute_mro\", lambda: serve.compute_mro(\"Puppy\", _index))\n\ncheck(\"find_method_origin\", lambda: serve.find_method_origin(\"Puppy\", \"speak\", _index))\n\ncheck(\"analyze_super_calls\", lambda: serve.analyze_super_calls(_chain))\n\ncheck(\"build_override_chain\", lambda: serve.build_override_chain(_chain, \"speak\"))\n\nsection(\"数据流分析\")\n\ncheck(\"analyze_dataflow\", lambda: serve.analyze_dataflow(\"describe\", f\"{ROOT}/{PKG}\"))\n\ncheck(\"get_function_inputs\", lambda: serve.get_function_inputs(f\"{ROOT}/{FLOW}\", \"build_dog\"))\n\ncheck(\"get_function_outputs\", lambda: serve.get_function_outputs(f\"{ROOT}/{FLOW}\", \"build_dog\"))\n\ncheck(\"get_transformations\", lambda: serve.get_transformations(f\"{ROOT}/{FLOW}\", \"build_dog\"))\n\ncheck(\"trace_variable\", lambda: serve.trace_variable(f\"{ROOT}/{FLOW}\", \"build_dog\", \"cfg\"))\n\ncheck(\"analyze_call_chain\", lambda: serve.analyze_call_chain(\"build_dog\", {\"root\": ROOT}))\n\ncheck(\"generate_dataflow_html\", lambda: serve.generate_dataflow_html(\n    str(Path(ROOT) / \".codedendrite\"), \".cache/dataflow.html\"))\n\nsection(\"智能分析\")\n\ncheck(\"smart_analyze\", lambda: serve.smart_analyze(\"boom\", file=PKG, root=ROOT))\n\nsection(\"工作流\")\n\ncheck(\"debug_workflow\", lambda: serve.debug_workflow(\"boom\", PKG, ROOT))\n\ncheck(\"locate_bug\", lambda: serve.locate_bug(**_wf))\n\ncheck(\"diagnose_bug\", lambda: serve.diagnose_bug(**_wf))\n\ncheck(\"plan_fix\", lambda: serve.plan_fix(**_wf))\n\ncheck(\"verify_fix\", lambda: serve.verify_fix(**_wf))\n\ncheck(\"run_debug_loop\", lambda: serve.run_debug_loop(**_wf))\n\nsection(\"锚点管理\")\n\ncheck(\"list_all_symbols\", lambda: serve.list_all_symbols(ROOT))\n\ncheck(\"list_anchors\", lambda: serve.list_anchors(ROOT))\n\ncheck(\"load_anchors\", lambda: serve.load_anchors(ROOT))\n\ncheck(\"generate_all_anchors\", lambda: serve.generate_all_anchors(ROOT))\n\ncheck(\"update_anchors_for_files\", lambda: serve.update_anchors_for_files(ROOT, [PKG]))\n\ncheck(\"check_all_anchors\", lambda: serve.check_all_anchors(ROOT))\n\ncheck(\"get_anchor\", lambda: serve.get_anchor(\"pkg/flow.py::build_dog\", root=ROOT))\n\ncheck(\"filter_anchors_by_file\", lambda: serve.filter_anchors_by_file(\"base.py\", root=ROOT))\n\ncheck(\"create_anchor\", lambda: serve.create_anchor(\n    \"smoke.dog\", PKG, symbol=\"Dog\", description=\"smoke\", root=ROOT))\n\nsection(\"关系图\")\n\ncheck(\"generate_relations\", lambda: serve.generate_relations(ROOT))\n\ncheck(\"load_relations\", lambda: serve.load_relations(ROOT))\n\ncheck(\"count_edge_types\", lambda: serve.count_edge_types(ROOT))\n\ncheck(\"get_node_edges\", lambda: serve.get_node_edges(_node, ROOT))\n\ncheck(\"expand_node\", lambda: serve.expand_node(_node, ROOT))\n\ncheck(\"filter_edges_by_keyword\", lambda: serve.filter_edges_by_keyword(\"Dog\", ROOT))\n\nsection(\"模块树\")\n\ncheck(\"generate_module_tree\", lambda: serve.generate_module_tree(ROOT))\n\ncheck(\"load_module_tree\", lambda: serve.load_module_tree(ROOT))\n\ncheck(\"generate_module_summary\", lambda: serve.generate_module_summary(ROOT))\n\ncheck(\"load_summary_cache\", lambda: serve.load_summary_cache(ROOT))\n\ncheck(\"get_module\", lambda: serve.get_module(_mid, ROOT), f\"id={_mid}\")\n\ncheck(\"find_module_for_symbol\", lambda: serve.find_module_for_symbol(\"Dog\", ROOT))\n\ncheck(\"query_modules\", lambda: serve.query_modules(\"dog\", ROOT))\n\nsection(\"导航链\")\n\ncheck(\"Step\", lambda: serve.Step(status=\"need_evidence\", signal=\"s\"))\n\ncheck(\"Target\", lambda: serve.Target(symbol=\"Dog.speak\", code=\"x\", problem=\"p\", context=\"c\"))\n\ncheck(\"start\", lambda: serve.start(ROOT, \"boom\", PKG, refresh=False))\n\ncheck(\"jump\", lambda: serve.jump(\"pkg/base.py::Dog\", ROOT))\n\ncheck(\"get_target\", lambda: serve.get_target(ROOT))\n\ncheck(\"done\", lambda: serve.done(ROOT, \"Dog.speak\", \"smoke\"))\n\ncheck(\"escalate\", lambda: serve.escalate(ROOT, \"Dog.speak\", \"smoke\"))\n\nsection(\"顶层可选项\")\n\nfor _name in (\"ContextBuilder\", \"SymbolExpander\", \"PathTracer\",\n              \"NodeReplacer\", \"AnchorMemory\", \"Observation\"):\n    check(_name, (lambda n=_name: getattr(CD, n)))\n\ncheck(\"ContextBuilder()\", lambda: CD.ContextBuilder(ROOT))\n\ncheck(\"SymbolExpander()\", lambda: CD.SymbolExpander(ROOT))\n\ncheck(\"PathTracer()\", lambda: CD.PathTracer(ROOT))\n\ncheck(\"NodeReplacer()\", lambda: CD.NodeReplacer(serve.load_anchors(ROOT)))\n\ncheck(\"AnchorMemory()\", lambda: CD.AnchorMemory(ROOT))\n\ncheck(\"Observation()\", lambda: CD.Observation(\"smoke\", \"code\", 0.9))",
+      "hash": "ae31eb287b49",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "context": "top_level",
+        "statement_count": 88,
+        "is_merged": true
+      }
+    },
+    ".cache/smoke_public_api.py::check": {
+      "id": ".cache/smoke_public_api.py::check",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 25,
+      "line_end": 30,
+      "name": "check",
+      "code": "def check(name, fn, note=\"\"):\n    try:\n        out = fn()\n        RESULTS.append((name, True, _brief(out), note))\n    except BaseException as exc:  # noqa: BLE001\n        RESULTS.append((name, False, f\"{type(exc).__name__}: {exc}\"[:110], note))",
+      "hash": "873c66d88b6c",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "name",
+          "fn",
+          "note"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_public_api.py::_brief": {
+      "id": ".cache/smoke_public_api.py::_brief",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 33,
+      "line_end": 38,
+      "name": "_brief",
+      "code": "def _brief(out):\n    if out is None:\n        return \"None\"\n    if isinstance(out, (list, tuple, set, dict, str)):\n        return f\"{type(out).__name__}({len(out)})\"\n    return type(out).__name__",
+      "hash": "52b99b9993e1",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "out"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_public_api.py::section": {
+      "id": ".cache/smoke_public_api.py::section",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 41,
+      "line_end": 42,
+      "name": "section",
+      "code": "def section(title):\n    RESULTS.append((f\"── {title} ──\", None, \"\", \"\"))",
+      "hash": "36db8e411db7",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "title"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_public_api.py::_project_info": {
+      "id": ".cache/smoke_public_api.py::_project_info",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 67,
+      "line_end": 68,
+      "name": "_project_info",
+      "code": "def _project_info():\n    return serve.PythonAnalyzer(ROOT).analyze()",
+      "hash": "8e8afcdae1e5",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_public_api.py::main": {
+      "id": ".cache/smoke_public_api.py::main",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py",
+      "line_start": 179,
+      "line_end": 193,
+      "name": "main",
+      "code": "def main():\n    ok = sum(1 for _, s, _, _ in RESULTS if s is True)\n    bad = [r for r in RESULTS if r[2 - 1] is False]\n    for name, state, brief, note in RESULTS:\n        if state is None:\n            print(f\"\\n{name}\")\n        else:\n            mark = \"OK  \" if state else \"FAIL\"\n            extra = f\"  <- {brief}\" if state else f\"  <- {brief}\"\n            tail = f\"  [{note}]\" if note else \"\"\n            print(f\"  {mark} {name:32s}{extra}{tail}\")\n    print(f\"\\n调用点 {ok + len(bad)}  通过 {ok}  失败 {len(bad)}\")\n    for name, _, brief, _ in bad:\n        print(f\"  FAIL {name}: {brief}\")\n    return 1 if bad else 0",
+      "hash": "bff03194e57c",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_subsystems.py::import:contextlib": {
+      "id": ".cache/smoke_subsystems.py::import:contextlib",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 7,
+      "name": "contextlib",
+      "code": "import contextlib",
+      "hash": "e463e1373888",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_subsystems.py::import:io": {
+      "id": ".cache/smoke_subsystems.py::import:io",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 8,
+      "name": "io",
+      "code": "import io",
+      "hash": "336588ec8cf0",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_subsystems.py::import:signal": {
+      "id": ".cache/smoke_subsystems.py::import:signal",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 9,
+      "name": "signal",
+      "code": "import signal",
+      "hash": "d7fafb998798",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_subsystems.py::import:sys": {
+      "id": ".cache/smoke_subsystems.py::import:sys",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 10,
+      "name": "sys",
+      "code": "import sys",
+      "hash": "83d8e9e427df",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_subsystems.py::import:traceback": {
+      "id": ".cache/smoke_subsystems.py::import:traceback",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 11,
+      "name": "traceback",
+      "code": "import traceback",
+      "hash": "c3ce868984ab",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_subsystems.py::import:Path": {
+      "id": ".cache/smoke_subsystems.py::import:Path",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 12,
+      "name": "Path",
+      "code": "from pathlib import Path",
+      "hash": "9b5c42011415",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "pathlib"
+      }
+    },
+    ".cache/smoke_subsystems.py::import:Q": {
+      "id": ".cache/smoke_subsystems.py::import:Q",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 62,
+      "name": "Q",
+      "code": "from serve.api import query as Q",
+      "hash": "5c871e4b6589",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "serve.api"
+      }
+    },
+    ".cache/smoke_subsystems.py::import:I": {
+      "id": ".cache/smoke_subsystems.py::import:I",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 63,
+      "name": "I",
+      "code": "from serve.api import inspector as I",
+      "hash": "4e96f09f5ddc",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "serve.api"
+      }
+    },
+    ".cache/smoke_subsystems.py::import:N": {
+      "id": ".cache/smoke_subsystems.py::import:N",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 64,
+      "name": "N",
+      "code": "from serve.api import navigator as N",
+      "hash": "1bda19e11669",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "serve.api"
+      }
+    },
+    ".cache/smoke_subsystems.py::import:DD": {
+      "id": ".cache/smoke_subsystems.py::import:DD",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 98,
+      "name": "DD",
+      "code": "from synth.codeTree import deep_drift as DD",
+      "hash": "b1bfd2892b76",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "synth.codeTree"
+      }
+    },
+    ".cache/smoke_subsystems.py::import:V": {
+      "id": ".cache/smoke_subsystems.py::import:V",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 105,
+      "name": "V",
+      "code": "from view import visualize as V",
+      "hash": "a0185d678281",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "view"
+      }
+    },
+    ".cache/smoke_subsystems.py::import:AT": {
+      "id": ".cache/smoke_subsystems.py::import:AT",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 112,
+      "name": "AT",
+      "code": "import serve.ai_tools as AT",
+      "hash": "63193cb66061",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/smoke_subsystems.py::assign:block_1": {
+      "id": ".cache/smoke_subsystems.py::assign:block_1",
+      "language": "py",
+      "category": "assigns",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 14,
+      "line_end": 67,
+      "name": "block_1",
+      "code": "_REPO = Path(__file__).resolve().parent.parent\n\nROOT = \".\"\n\nOUT = Path(\".cache\")\n\nCALL_TIMEOUT = 90\n\nRESULTS = []\n\nSYM = \"serve/api/cli/ensure_path.py::rebuild\"\n\nFILE = \"serve/api/cli/ensure_path.py\"",
+      "hash": "53e8f957a8eb",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "targets": [
+          "_REPO",
+          "ROOT",
+          "OUT",
+          "CALL_TIMEOUT",
+          "RESULTS",
+          "SYM",
+          "FILE"
+        ],
+        "is_merged": true,
+        "statement_count": 7
+      }
+    },
+    ".cache/smoke_subsystems.py::__main__:guard": {
+      "id": ".cache/smoke_subsystems.py::__main__:guard",
+      "language": "py",
+      "category": "__main__",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 133,
+      "line_end": 134,
+      "name": "__main__ guard",
+      "code": "if __name__ == \"__main__\":\n    raise SystemExit(main())",
+      "hash": "a19977043f22",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "is_main_guard": true
+      }
+    },
+    ".cache/smoke_subsystems.py::statement:block_1": {
+      "id": ".cache/smoke_subsystems.py::statement:block_1",
+      "language": "py",
+      "category": "statements",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 1,
+      "line_end": 115,
+      "name": "block_1",
+      "code": "\"\"\"子系统（cdd 读命令后端）功能冒烟。打在仓库自身的索引上。\n\n用法：\n    PY=~/Workspace/SOFTWARE/env/miniforge3/envs/parallm/bin/python\n    $PY .cache/smoke_subsystems.py\n\"\"\"\n\nsys.path.insert(0, str(_REPO))\n\nsection(\"query（cdd 读命令后端）\")\n\ncheck(\"cmd_anchors\", lambda: Q.cmd_anchors(\"load_anchors\", ROOT))\n\ncheck(\"cmd_chain down\", lambda: Q.cmd_chain(SYM, ROOT, depth=6, direction=\"down\"))\n\ncheck(\"cmd_chain up\", lambda: Q.cmd_chain(SYM, ROOT, depth=6, direction=\"up\"))\n\ncheck(\"cmd_codemap\", lambda: Q.cmd_codemap(ROOT))\n\ncheck(\"cmd_count\", lambda: Q.cmd_count(ROOT))\n\ncheck(\"cmd_edges\", lambda: Q.cmd_edges(\"load_anchors\", ROOT))\n\ncheck(\"cmd_expand\", lambda: Q.cmd_expand(SYM, ROOT))\n\ncheck(\"cmd_fileanchors\", lambda: Q.cmd_fileanchors(FILE, ROOT))\n\ncheck(\"cmd_graph\", lambda: Q.cmd_graph(SYM, ROOT, radius=2))\n\ncheck(\"cmd_map\", lambda: Q.cmd_map(\"compact\", ROOT))\n\ncheck(\"cmd_registered\", lambda: Q.cmd_registered(ROOT))\n\ncheck(\"cmd_timeline\", lambda: Q.cmd_timeline(SYM, ROOT, depth=4))\n\nsection(\"inspector\")\n\ncheck(\"find_anchor\", lambda: I.find_anchor(\"load_anchors\", ROOT))\n\ncheck(\"get_anchor_source\", lambda: I.get_anchor_source(SYM, ROOT))\n\ncheck(\"get_anchor_relations\", lambda: I.get_anchor_relations(SYM, ROOT))\n\ncheck(\"get_downward_chain\", lambda: I.get_downward_chain(SYM, ROOT, max_depth=4))\n\ncheck(\"get_upward_chain\", lambda: I.get_upward_chain(SYM, ROOT, max_depth=4))\n\ncheck(\"list_file_anchors\", lambda: I.list_file_anchors(FILE, ROOT))\n\ncheck(\"find_attribute_call_sites\", lambda: I.find_attribute_call_sites(\"get\", ROOT, limit=10))\n\nsection(\"navigator\")\n\ncheck(\"navigate\", lambda: N.navigate(ROOT, error_msg=\"boom\", file_path=FILE, max_steps=6))\n\ncheck(\"step_to_str\", lambda: N.step_to_str(N.start(ROOT, \"boom\", FILE, refresh=False)))\n\ncheck(\"target_to_str\", lambda: N.target_to_str(N.Target(symbol=\"s\", code=\"c\", problem=\"p\", context=\"x\")))\n\nsection(\"deep_drift（需 git）\")\n\ncheck(\"git_log_files\", lambda: DD.git_log_files(str(_REPO), since=\"HEAD~1\"))\n\ncheck(\"git_diff_file\", lambda: DD.git_diff_file(FILE, str(_REPO), since=\"HEAD\"))\n\ncheck(\"fuzzy_find_symbol\", lambda: DD.fuzzy_find_symbol(\"load_anchors\", FILE, str(_REPO)))\n\ncheck(\"deep_drift_report\", lambda: DD.deep_drift_report(str(_REPO), since=\"HEAD\"))\n\nsection(\"visualize / 出图\")\n\ncheck(\"generate_code_map\", lambda: V.generate_code_map(ROOT, str(OUT / \"code_map.html\")))\n\ncheck(\"generate_relation_graph\", lambda: V.generate_relation_graph(ROOT, str(OUT / \"relation_graph.html\")))\n\ncheck(\"generate_call_timeline\", lambda: V.generate_call_timeline(ROOT, SYM, str(OUT / \"timeline.html\")))\n\ncheck(\"generate_module_tree_graph\", lambda: V.generate_module_tree_graph(ROOT))\n\nsection(\"ai_tools\")\n\nfor _n in (\"CodeDendriteTool\", \"CodeSearchTool\", \"CodeAnalysisTool\", \"InheritanceTraceTool\",\n           \"DataflowAnalyzeTool\", \"AnchorCheckTool\", \"SmartAnalyzeTool\", \"CodeDendriteAPI\"):\n    check(_n, (lambda n=_n: getattr(AT, n)(str(_REPO))))",
+      "hash": "14c063286281",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "context": "top_level",
+        "statement_count": 39,
+        "is_merged": true
+      }
+    },
+    ".cache/smoke_subsystems.py::_Timeout": {
+      "id": ".cache/smoke_subsystems.py::_Timeout",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 24,
+      "line_end": 25,
+      "name": "_Timeout",
+      "code": "class _Timeout(Exception):\n    pass",
+      "hash": "080f1e11c8f6",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "bases": [
+          "Exception"
+        ],
+        "decorators": []
+      }
+    },
+    ".cache/smoke_subsystems.py::_alarm": {
+      "id": ".cache/smoke_subsystems.py::_alarm",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 28,
+      "line_end": 29,
+      "name": "_alarm",
+      "code": "def _alarm(signum, frame):\n    raise _Timeout(f\"超过 {CALL_TIMEOUT}s 未返回\")",
+      "hash": "ab18f0d05185",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "signum",
+          "frame"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_subsystems.py::check": {
+      "id": ".cache/smoke_subsystems.py::check",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 32,
+      "line_end": 47,
+      "name": "check",
+      "code": "def check(name, fn):\n    buf = io.StringIO()\n    print(f\"  ... {name}\", flush=True)\n    old = signal.signal(signal.SIGALRM, _alarm)\n    signal.alarm(CALL_TIMEOUT)\n    try:\n        with contextlib.redirect_stdout(buf):\n            out = fn()\n        text = buf.getvalue().strip()\n        lines = len(text.splitlines())\n        RESULTS.append((name, True, f\"{_brief(out)} | stdout {lines} 行\"))\n    except BaseException as exc:  # noqa: BLE001\n        RESULTS.append((name, False, f\"{type(exc).__name__}: {exc}\"[:110]))\n    finally:\n        signal.alarm(0)\n        signal.signal(signal.SIGALRM, old)",
+      "hash": "752ec1dcfa6b",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "name",
+          "fn"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_subsystems.py::_brief": {
+      "id": ".cache/smoke_subsystems.py::_brief",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 50,
+      "line_end": 55,
+      "name": "_brief",
+      "code": "def _brief(out):\n    if out is None:\n        return \"None\"\n    if isinstance(out, (list, tuple, set, dict, str)):\n        return f\"{type(out).__name__}({len(out)})\"\n    return type(out).__name__",
+      "hash": "52b99b9993e1",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "out"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_subsystems.py::section": {
+      "id": ".cache/smoke_subsystems.py::section",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 58,
+      "line_end": 59,
+      "name": "section",
+      "code": "def section(t):\n    RESULTS.append((f\"── {t} ──\", None, \"\"))",
+      "hash": "c7aa1b9b7a42",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "t"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/smoke_subsystems.py::main": {
+      "id": ".cache/smoke_subsystems.py::main",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py",
+      "line_start": 118,
+      "line_end": 130,
+      "name": "main",
+      "code": "def main():\n    ok = sum(1 for r in RESULTS if r[1] is True)\n    bad = [r for r in RESULTS if r[1] is False]\n    for name, state, brief in RESULTS:\n        if state is None:\n            print(f\"\\n{name}\")\n        else:\n            print(f\"  {'OK  ' if state else 'FAIL'} {name:28s} <- {brief}\")\n    total = ok + len(bad)\n    print(f\"\\n调用点 {total}  通过 {ok}  失败 {len(bad)}\")\n    for name, _, brief in bad:\n        print(f\"  FAIL {name}: {brief}\")\n    return 1 if bad else 0",
+      "hash": "d6b2477e720e",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/flow.py::import:Dog": {
+      "id": ".cache/fixture/pkg/flow.py::import:Dog",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/flow.py",
+      "line_start": 1,
+      "line_end": 1,
+      "name": "Dog",
+      "code": "from pkg.base import Dog",
+      "hash": "0f12ba1be6e3",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "from_module": "pkg.base"
+      }
+    },
+    ".cache/fixture/pkg/flow.py::load_config": {
+      "id": ".cache/fixture/pkg/flow.py::load_config",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/flow.py",
+      "line_start": 4,
+      "line_end": 6,
+      "name": "load_config",
+      "code": "def load_config(path):\n    with open(path, encoding=\"utf-8\") as handle:\n        return json.load(handle) if False else {}",
+      "hash": "b559a46ca22e",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "path"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/flow.py::build_dog": {
+      "id": ".cache/fixture/pkg/flow.py::build_dog",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/flow.py",
+      "line_start": 9,
+      "line_end": 12,
+      "name": "build_dog",
+      "code": "def build_dog(raw):\n    cfg = load_config(raw)\n    dog = Dog(cfg.get(\"name\", \"rex\"), cfg.get(\"breed\", \"corgi\"))\n    return dog.describe()",
+      "hash": "78a133f2f939",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "raw"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/flow.py::dispatch": {
+      "id": ".cache/fixture/pkg/flow.py::dispatch",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/flow.py",
+      "line_start": 15,
+      "line_end": 17,
+      "name": "dispatch",
+      "code": "def dispatch(kind):\n    handlers = {\"a\": build_dog, \"b\": load_config}\n    return handlers[kind]",
+      "hash": "408b3585368a",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "kind"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/base.py::import:json": {
+      "id": ".cache/fixture/pkg/base.py::import:json",
+      "language": "py",
+      "category": "imports",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 1,
+      "line_end": 2,
+      "name": "json",
+      "code": "import json",
+      "hash": "f2f4a1237dbd",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {}
+    },
+    ".cache/fixture/pkg/base.py::statement:block_1": {
+      "id": ".cache/fixture/pkg/base.py::statement:block_1",
+      "language": "py",
+      "category": "statements",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 1,
+      "line_end": 1,
+      "name": "block_1",
+      "code": "\"\"\"Fixture: 继承链 + 数据流 + dispatch。\"\"\"",
+      "hash": "16d3afbc347c",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "context": "top_level",
+        "statement_count": 1,
+        "is_merged": true
+      }
+    },
+    ".cache/fixture/pkg/base.py::Animal": {
+      "id": ".cache/fixture/pkg/base.py::Animal",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 5,
+      "line_end": 13,
+      "name": "Animal",
+      "code": "class Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def speak(self):\n        return \"...\"\n\n    def describe(self):\n        return self.speak() + \" \" + self.name",
+      "hash": "4214179f70dd",
+      "parent_id": "",
+      "children_ids": [
+        ".cache/fixture/pkg/base.py::Animal.__init__",
+        ".cache/fixture/pkg/base.py::Animal.speak",
+        ".cache/fixture/pkg/base.py::Animal.describe"
+      ],
+      "metadata": {
+        "bases": [],
+        "decorators": []
+      }
+    },
+    ".cache/fixture/pkg/base.py::Animal.__init__": {
+      "id": ".cache/fixture/pkg/base.py::Animal.__init__",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 6,
+      "line_end": 7,
+      "name": "__init__",
+      "code": "def __init__(self, name):\n        self.name = name",
+      "hash": "b2255274ed7f",
+      "parent_id": ".cache/fixture/pkg/base.py::Animal",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self",
+          "name"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/base.py::Animal.speak": {
+      "id": ".cache/fixture/pkg/base.py::Animal.speak",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 9,
+      "line_end": 10,
+      "name": "speak",
+      "code": "def speak(self):\n        return \"...\"",
+      "hash": "949567d136df",
+      "parent_id": ".cache/fixture/pkg/base.py::Animal",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/base.py::Animal.describe": {
+      "id": ".cache/fixture/pkg/base.py::Animal.describe",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 12,
+      "line_end": 13,
+      "name": "describe",
+      "code": "def describe(self):\n        return self.speak() + \" \" + self.name",
+      "hash": "bdc4094d5c53",
+      "parent_id": ".cache/fixture/pkg/base.py::Animal",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/base.py::Dog": {
+      "id": ".cache/fixture/pkg/base.py::Dog",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 16,
+      "line_end": 22,
+      "name": "Dog",
+      "code": "class Dog(Animal):\n    def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed\n\n    def speak(self):\n        return \"woof\"",
+      "hash": "4fda56cc86f9",
+      "parent_id": "",
+      "children_ids": [
+        ".cache/fixture/pkg/base.py::Dog.__init__",
+        ".cache/fixture/pkg/base.py::Dog.speak"
+      ],
+      "metadata": {
+        "bases": [
+          "Animal"
+        ],
+        "decorators": []
+      }
+    },
+    ".cache/fixture/pkg/base.py::Dog.__init__": {
+      "id": ".cache/fixture/pkg/base.py::Dog.__init__",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 17,
+      "line_end": 19,
+      "name": "__init__",
+      "code": "def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed",
+      "hash": "ab85ea8682a3",
+      "parent_id": ".cache/fixture/pkg/base.py::Dog",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self",
+          "name",
+          "breed"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/base.py::Dog.speak": {
+      "id": ".cache/fixture/pkg/base.py::Dog.speak",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 21,
+      "line_end": 22,
+      "name": "speak",
+      "code": "def speak(self):\n        return \"woof\"",
+      "hash": "8afbb889fadb",
+      "parent_id": ".cache/fixture/pkg/base.py::Dog",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/fixture/pkg/base.py::Puppy": {
+      "id": ".cache/fixture/pkg/base.py::Puppy",
+      "language": "py",
+      "category": "classes",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 25,
+      "line_end": 27,
+      "name": "Puppy",
+      "code": "class Puppy(Dog):\n    def speak(self):\n        return \"yip\"",
+      "hash": "2ea41389bbbc",
+      "parent_id": "",
+      "children_ids": [
+        ".cache/fixture/pkg/base.py::Puppy.speak"
+      ],
+      "metadata": {
+        "bases": [
+          "Dog"
+        ],
+        "decorators": []
+      }
+    },
+    ".cache/fixture/pkg/base.py::Puppy.speak": {
+      "id": ".cache/fixture/pkg/base.py::Puppy.speak",
+      "language": "py",
+      "category": "methods",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py",
+      "line_start": 26,
+      "line_end": 27,
+      "name": "speak",
+      "code": "def speak(self):\n        return \"yip\"",
+      "hash": "815babdcee90",
+      "parent_id": ".cache/fixture/pkg/base.py::Puppy",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [
+          "self"
+        ],
+        "decorators": [],
+        "is_async": false
+      }
+    },
+    ".cache/anchordb/sample.py::alpha": {
+      "id": ".cache/anchordb/sample.py::alpha",
+      "language": "py",
+      "category": "functions",
+      "file": "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/anchordb/sample.py",
+      "line_start": 1,
+      "line_end": 2,
+      "name": "alpha",
+      "code": "def alpha():\n    return 1",
+      "hash": "df45643058a1",
+      "parent_id": "",
+      "children_ids": [],
+      "metadata": {
+        "parameters": [],
+        "decorators": [],
+        "is_async": false
+      }
+    },
     "base/dataFlow/types.py::import:dataclass": {
       "id": "base/dataFlow/types.py::import:dataclass",
       "language": "py",
@@ -81026,9 +82244,28 @@
       "__init__.py::import:_sys",
       "__init__.py::import:_Path",
       "__init__.py::import:*",
-      "__init__.py::import:__all__",
+      "__init__.py::import:_SERVE_ALL",
       "__init__.py::assign:block_1",
       "__init__.py::statement:block_1"
+    ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/flow.py": [
+      "_smoke_fixture/pkg/flow.py::import:Dog",
+      "_smoke_fixture/pkg/flow.py::load_config",
+      "_smoke_fixture/pkg/flow.py::build_dog",
+      "_smoke_fixture/pkg/flow.py::dispatch"
+    ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/_smoke_fixture/pkg/base.py": [
+      "_smoke_fixture/pkg/base.py::import:json",
+      "_smoke_fixture/pkg/base.py::statement:block_1",
+      "_smoke_fixture/pkg/base.py::Animal",
+      "_smoke_fixture/pkg/base.py::Animal.__init__",
+      "_smoke_fixture/pkg/base.py::Animal.speak",
+      "_smoke_fixture/pkg/base.py::Animal.describe",
+      "_smoke_fixture/pkg/base.py::Dog",
+      "_smoke_fixture/pkg/base.py::Dog.__init__",
+      "_smoke_fixture/pkg/base.py::Dog.speak",
+      "_smoke_fixture/pkg/base.py::Puppy",
+      "_smoke_fixture/pkg/base.py::Puppy.speak"
     ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/parse/hash/git_diff.py": [
       "parse/hash/git_diff.py::import:subprocess",
@@ -83131,13 +84368,11 @@
       "synth/anchorMemory/__init__.py::statement:block_1"
     ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/repair.py": [
-      "synth/anchorRepair/repair.py::import:sys",
       "synth/anchorRepair/repair.py::import:time",
       "synth/anchorRepair/repair.py::import:Path",
       "synth/anchorRepair/repair.py::import:List",
       "synth/anchorRepair/repair.py::import:AnchorStatusType",
       "synth/anchorRepair/repair.py::import:Anchor",
-      "synth/anchorRepair/repair.py::assign:block_1",
       "synth/anchorRepair/repair.py::statement:block_1",
       "synth/anchorRepair/repair.py::repair_anchors",
       "synth/anchorRepair/repair.py::find_affected_anchors",
@@ -83145,12 +84380,10 @@
       "synth/anchorRepair/repair.py::repair_all_stale"
     ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/database.py": [
-      "synth/anchorRepair/database.py::import:sys",
       "synth/anchorRepair/database.py::import:Path",
       "synth/anchorRepair/database.py::import:List",
       "synth/anchorRepair/database.py::import:asdict",
       "synth/anchorRepair/database.py::import:Anchor",
-      "synth/anchorRepair/database.py::assign:block_1",
       "synth/anchorRepair/database.py::statement:block_1",
       "synth/anchorRepair/database.py::AnchorDatabase",
       "synth/anchorRepair/database.py::AnchorDatabase.__init__",
@@ -83176,12 +84409,10 @@
       "synth/anchorRepair/__init__.py::statement:block_1"
     ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/synth/anchorRepair/batch_check.py": [
-      "synth/anchorRepair/batch_check.py::import:sys",
       "synth/anchorRepair/batch_check.py::import:Path",
       "synth/anchorRepair/batch_check.py::import:List",
       "synth/anchorRepair/batch_check.py::import:AnchorStatusType",
       "synth/anchorRepair/batch_check.py::import:Anchor",
-      "synth/anchorRepair/batch_check.py::assign:block_1",
       "synth/anchorRepair/batch_check.py::statement:block_1",
       "synth/anchorRepair/batch_check.py::check_anchor",
       "synth/anchorRepair/batch_check.py::check_anchors_batch",
@@ -83632,6 +84863,7 @@
       "view/codeAnalysis/main.py::import:PythonAnalyzer",
       "view/codeAnalysis/main.py::import:ProjectStructureAnalyzer",
       "view/codeAnalysis/main.py::import:MermaidGenerator",
+      "view/codeAnalysis/main.py::assign:block_1",
       "view/codeAnalysis/main.py::__main__:guard",
       "view/codeAnalysis/main.py::statement:block_1",
       "view/codeAnalysis/main.py::detect_language",
@@ -84452,6 +85684,11 @@
       "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::get_all_virtual_methods"
     ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/__init__.py": [
+      "serve/__init__.py::import:_sys",
+      "serve/__init__.py::import:_Path",
+      "serve/__init__.py::import:*",
+      "serve/__init__.py::import:__all__",
+      "serve/__init__.py::assign:block_1",
       "serve/__init__.py::statement:block_1"
     ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/serve/mcp_server.py": [
@@ -85741,6 +86978,67 @@
       "relate/cpp_inheritance/resolver/normalize_class_name.py::is_subclass_of",
       "relate/cpp_inheritance/resolver/normalize_class_name.py::find_common_base"
     ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_public_api.py": [
+      ".cache/smoke_public_api.py::import:inspect",
+      ".cache/smoke_public_api.py::import:sys",
+      ".cache/smoke_public_api.py::import:traceback",
+      ".cache/smoke_public_api.py::import:Path",
+      ".cache/smoke_public_api.py::import:serve",
+      ".cache/smoke_public_api.py::import:CD",
+      ".cache/smoke_public_api.py::assign:block_1",
+      ".cache/smoke_public_api.py::__main__:guard",
+      ".cache/smoke_public_api.py::statement:block_1",
+      ".cache/smoke_public_api.py::check",
+      ".cache/smoke_public_api.py::_brief",
+      ".cache/smoke_public_api.py::section",
+      ".cache/smoke_public_api.py::_project_info",
+      ".cache/smoke_public_api.py::main"
+    ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/smoke_subsystems.py": [
+      ".cache/smoke_subsystems.py::import:contextlib",
+      ".cache/smoke_subsystems.py::import:io",
+      ".cache/smoke_subsystems.py::import:signal",
+      ".cache/smoke_subsystems.py::import:sys",
+      ".cache/smoke_subsystems.py::import:traceback",
+      ".cache/smoke_subsystems.py::import:Path",
+      ".cache/smoke_subsystems.py::import:Q",
+      ".cache/smoke_subsystems.py::import:I",
+      ".cache/smoke_subsystems.py::import:N",
+      ".cache/smoke_subsystems.py::import:DD",
+      ".cache/smoke_subsystems.py::import:V",
+      ".cache/smoke_subsystems.py::import:AT",
+      ".cache/smoke_subsystems.py::assign:block_1",
+      ".cache/smoke_subsystems.py::__main__:guard",
+      ".cache/smoke_subsystems.py::statement:block_1",
+      ".cache/smoke_subsystems.py::_Timeout",
+      ".cache/smoke_subsystems.py::_alarm",
+      ".cache/smoke_subsystems.py::check",
+      ".cache/smoke_subsystems.py::_brief",
+      ".cache/smoke_subsystems.py::section",
+      ".cache/smoke_subsystems.py::main"
+    ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/flow.py": [
+      ".cache/fixture/pkg/flow.py::import:Dog",
+      ".cache/fixture/pkg/flow.py::load_config",
+      ".cache/fixture/pkg/flow.py::build_dog",
+      ".cache/fixture/pkg/flow.py::dispatch"
+    ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/fixture/pkg/base.py": [
+      ".cache/fixture/pkg/base.py::import:json",
+      ".cache/fixture/pkg/base.py::statement:block_1",
+      ".cache/fixture/pkg/base.py::Animal",
+      ".cache/fixture/pkg/base.py::Animal.__init__",
+      ".cache/fixture/pkg/base.py::Animal.speak",
+      ".cache/fixture/pkg/base.py::Animal.describe",
+      ".cache/fixture/pkg/base.py::Dog",
+      ".cache/fixture/pkg/base.py::Dog.__init__",
+      ".cache/fixture/pkg/base.py::Dog.speak",
+      ".cache/fixture/pkg/base.py::Puppy",
+      ".cache/fixture/pkg/base.py::Puppy.speak"
+    ],
+    "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/.cache/anchordb/sample.py": [
+      ".cache/anchordb/sample.py::alpha"
+    ],
     "/Users/a1/Workspace/WORKSPACE/CodeDendrite_refactor/base/dataFlow/types.py": [
       "base/dataFlow/types.py::import:dataclass",
       "base/dataFlow/types.py::import:List",
@@ -86020,7 +87318,9 @@
       "__init__.py::import:_sys",
       "__init__.py::import:_Path",
       "__init__.py::import:*",
-      "__init__.py::import:__all__",
+      "__init__.py::import:_SERVE_ALL",
+      "_smoke_fixture/pkg/flow.py::import:Dog",
+      "_smoke_fixture/pkg/base.py::import:json",
       "parse/hash/git_diff.py::import:subprocess",
       "parse/hash/git_diff.py::import:Path",
       "parse/hash/git_diff.py::import:List",
@@ -86692,13 +87992,11 @@
       "synth/anchorMemory/memory.py::import:MemoryEntry",
       "synth/anchorMemory/__init__.py::import:AnchorMemory",
       "synth/anchorMemory/__init__.py::import:MemoryEntry",
-      "synth/anchorRepair/repair.py::import:sys",
       "synth/anchorRepair/repair.py::import:time",
       "synth/anchorRepair/repair.py::import:Path",
       "synth/anchorRepair/repair.py::import:List",
       "synth/anchorRepair/repair.py::import:AnchorStatusType",
       "synth/anchorRepair/repair.py::import:Anchor",
-      "synth/anchorRepair/database.py::import:sys",
       "synth/anchorRepair/database.py::import:Path",
       "synth/anchorRepair/database.py::import:List",
       "synth/anchorRepair/database.py::import:asdict",
@@ -86707,7 +88005,6 @@
       "synth/anchorRepair/__init__.py::import:repair_anchors",
       "synth/anchorRepair/__init__.py::import:check_anchor",
       "synth/anchorRepair/__init__.py::import:AnchorDatabase",
-      "synth/anchorRepair/batch_check.py::import:sys",
       "synth/anchorRepair/batch_check.py::import:Path",
       "synth/anchorRepair/batch_check.py::import:List",
       "synth/anchorRepair/batch_check.py::import:AnchorStatusType",
@@ -87269,6 +88566,10 @@
       "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::import:List",
       "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::import:CppClassIndex",
       "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::import:parse_cpp_file",
+      "serve/__init__.py::import:_sys",
+      "serve/__init__.py::import:_Path",
+      "serve/__init__.py::import:*",
+      "serve/__init__.py::import:__all__",
       "serve/mcp_server.py::import:annotations",
       "serve/mcp_server.py::import:argparse",
       "serve/mcp_server.py::import:asyncio",
@@ -87796,6 +89097,26 @@
       "relate/cpp_inheritance/resolver/normalize_class_name.py::import:List",
       "relate/cpp_inheritance/resolver/normalize_class_name.py::import:re",
       "relate/cpp_inheritance/resolver/normalize_class_name.py::import:CppClassIndex",
+      ".cache/smoke_public_api.py::import:inspect",
+      ".cache/smoke_public_api.py::import:sys",
+      ".cache/smoke_public_api.py::import:traceback",
+      ".cache/smoke_public_api.py::import:Path",
+      ".cache/smoke_public_api.py::import:serve",
+      ".cache/smoke_public_api.py::import:CD",
+      ".cache/smoke_subsystems.py::import:contextlib",
+      ".cache/smoke_subsystems.py::import:io",
+      ".cache/smoke_subsystems.py::import:signal",
+      ".cache/smoke_subsystems.py::import:sys",
+      ".cache/smoke_subsystems.py::import:traceback",
+      ".cache/smoke_subsystems.py::import:Path",
+      ".cache/smoke_subsystems.py::import:Q",
+      ".cache/smoke_subsystems.py::import:I",
+      ".cache/smoke_subsystems.py::import:N",
+      ".cache/smoke_subsystems.py::import:DD",
+      ".cache/smoke_subsystems.py::import:V",
+      ".cache/smoke_subsystems.py::import:AT",
+      ".cache/fixture/pkg/flow.py::import:Dog",
+      ".cache/fixture/pkg/base.py::import:json",
       "base/dataFlow/types.py::import:dataclass",
       "base/dataFlow/types.py::import:List",
       "base/codeGenome/types.py::import:dataclass",
@@ -87918,10 +89239,7 @@
       "synth/codeTree/deep_drift/__init__.py::assign:block_1",
       "synth/anchorMemory/memory.py::assign:block_1",
       "synth/anchorMemory/__init__.py::assign:block_1",
-      "synth/anchorRepair/repair.py::assign:block_1",
-      "synth/anchorRepair/database.py::assign:block_1",
       "synth/anchorRepair/__init__.py::assign:block_1",
-      "synth/anchorRepair/batch_check.py::assign:block_1",
       "synth/api/path_policy.py::assign:block_1",
       "synth/api/action_session.py::assign:block_1",
       "synth/api/jump_packet.py::assign:block_1",
@@ -87939,6 +89257,7 @@
       "synth/api/issue_evidence_packet/validate_issue_evidence_packet.py::assign:block_1",
       "synth/api/module_tree_v2/__init__.py::assign:block_1",
       "view/codeTree/view_html.py::assign:block_1",
+      "view/codeAnalysis/main.py::assign:block_1",
       "view/codeAnalysis/ui_analyzer/__init__.py::assign:block_1",
       "view/codeAnalysis/graph/__init__.py::assign:block_1",
       "view/visualize/draw_pages.py::assign:block_1",
@@ -87972,6 +89291,7 @@
       "index/api/anchors/core_load.py::assign:block_1",
       "index/api/anchors/generate_all_anchors.py::assign:block_1",
       "index/cpp_inheritance/class_indexer/__init__.py::assign:block_1",
+      "serve/__init__.py::assign:block_1",
       "serve/mcp_server.py::assign:block_1",
       "serve/api/bridges.py::assign:block_1",
       "serve/api/analysis.py::assign:block_1",
@@ -88018,6 +89338,8 @@
       "relate/cpp_inheritance/__init__.py::assign:block_1",
       "relate/cpp_inheritance/cpp_tracker/__init__.py::assign:block_1",
       "relate/cpp_inheritance/resolver/__init__.py::assign:block_1",
+      ".cache/smoke_public_api.py::assign:block_1",
+      ".cache/smoke_subsystems.py::assign:block_1",
       "base/codeGenome/identity.py::assign:block_1",
       "base/shared/compat.py::assign:block_1",
       "base/shared/__init__.py::assign:block_1",
@@ -88028,6 +89350,7 @@
     ],
     "statements": [
       "__init__.py::statement:block_1",
+      "_smoke_fixture/pkg/base.py::statement:block_1",
       "parse/hash/git_diff.py::statement:block_1",
       "parse/hash/__init__.py::statement:block_1",
       "parse/hash/file_hash.py::statement:block_1",
@@ -88299,6 +89622,9 @@
       "relate/cpp_inheritance/resolver/get_all_bases.py::statement:block_1",
       "relate/cpp_inheritance/resolver/__init__.py::statement:block_1",
       "relate/cpp_inheritance/resolver/normalize_class_name.py::statement:block_1",
+      ".cache/smoke_public_api.py::statement:block_1",
+      ".cache/smoke_subsystems.py::statement:block_1",
+      ".cache/fixture/pkg/base.py::statement:block_1",
       "base/dataFlow/types.py::statement:block_1",
       "base/codeGenome/types.py::statement:block_1",
       "base/codeGenome/identity.py::statement:block_1",
@@ -88317,6 +89643,9 @@
       "base/cpp_inheritance/types.py::statement:block_1"
     ],
     "functions": [
+      "_smoke_fixture/pkg/flow.py::load_config",
+      "_smoke_fixture/pkg/flow.py::build_dog",
+      "_smoke_fixture/pkg/flow.py::dispatch",
       "parse/hash/git_diff.py::get_changed_files",
       "parse/hash/git_diff.py::get_commits_since",
       "parse/hash/git_diff.py::get_file_at_commit",
@@ -89224,6 +90553,20 @@
       "relate/cpp_inheritance/resolver/normalize_class_name.py::get_virtual_methods",
       "relate/cpp_inheritance/resolver/normalize_class_name.py::is_subclass_of",
       "relate/cpp_inheritance/resolver/normalize_class_name.py::find_common_base",
+      ".cache/smoke_public_api.py::check",
+      ".cache/smoke_public_api.py::_brief",
+      ".cache/smoke_public_api.py::section",
+      ".cache/smoke_public_api.py::_project_info",
+      ".cache/smoke_public_api.py::main",
+      ".cache/smoke_subsystems.py::_alarm",
+      ".cache/smoke_subsystems.py::check",
+      ".cache/smoke_subsystems.py::_brief",
+      ".cache/smoke_subsystems.py::section",
+      ".cache/smoke_subsystems.py::main",
+      ".cache/fixture/pkg/flow.py::load_config",
+      ".cache/fixture/pkg/flow.py::build_dog",
+      ".cache/fixture/pkg/flow.py::dispatch",
+      ".cache/anchordb/sample.py::alpha",
       "base/codeGenome/identity.py::canonical_file_id",
       "base/codeGenome/identity.py::symbol_anchor_id",
       "base/codeGenome/identity.py::asset_anchor_id",
@@ -89238,6 +90581,9 @@
       "base/shared/codedendrite_ignore/glob_match.py::_glob_match"
     ],
     "classes": [
+      "_smoke_fixture/pkg/base.py::Animal",
+      "_smoke_fixture/pkg/base.py::Dog",
+      "_smoke_fixture/pkg/base.py::Puppy",
       "parse/hash/database/change_type.py::ChangeType",
       "parse/hash/database/hash_database.py::HashDatabase",
       "parse/codeGenome/config_detector.py::ConfigDetector",
@@ -89381,6 +90727,10 @@
       "relate/pathTracer/replacer.py::ReplaceProposal",
       "relate/pathTracer/replacer.py::NodeReplacer",
       "relate/cpp_inheritance/cpp_tracker/cpp_inheritance_tracker.py::CppInheritanceTracker",
+      ".cache/smoke_subsystems.py::_Timeout",
+      ".cache/fixture/pkg/base.py::Animal",
+      ".cache/fixture/pkg/base.py::Dog",
+      ".cache/fixture/pkg/base.py::Puppy",
       "base/dataFlow/types.py::VariableInfo",
       "base/dataFlow/types.py::Transformation",
       "base/dataFlow/types.py::FunctionCall",
@@ -89436,6 +90786,12 @@
       "base/cpp_inheritance/types.py::CppOverrideInfo"
     ],
     "methods": [
+      "_smoke_fixture/pkg/base.py::Animal.__init__",
+      "_smoke_fixture/pkg/base.py::Animal.speak",
+      "_smoke_fixture/pkg/base.py::Animal.describe",
+      "_smoke_fixture/pkg/base.py::Dog.__init__",
+      "_smoke_fixture/pkg/base.py::Dog.speak",
+      "_smoke_fixture/pkg/base.py::Puppy.speak",
       "parse/hash/database/hash_database.py::HashDatabase.__init__",
       "parse/hash/database/hash_database.py::HashDatabase.load",
       "parse/hash/database/hash_database.py::HashDatabase._merge_concurrent_writes",
@@ -90243,6 +91599,12 @@
       "relate/cpp_inheritance/cpp_tracker/cpp_inheritance_tracker.py::CppInheritanceTracker.resolve_multi_level_inheritance",
       "relate/cpp_inheritance/cpp_tracker/cpp_inheritance_tracker.py::CppInheritanceTracker.get_full_inheritance_tree",
       "relate/cpp_inheritance/cpp_tracker/cpp_inheritance_tracker.py::CppInheritanceTracker.get_class_hierarchy",
+      ".cache/fixture/pkg/base.py::Animal.__init__",
+      ".cache/fixture/pkg/base.py::Animal.speak",
+      ".cache/fixture/pkg/base.py::Animal.describe",
+      ".cache/fixture/pkg/base.py::Dog.__init__",
+      ".cache/fixture/pkg/base.py::Dog.speak",
+      ".cache/fixture/pkg/base.py::Puppy.speak",
       "base/dataFlow/types.py::VariableInfo.to_dict",
       "base/dataFlow/types.py::Transformation.to_dict",
       "base/dataFlow/types.py::FunctionCall.to_dict",
@@ -90390,16 +91752,33 @@
       "relate/dynamic/test_trace_target.py::__main__:guard",
       "relate/dynamic/trace_cli.py::__main__:guard",
       "relate/codeTree/dataflow_analyzer/main.py::__main__:guard",
+      ".cache/smoke_public_api.py::__main__:guard",
+      ".cache/smoke_subsystems.py::__main__:guard",
       "base/shared/codedendrite_ignore/code_dendrite_ignore.py::__main__:guard"
     ]
   },
   "hash_toId": {
-    "c6af92354eea": "__init__.py::import:_sys",
-    "4a332d8667e6": "__init__.py::import:_Path",
+    "c6af92354eea": "serve/__init__.py::import:_sys",
+    "4a332d8667e6": "serve/__init__.py::import:_Path",
     "c090aaa3ec3e": "__init__.py::import:*",
-    "3062125fddbb": "__init__.py::import:__all__",
-    "ad94e2c9c941": "__init__.py::assign:block_1",
-    "efd47f2b3b51": "__init__.py::statement:block_1",
+    "1e5c91d49a62": "__init__.py::import:_SERVE_ALL",
+    "8b5d35ac0827": "__init__.py::assign:block_1",
+    "a8fec49c88a3": "__init__.py::statement:block_1",
+    "0f12ba1be6e3": ".cache/fixture/pkg/flow.py::import:Dog",
+    "b559a46ca22e": ".cache/fixture/pkg/flow.py::load_config",
+    "78a133f2f939": ".cache/fixture/pkg/flow.py::build_dog",
+    "408b3585368a": ".cache/fixture/pkg/flow.py::dispatch",
+    "f2f4a1237dbd": ".cache/fixture/pkg/base.py::import:json",
+    "16d3afbc347c": ".cache/fixture/pkg/base.py::statement:block_1",
+    "4214179f70dd": ".cache/fixture/pkg/base.py::Animal",
+    "b2255274ed7f": ".cache/fixture/pkg/base.py::Animal.__init__",
+    "949567d136df": ".cache/fixture/pkg/base.py::Animal.speak",
+    "bdc4094d5c53": ".cache/fixture/pkg/base.py::Animal.describe",
+    "4fda56cc86f9": ".cache/fixture/pkg/base.py::Dog",
+    "ab85ea8682a3": ".cache/fixture/pkg/base.py::Dog.__init__",
+    "8afbb889fadb": ".cache/fixture/pkg/base.py::Dog.speak",
+    "2ea41389bbbc": ".cache/fixture/pkg/base.py::Puppy",
+    "815babdcee90": ".cache/fixture/pkg/base.py::Puppy.speak",
     "61c01096aa26": "serve/api/yaml_profile.py::import:subprocess",
     "9b5c42011415": "base/anchorRepair/types.py::import:Path",
     "f8f905e01f75": "relate/api/relations/load_relations.py::import:List",
@@ -90432,7 +91811,6 @@
     "78a9da1ad554": "parse/hash/ast_hash.py::get_symbol_ast_hash",
     "de06972e3b08": "parse/hash/ast_hash.py::normalize_body",
     "f363096a5ad6": "parse/hash/ast_hash.py::body_hash",
-    "f2f4a1237dbd": "relate/pathTracer/tracer.py::import:json",
     "89ed1aae8d33": "base/shared/codedendrite_ignore/glob_match.py::import:os",
     "068bc14dcca9": "index/codeTree/anchor_engine_v2/load_db.py::import:tempfile",
     "969cc8aeddd6": "base/shared/types.py::import:datetime",
@@ -90766,7 +92144,7 @@
     "fc67ee1545e1": "parse/codeAnalysis/analyzer/__init__.py::import:SwiftAnalyzer",
     "7f42492c89f2": "parse/codeAnalysis/analyzer/__init__.py::import:KotlinAnalyzer",
     "7f2854deaf06": "parse/codeAnalysis/analyzer/__init__.py::import:HtmlAnalyzer",
-    "6313a510b2a7": "parse/codeAnalysis/analyzer/__init__.py::import:ProjectStructureAnalyzer",
+    "6313a510b2a7": "view/codeAnalysis/main.py::import:ProjectStructureAnalyzer",
     "a190fe867ff8": "parse/codeAnalysis/analyzer/__init__.py::assign:block_1",
     "4acc5447449e": "parse/codeAnalysis/analyzer/__init__.py::statement:block_1",
     "14851efe8c8c": "parse/codeAnalysis/analyzer/__init__.py::get_analyzer",
@@ -91081,7 +92459,7 @@
     "9d75b6e6b7cf": "tests/test_l3_inheritance.py::TestComputeMRO.test_single_inheritance_mro",
     "2a0b60fc2dc0": "tests/test_l3_inheritance.py::TestFindMethodOrigin",
     "be5f88bed114": "tests/test_l3_inheritance.py::TestFindMethodOrigin.test_find_own_method",
-    "5ce987eb7da2": "serve/__init__.py::statement:block_1",
+    "5ce987eb7da2": "tests/__init__.py::statement:block_1",
     "7a6120402abd": "tests/test_module_tree_v2_smoke.py::import:PathPolicy",
     "17c1424cbe96": "tests/test_module_tree_v2_smoke.py::import:build_capability_candidates",
     "791664775deb": "tests/test_module_tree_v2_smoke.py::import:generate_module_tree_v2",
@@ -91116,7 +92494,7 @@
     "24fca0ffbfea": "tests/test_module_tree_v2_smoke.py::TestCurrentRepoRegression.test_area_coverage_reasonable",
     "9ae86d4896b1": "tests/test_module_tree_v2_smoke.py::_run_tests",
     "7ec25667fd36": "tests/test_task_context_smoke.py::import:generate_task_context",
-    "3e332d4133aa": "synth/api/module_tree/module.py::import:load_anchors",
+    "3e332d4133aa": "serve/api/outline.py::import:load_anchors",
     "f71f330d60bb": "synth/api/module_tree/module.py::import:load_relations",
     "bcbb62d8565c": "tests/test_task_context_smoke.py::statement:block_1",
     "d23c8ce4edea": "tests/test_task_context_smoke.py::repo_data",
@@ -91170,7 +92548,7 @@
     "4b298a5a8d0d": "tests/test_workflow_evidence.py::WorkflowEvidenceTests.test_file_target_is_not_promoted_to_first_function",
     "73568ccffe66": "tests/test_workflow_evidence.py::WorkflowEvidenceTests.test_same_file_alone_is_not_enough_for_edit_suspect",
     "e463e1373888": "base/shared/dblock.py::import:contextlib",
-    "336588ec8cf0": "serve/api/yaml_profile_worker.py::import:io",
+    "336588ec8cf0": ".cache/smoke_subsystems.py::import:io",
     "1688bb695040": "tests/test_query_coverage.py::import:get_anchor",
     "bb3f45333d10": "tests/test_query_coverage.py::import:find_attribute_call_sites",
     "76ea4413c978": "tests/test_query_coverage.py::import:cmd_chain",
@@ -91616,15 +92994,15 @@
     "4e6be48bbcbf": "synth/codeTree/pipeline_generator.py::__main__:guard",
     "0be2c65c4584": "synth/codeTree/pipeline_generator.py::statement:block_1",
     "d2c2835a189f": "synth/codeTree/pipeline_generator.py::generate_precise_pipeline",
-    "589e1df119db": "synth/codeTree/test_anchor.py::import:create_anchor",
+    "13ecac2c0b9d": "synth/codeTree/test_anchor.py::import:create_anchor",
     "631c09572333": "synth/codeTree/test_anchor.py::assign:block_1",
     "afcce2cfb016": "synth/codeTree/test_anchor.py::__main__:guard",
-    "0162a2582499": "synth/codeTree/test_anchor.py::statement:block_1",
+    "368749295b20": "synth/codeTree/test_anchor.py::statement:block_1",
     "142d7ddd6305": "synth/codeTree/test_anchor.py::run",
     "8577a9d24117": "synth/codeTree/test_anchor.py::test_all",
-    "fe668cb18d03": "synth/codeTree/agent_tools.py::import:create_anchor",
+    "d0c361a549d4": "synth/codeTree/agent_tools.py::import:create_anchor",
     "70e6682e57e9": "synth/codeTree/agent_tools.py::assign:block_1",
-    "4cb178738589": "synth/codeTree/agent_tools.py::statement:block_1",
+    "124130d1975e": "synth/codeTree/agent_tools.py::statement:block_1",
     "fd055d4cb3a1": "synth/codeTree/agent_tools.py::handle_tool_call",
     "b70e6422b671": "relate/codeTree/dataflow_analyzer/main.py::import:Dict",
     "eb112748f42d": "serve/api/navigator/target.py::import:dataclass",
@@ -91714,15 +93092,14 @@
     "a80f785b5c56": "synth/anchorMemory/__init__.py::statement:block_1",
     "117d51c6ac83": "synth/anchorRepair/repair.py::import:List",
     "589019490d05": "synth/anchorRepair/__init__.py::import:AnchorStatusType",
-    "1a3a05b9024b": "synth/anchorRepair/repair.py::import:Anchor",
-    "36fcae326490": "base/anchorRepair/types.py::assign:block_1",
-    "42c425a3f09e": "synth/anchorRepair/repair.py::statement:block_1",
+    "505200347ede": "synth/anchorRepair/repair.py::import:Anchor",
+    "e8508062e3d1": "synth/anchorRepair/repair.py::statement:block_1",
     "7547095cb3fa": "synth/anchorRepair/repair.py::repair_anchors",
     "c1589d4927a6": "synth/anchorRepair/repair.py::find_affected_anchors",
     "e72726c56886": "synth/anchorRepair/repair.py::on_files_changed",
     "87e099006aba": "synth/anchorRepair/repair.py::repair_all_stale",
-    "9ab67a1565e1": "synth/anchorRepair/database.py::import:Anchor",
-    "db3898506e5a": "synth/anchorRepair/database.py::statement:block_1",
+    "7500cd581cdb": "synth/anchorRepair/database.py::import:Anchor",
+    "5cc83982e645": "synth/anchorRepair/database.py::statement:block_1",
     "dfdb74ccaadc": "synth/anchorRepair/database.py::AnchorDatabase",
     "cd6ee3f85d76": "synth/anchorRepair/database.py::AnchorDatabase.__init__",
     "b584f0470832": "synth/anchorRepair/database.py::AnchorDatabase.db_data",
@@ -91743,8 +93120,8 @@
     "a7d13a3b7542": "synth/anchorRepair/__init__.py::assign:block_1",
     "e42d516c8774": "synth/anchorRepair/__init__.py::statement:block_1",
     "382ac8a0c9c3": "synth/anchorRepair/batch_check.py::import:AnchorStatusType",
-    "c4360421ce80": "synth/anchorRepair/batch_check.py::import:Anchor",
-    "a98dcf1ce083": "synth/anchorRepair/batch_check.py::statement:block_1",
+    "aca19927296b": "synth/anchorRepair/batch_check.py::import:Anchor",
+    "065f4a7b9c29": "synth/anchorRepair/batch_check.py::statement:block_1",
     "0b18c6287470": "synth/anchorRepair/batch_check.py::check_anchor",
     "b4dd542695fa": "synth/anchorRepair/batch_check.py::check_anchors_batch",
     "012f3024032e": "synth/anchorRepair/batch_check.py::check_all_anchors",
@@ -91769,7 +93146,7 @@
     "ffbad58445c9": "synth/api/path_policy.py::classify_with_detail",
     "72dc3e64d1f2": "synth/api/action_session.py::import:datetime",
     "ddd6f190ae45": "synth/api/action_session.py::assign:block_1",
-    "a19977043f22": "serve/api/cli/__main__.py::__main__:guard",
+    "a19977043f22": ".cache/smoke_subsystems.py::__main__:guard",
     "b73fa60831c0": "synth/api/action_session.py::statement:block_1",
     "922ebc8a97c0": "synth/api/action_session.py::_session_path",
     "cf21b158f1e0": "synth/api/action_session.py::_fingerprint",
@@ -91969,10 +93346,10 @@
     "60bb49998218": "view/codeAnalysis/bind_core_anchors.py::bind_llm_scheduler_anchors",
     "4968a83dcc0b": "view/codeAnalysis/bind_core_anchors.py::bind_tool_executor_anchors",
     "1c372ef3391e": "view/codeAnalysis/bind_core_anchors.py::main",
-    "f04ee97f0a28": "view/codeAnalysis/main.py::import:PythonAnalyzer",
-    "45cb93bcbf00": "view/codeAnalysis/main.py::import:ProjectStructureAnalyzer",
-    "1f3cb58c012e": "view/codeAnalysis/main.py::import:MermaidGenerator",
-    "2ede001a9ea4": "view/codeAnalysis/main.py::statement:block_1",
+    "6bb6c31ddbfd": "view/codeAnalysis/main.py::import:PythonAnalyzer",
+    "cac304ef0a1a": "view/codeAnalysis/main.py::import:MermaidGenerator",
+    "a880c04b7e17": "view/codeAnalysis/main.py::assign:block_1",
+    "12d9afa937ba": "view/codeAnalysis/main.py::statement:block_1",
     "4d0213b1703c": "view/codeAnalysis/main.py::detect_language",
     "9e17a01145ea": "view/codeAnalysis/main.py::analyze_project",
     "09bc7d6609b7": "view/codeAnalysis/main.py::print_statistics",
@@ -92199,7 +93576,7 @@
     "046ae841b6e2": "index/codeTree/anchor_engine_v2/load_db.py::check_drift_v2",
     "f58be1851cec": "index/codeTree/anchor_engine_v2/load_db.py::refresh_anchor",
     "846fdf6cacb0": "index/codeTree/anchor_engine_v2/load_db.py::refresh_all_stale",
-    "0fb98126bf5d": "index/codeTree/anchor_engine_v2/load_db.py::list_anchors",
+    "e9aabcd71d18": "index/codeTree/anchor_engine_v2/load_db.py::list_anchors",
     "a9e703bd1e55": "index/codeTree/anchor_engine_v2/load_db.py::generate_all_anchors",
     "75cc5f23529f": "index/inheritance/class_indexer.py::import:List",
     "3f1f24f41eff": "index/inheritance/class_indexer.py::import:ClassIndex",
@@ -92367,21 +93744,25 @@
     "891dd0549456": "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::find_template_instantiations",
     "6a5c70194cd5": "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::get_class_hierarchy",
     "9bfe5bcfe2cc": "index/cpp_inheritance/class_indexer/get_class_hierarchy.py::get_all_virtual_methods",
+    "2b856039dc8c": "serve/__init__.py::import:*",
+    "2b261fddd70f": "serve/__init__.py::import:__all__",
+    "bf2c1e85591a": "serve/__init__.py::assign:block_1",
+    "bc490af4054c": "serve/__init__.py::statement:block_1",
     "851f99543c97": "serve/mcp_server.py::import:asyncio",
     "b6bb73c0b473": "serve/mcp_server.py::import:types",
     "8fb2bd9bc0a5": "serve/mcp_server.py::import:Server",
     "24d12fbb2d72": "serve/mcp_server.py::import:stdio_server",
-    "b968c1413a8d": "serve/mcp_server.py::assign:block_1",
+    "a9f3d28fdf6a": "serve/mcp_server.py::assign:block_1",
     "5adf798f12e4": "serve/mcp_server.py::__main__:guard",
     "952a4256862d": "serve/mcp_server.py::statement:block_1",
     "0c6b6b5ce341": "serve/mcp_server.py::_parse_root",
-    "a240d0ac6d8d": "serve/mcp_server.py::_anchors",
+    "996f45346475": "serve/mcp_server.py::_anchors",
     "bf9005d0494f": "serve/mcp_server.py::_relations",
     "f083ccc213ac": "serve/mcp_server.py::_module_tree",
     "cf4a6874cef6": "serve/mcp_server.py::_project_summary",
-    "5fead0687a3e": "serve/mcp_server.py::tool_context",
-    "27f5726ac093": "serve/mcp_server.py::tool_symbol",
-    "7cf57f5fffb6": "serve/mcp_server.py::tool_search",
+    "8e0c2cedae98": "serve/mcp_server.py::tool_context",
+    "e78a30b05b56": "serve/mcp_server.py::tool_symbol",
+    "e4a06a002c5d": "serve/mcp_server.py::tool_search",
     "c9d5a6b227e5": "serve/mcp_server.py::tool_impact",
     "e064780aa214": "serve/mcp_server.py::tool_modules",
     "12efce04849f": "serve/mcp_server.py::list_tools",
@@ -92465,7 +93846,6 @@
     "3961622f0ccd": "serve/api/control_flow_dispatch.py::_brace_end",
     "c943e36df574": "serve/api/control_flow_dispatch.py::_generic_control_flow",
     "eea52d5851fe": "serve/api/control_flow_dispatch.py::extract_file_control_flow",
-    "61a4a74fd04c": "serve/api/outline.py::import:load_anchors",
     "b5951448d846": "serve/api/outline.py::assign:block_1",
     "966078c9cfb5": "serve/api/outline.py::_anchor_label",
     "4d1738145234": "serve/api/outline.py::_anchor_name",
@@ -93033,6 +94413,32 @@
     "02ed71ea0e6d": "relate/cpp_inheritance/resolver/normalize_class_name.py::get_virtual_methods",
     "056d67a3540a": "relate/cpp_inheritance/resolver/normalize_class_name.py::is_subclass_of",
     "4bdd1c03eb1d": "relate/cpp_inheritance/resolver/normalize_class_name.py::find_common_base",
+    "32ee1b60eac5": ".cache/smoke_public_api.py::import:inspect",
+    "c3ce868984ab": ".cache/smoke_subsystems.py::import:traceback",
+    "89c47e92dcbc": ".cache/smoke_public_api.py::import:serve",
+    "60ca87493297": ".cache/smoke_public_api.py::import:CD",
+    "4d086b1dcbff": ".cache/smoke_public_api.py::assign:block_1",
+    "ae31eb287b49": ".cache/smoke_public_api.py::statement:block_1",
+    "873c66d88b6c": ".cache/smoke_public_api.py::check",
+    "52b99b9993e1": ".cache/smoke_subsystems.py::_brief",
+    "36db8e411db7": ".cache/smoke_public_api.py::section",
+    "8e8afcdae1e5": ".cache/smoke_public_api.py::_project_info",
+    "bff03194e57c": ".cache/smoke_public_api.py::main",
+    "d7fafb998798": ".cache/smoke_subsystems.py::import:signal",
+    "5c871e4b6589": ".cache/smoke_subsystems.py::import:Q",
+    "4e96f09f5ddc": ".cache/smoke_subsystems.py::import:I",
+    "1bda19e11669": ".cache/smoke_subsystems.py::import:N",
+    "b1bfd2892b76": ".cache/smoke_subsystems.py::import:DD",
+    "a0185d678281": ".cache/smoke_subsystems.py::import:V",
+    "63193cb66061": ".cache/smoke_subsystems.py::import:AT",
+    "53e8f957a8eb": ".cache/smoke_subsystems.py::assign:block_1",
+    "14c063286281": ".cache/smoke_subsystems.py::statement:block_1",
+    "080f1e11c8f6": ".cache/smoke_subsystems.py::_Timeout",
+    "ab18f0d05185": ".cache/smoke_subsystems.py::_alarm",
+    "752ec1dcfa6b": ".cache/smoke_subsystems.py::check",
+    "c7aa1b9b7a42": ".cache/smoke_subsystems.py::section",
+    "d6b2477e720e": ".cache/smoke_subsystems.py::main",
+    "df45643058a1": ".cache/anchordb/sample.py::alpha",
     "23ca83e0c806": "base/dataFlow/types.py::statement:block_1",
     "a47252ce2f14": "base/dataFlow/types.py::VariableInfo",
     "efb1d5135689": "base/dataFlow/types.py::VariableInfo.to_dict",
@@ -93189,6 +94595,7 @@
     "34b034d1236e": "base/cpp_inheritance/types.py::CppClassIndex.__contains__",
     "0ef70be59bb0": "base/cpp_inheritance/types.py::CppClassIndex.__len__",
     "ab682140eb4b": "base/inheritance/types.py::ClassIndex.to_dict",
+    "36fcae326490": "base/anchorRepair/types.py::assign:block_1",
     "fc86fa5ef71a": "base/anchorRepair/types.py::statement:block_1",
     "950d7cc00212": "base/anchorRepair/types.py::AnchorStatusType",
     "605faa25da39": "base/anchorRepair/types.py::AnchorStatus",
