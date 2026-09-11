@@ -61,7 +61,12 @@ def get_upward_chain(
         return None
 
     def callers_of(anchor_id: str) -> List[dict]:
-        anchor = get_anchor(anchor_id, root)
+        # 与 callees_of 同款：先查已经加载好的 all_anchors，只有查不到才回落到
+        # get_anchor()。get_anchor 每次都重解析一遍 anchors.json（无缓存，实测
+        # 单次 ~74ms），逐条边调用会把上行遍历拖成分钟级。
+        anchor = all_anchors.get(anchor_id) or all_anchors.get(anchor_id.replace("\\", "/"))
+        if anchor is None:
+            anchor = get_anchor(anchor_id, root)
         if not anchor:
             return []
         norm_id = anchor.id.replace("\\", "/")
@@ -91,7 +96,10 @@ def get_upward_chain(
                 if from_id in seen:
                     continue
                 seen.add(from_id)
-                caller_anchor = get_anchor(from_id, root)
+                raw_from_id = edge.get("from_id", "")
+                caller_anchor = all_anchors.get(from_id) or all_anchors.get(raw_from_id)
+                if caller_anchor is None and ("::" in from_id or "#" in from_id):
+                    caller_anchor = get_anchor(from_id, root)
                 if caller_anchor and not caller_anchor.is_virtual:
                     result.append({
                         "id": caller_anchor.id,
