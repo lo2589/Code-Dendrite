@@ -36,6 +36,9 @@ from analyzer.anchors import load_anchors
 from api.relations import load_relations
 
 
+TASK_TARGET = "src/analyzer/identity/engine/load_db.py::create_anchor"
+
+
 # ── 辅助 ──────────────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")
@@ -309,7 +312,7 @@ class TestLevel1Properties:
     def test_level1_only_current_area(self, repo_data):
         """L1 只描述当前区域（验收标准 #2）。"""
         ctx = generate_task_context(
-            "api/anchors.py::create_anchor", root=PROJECT_ROOT,
+            TASK_TARGET, root=PROJECT_ROOT,
             anchors=repo_data["anchors"],
             relations=repo_data["relations"],
             module_tree=repo_data["module_tree"],
@@ -326,7 +329,7 @@ class TestLevel2Properties:
     def test_candidates_count(self, repo_data):
         """L2 只给少量可信候选，不为满足数量下限而补齐。"""
         ctx = generate_task_context(
-            "api/anchors.py::create_anchor", root=PROJECT_ROOT,
+            TASK_TARGET, root=PROJECT_ROOT,
             anchors=repo_data["anchors"],
             relations=repo_data["relations"],
             module_tree=repo_data["module_tree"],
@@ -352,7 +355,7 @@ class TestLevel2Properties:
     def test_each_candidate_has_why_and_next(self, repo_data):
         """每个候选都有 why 和 next_command（验收标准 #4）。"""
         ctx = generate_task_context(
-            "api/anchors.py::create_anchor", root=PROJECT_ROOT,
+            TASK_TARGET, root=PROJECT_ROOT,
             anchors=repo_data["anchors"],
             relations=repo_data["relations"],
             module_tree=repo_data["module_tree"],
@@ -364,7 +367,7 @@ class TestLevel2Properties:
     def test_first_candidate_is_task_target(self, repo_data):
         """第一个候选应是任务锚点自身。"""
         ctx = generate_task_context(
-            "api/anchors.py::create_anchor", root=PROJECT_ROOT,
+            TASK_TARGET, root=PROJECT_ROOT,
             anchors=repo_data["anchors"],
             relations=repo_data["relations"],
         )
@@ -389,7 +392,7 @@ class TestCompactFormat:
     def test_compact_contains_sections(self, repo_data):
         """compact 格式必须包含关键段落。"""
         ctx = generate_task_context(
-            "api/anchors.py::create_anchor", root=PROJECT_ROOT,
+            TASK_TARGET, root=PROJECT_ROOT,
             anchors=repo_data["anchors"],
             relations=repo_data["relations"],
         )
@@ -456,7 +459,7 @@ class TestCurrentRepoRegression:
     def test_context_edges_are_bounded(self, repo_data):
         """关系上下文可以为空，但不能越过固定上限。"""
         ctx = generate_task_context(
-            "api/anchors.py::create_anchor", root=PROJECT_ROOT,
+            TASK_TARGET, root=PROJECT_ROOT,
             anchors=repo_data["anchors"],
             relations=repo_data["relations"],
         )

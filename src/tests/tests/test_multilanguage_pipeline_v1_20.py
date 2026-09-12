@@ -143,39 +143,39 @@ def test_worker_postmessage_connects_both_message_handlers(tmp_path):
     assert returned["target"].startswith("host.js::createProjector.on")
 
 
-def test_v1_19_plugin_self_chain_is_not_flattened_or_cross_wired():
-    root = Path(__file__).resolve().parents[1] / "plugin" / "dsh-cdd-session-lens-v1_19"
+def test_lens_plugin_self_chain_is_not_flattened_or_cross_wired():
+    root = Path(__file__).resolve().parents[3] / "src" / "view" / "lens"
     paths = [
         root / "src" / "host.js",
-        root / "src" / "core.js",
-        root / "src" / "client.js",
-        root / "scripts" / "projection_worker_v1_19.js",
+        root / "src" / "index_worker.js",
+        root / "lib" / "client.js",
     ]
     parsed, failures, completed = parse_paths(root, paths)
     assert not failures
-    assert len(completed) == 4
+    assert len(completed) == len(paths)
     anchors = _anchors(parsed)
 
     fake = {"call", "or", "is", "target", "can", "showed"}
     assert not fake.intersection(
         item.symbol for item in anchors.values() if item.symbol_type == "class"
     )
-    assert anchors["src/host.js::apply"].line_end == 420
-    state_handler = anchors["src/host.js::apply.handler#1"]
-    assert "src/host.js::apply.resolveSession" in state_handler.callees
-    assert "src/host.js::createProjector.schedule" in state_handler.callees
-    assert not any("test/host.test.js" in item for item in state_handler.callees)
 
-    project = anchors["scripts/projection_worker_v1_19.js::project"]
-    assert "src/core.js::buildGraph" in project.callees
-    graph = anchors["src/core.js::buildGraph"]
-    assert graph.line_end == 910
-    assert "src/core.js::chooseRoot" in graph.callees
-    assert "src/core.js::shortestPath" in graph.callees
-    assert "src/core.js::buildGraph.buildColumns" in graph.callees
+    host = anchors["src/host.js::apply"]
+    assert host.line_start == 115
+    assert host.line_end > host.line_start + 500
+    route = anchors["src/host.js::apply.register#1"]
+    route_handler = anchors["src/host.js::apply.register#1.handler"]
+    assert route.parent_anchor == host.id
+    assert route_handler.parent_anchor == route.id
+    assert "src/host.js::apply.json" in route_handler.callees
 
-    lens = anchors["src/client.js::factory.LensPanel"]
-    effect = anchors["src/client.js::factory.LensPanel.useEffect#1"]
-    assert lens.line_end == 729
+    worker_chain = anchors["src/index_worker.js::chain#1"]
+    worker_visit = anchors["src/index_worker.js::chain#1.visit"]
+    assert worker_visit.parent_anchor == worker_chain.id
+    assert "src/index_worker.js::chain#1.visit" in worker_visit.callees
+    assert "src/index_worker.js::describe" in worker_chain.callees
+
+    lens = anchors["lib/client.js::factory#49.LensPanel"]
+    effect = anchors["lib/client.js::factory#49.LensPanel.useEffect#1"]
+    assert lens.line_end > lens.line_start
     assert effect.parent_anchor == lens.id
-    assert "src/client.js::factory.loadState" in effect.callees

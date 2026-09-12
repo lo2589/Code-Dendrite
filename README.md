@@ -13,7 +13,7 @@
 | 结构 | `src/` 下五层，`mcp/`、`skills/` 与 `src/` 同层 |
 | 索引 | **9336 个 anchor / 12223 条因果边** |
 | 边构成 | call 6594 · dataflow 5185 · impact 291 · inherit 92 · dispatch 61 |
-| 测试 | 233 passed / 4 failed（4 个是历史遗留，与目录结构无关） |
+| 测试 | 237 passed |
 
 ---
 
@@ -39,7 +39,7 @@
 入口是 `mcp/server.py::call_tool`。一条命令把它打穿到实现层：
 
 ```bash
-python src/usage/cli/cdd chain "mcp/server.py::call_tool" --depth 5
+python3 src/usage/cli/cdd chain "mcp/server.py::call_tool" --depth 5
 ```
 
 输出 **55 个节点**，穿透 mcp → usage → analyzer 三层（`mcp/` 16 个、`src/usage/` 36 个、`src/analyzer/` 4 个）：
@@ -72,15 +72,15 @@ Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
 
 ```bash
 cd <repo>
-python src/usage/cli/cdd status                  # 索引位置、数量、时间
-python src/usage/cli/cdd rebuild . --virtual     # 全量重建（本仓库约 35 秒）
-python src/usage/cli/cdd update .                # 增量更新
-python src/usage/cli/cdd peek <文件>             # 现场解析一个文件，不需要索引
-python src/usage/cli/cdd chain <anchor> --depth 12
-python src/usage/cli/cdd callers <anchor>        # 上行：谁在用它
-python src/usage/cli/cdd chain2context <anchor> --budget 40000 --output ctx.md
-python src/usage/cli/cdd draw                    # 生成浏览器版目录浏览器
-python src/usage/cli/cdd modules <关键词>        # 语义模块
+python3 src/usage/cli/cdd status                  # 索引位置、数量、时间
+python3 src/usage/cli/cdd rebuild . --virtual     # 全量重建（本仓库约 35 秒）
+python3 src/usage/cli/cdd update .                # 增量更新
+python3 src/usage/cli/cdd peek <文件>             # 现场解析一个文件，不需要索引
+python3 src/usage/cli/cdd chain <anchor> --depth 12
+python3 src/usage/cli/cdd callers <anchor>        # 上行：谁在用它
+python3 src/usage/cli/cdd chain2context <anchor> --budget 40000 --output ctx.md
+python3 src/usage/cli/cdd draw                    # 生成浏览器版目录浏览器
+python3 src/usage/cli/cdd modules <关键词>        # 语义模块
 ```
 
 `chain2context` 把一条链上所有 anchor 连源码组装成可投喂的上下文；超预算的 anchor 单列一栏，不静默丢。
@@ -107,11 +107,8 @@ python src/usage/cli/cdd modules <关键词>        # 语义模块
 
 ```bash
 cd <repo>
-PYTHONPATH=src python -m pytest src/tests src/tests/tests -q \
-  --ignore=src/tests/test_integration.py --ignore=src/tests/test_backend_dispatch.py
+PYTHONPATH=src python3 -m pytest src/tests src/tests/tests -q
 ```
-
-被 ignore 的两个测试要读写 `../backend`（工作区外的兄弟项目），放权后可一并跑。
 
 ---
 

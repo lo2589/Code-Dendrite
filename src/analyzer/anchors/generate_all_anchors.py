@@ -231,7 +231,11 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     try:
         from scanner.language.pipeline import parse_paths, walk_source_paths
         source_paths = walk_source_paths(root, ignore=ignore, exclude_dirs=exclude)
-        parsed, language_failures, _completed = parse_paths(root, source_paths)
+        # include_python=True：Python 也必须走这条语言适配层。它默认是关的，
+        # 于是 Python 只剩上面那条 codeGenome 老路——那条路不写 parent_anchor、
+        # 看不见函数体里的嵌套函数、也带不出 language。
+        parsed, language_failures, _completed = parse_paths(
+            root, source_paths, include_python=True)
         for parsed_anchor in parsed.values():
             _merge_parsed_anchor(anchors, parsed_anchor)
         failed.extend(language_failures)
