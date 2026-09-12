@@ -144,7 +144,7 @@ def test_worker_postmessage_connects_both_message_handlers(tmp_path):
 
 
 def test_lens_plugin_self_chain_is_not_flattened_or_cross_wired():
-    root = Path(__file__).resolve().parents[3] / "src" / "view" / "lens"
+    root = Path(__file__).resolve().parents[3] / "lens"   # 插件已拉到顶层，与 src 平级
     paths = [
         root / "src" / "host.js",
         root / "src" / "index_worker.js",
@@ -161,7 +161,13 @@ def test_lens_plugin_self_chain_is_not_flattened_or_cross_wired():
     )
 
     host = anchors["src/host.js::apply"]
-    assert host.line_start == 115
+    # 行号从源码现算，不写死：往插件文件前面加几行就会让 115 变成 139，而这条测试
+    # 真正要验的是"锚点落在那个函数上、父子链没被压平"，不是某个魔数。
+    source_lines = (root / "src" / "host.js").read_text(encoding="utf-8").split("\n")
+    apply_at = next(
+        i for i, line in enumerate(source_lines, 1) if line.strip().startswith("apply(")
+    )
+    assert host.line_start <= apply_at <= host.line_end
     assert host.line_end > host.line_start + 500
     route = anchors["src/host.js::apply.register#1"]
     route_handler = anchors["src/host.js::apply.register#1.handler"]

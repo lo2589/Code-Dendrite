@@ -4,6 +4,7 @@
 __pycache__/
 .git/
 backup/
+doc/
 lens/lib/
 lens/output/
 lens/design/

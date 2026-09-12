@@ -103,6 +103,14 @@ python3 src/usage/cli/cdd modules <关键词>        # 语义模块
 
 边一律**静态可解析才建**。解析不到的不会编一个出来——`cdd callers` 对方法零结果时会提示未解析的候选调用点，而不是报告「没人用」。
 
+### 锚点的颗粒度
+
+锚点只到**模块顶层 def 与类方法**。函数体里再嵌套的 `def`（局部 helper、闭包工厂）不单独成锚点：它们的调用边全部记在母函数的 `callees` 下，打开母函数源码就拿到了，没有需要再追问的独立身份。三个例子印证这条规则：
+
+- `src/analyzer/anchors/core_load.py::load_anchors` 内的 `_coerce_callers` / `_coerce_callees`——索引里没有它们的 anchor 条目，但 `load_anchors.callees` 留了字符串痕迹
+- `src/usage/packets/task_context_packet/anchor.py::build_anchor_packet` 内的 `_related`——同上
+- 这不是漏识别，是锚点生成器只走 `tree.body`（顶层 + 类方法层）的设计取舍
+
 ---
 
 ## 测试
