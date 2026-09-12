@@ -25,6 +25,30 @@ const { IndexStore } = require('./index_store.js')
 const { collect, merge } = require('./session_trace.js')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..')
+
+/**
+ * Where the repository this plugin draws lives.
+ *
+ * This used to be written down as `'..','..'` from the plugin directory, and
+ * every time the plugin moved that pointed somewhere outside the repository —
+ * which reads back as a bare "cdd not found" with nothing to explain it. Look
+ * for the layout once instead of remembering it: the repository is the first
+ * ancestor that has the CLI in it.
+ */
+function findRepoRoot(start) {
+  let dir = start
+  for (let i = 0; i < 8; i += 1) {
+    if (fs.existsSync(path.join(dir, 'src', 'usage', 'cli', 'cdd'))) return dir
+    const parent = path.resolve(dir, '..')
+    if (parent === dir) break
+    dir = parent
+  }
+  return path.resolve(start, '..')
+}
+
+const REPO_ROOT = findRepoRoot(PACKAGE_ROOT)
+// Python 包在 src 下（src/analyzer、src/usage…），import 根是它，不是仓库根。
+const SRC_ROOT = path.join(REPO_ROOT, 'src')
 const ROUTE = '/plugins/cdd-lens'
 const STARTED_AT = new Date().toISOString()
 
@@ -670,7 +694,7 @@ module.exports = {
     const cddBin = () => {
       const candidate = typeof config.cddBin === 'string' && config.cddBin.length > 0
         ? config.cddBin
-        : path.resolve(PACKAGE_ROOT, '..', '..', 'usage', 'cli', 'cdd')
+        : path.join(REPO_ROOT, 'src', 'usage', 'cli', 'cdd')
       return fs.existsSync(candidate) ? candidate : null
     }
     const pythonBin = () => (typeof config.pythonBin === 'string' && config.pythonBin.length > 0
@@ -685,10 +709,9 @@ module.exports = {
     // spawn dies with "No module named 'view'", which `refreshPage` reports as
     // `spawn-failed` and `startReindex` as an exit code — neither of which
     // points at the path.
-    const REPO_ROOT = path.resolve(PACKAGE_ROOT, '..', '..')
     const pythonEnv = () => ({
       ...process.env,
-      PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+      PYTHONPATH: [SRC_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
     })
 
     // Which workspaces this plugin has actually served a drawing for, and when
@@ -725,7 +748,7 @@ module.exports = {
     // `refreshPage` answer `no-manifest` — an answer that looks like a fact
     // about the page rather than a broken path.
     const GENERATOR = path.resolve(
-      PACKAGE_ROOT, '..', 'browser', 'build_file_index.py',
+      REPO_ROOT, 'src', 'view', 'browser', 'build_file_index.py',
     )
 
     /**
