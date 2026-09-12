@@ -1,0 +1,11 @@
+# dsh-cdd-lens — host entry.
+#
+# The `id` below is the name the client half must answer to. The loader pairs a
+# client module to a mounted host entry by ENTRY ID, not by package name:
+# `dsh-cdd-lens` is the package, `cdd-lens` is the entry, and a mismatch loads
+# the module, pairs it to nothing, and never calls apply — no error anywhere,
+# and no panel.
+- insert:
+    - id: cdd-lens
+      name: dsh-cdd-lens
+      config: {}

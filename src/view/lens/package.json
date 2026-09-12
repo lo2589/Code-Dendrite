@@ -1,0 +1,29 @@
+{
+  "name": "dsh-cdd-lens",
+  "version": "0.1.18",
+  "private": true,
+  "description": "CodeDendrite Lens: a persistent turn-aligned trajectory sidebar and the repository's real interactive anchor graph.",
+  "type": "commonjs",
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./*": "./src/client/*.js"
+  },
+  "files": [
+    "src",
+    "lib",
+    "build.json",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

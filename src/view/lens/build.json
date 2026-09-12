@@ -1,0 +1,4 @@
+{
+  "build": "V1_24_DOCK_OPEN_PERSIST_007",
+  "note": "Single source of the build stamp. The host reads it from disk; the client bundle carries it inlined. /health compares the two so a stale bundle can never masquerade as a fresh one."
+}

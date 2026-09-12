@@ -1,0 +1,28 @@
+# ── 运行时缓存与临时产物 ──────────────────────────────────────
+__pycache__/
+*.pyc
+*.lock
+.cache/
+.screenshot/
+backup/
+
+# ── 文档不进仓 ────────────────────────────────────────────────
+# 唯一进仓的文档是根 README；夹具不是文档，缺了 test_issue_evidence_packet 会挂。
+# 注意：pattern 后面不能跟行尾注释，会连注释一起当 pattern。
+*.md
+!/README.md
+!/src/tests/fixtures/*.md
+
+*.txt
+# 依赖清单不是文档
+!/src/scanner/requirements.txt
+
+# ── 生成物：索引与产物，用 cdd rebuild 重生 ────────────────────
+.codedendrite/
+.code_genome_db.json
+.code_hash_db.json
+.code_anchors.json
+
+# ── 本机文件 ──────────────────────────────────────────────────
+CLAUDE.md
+.DS_Store

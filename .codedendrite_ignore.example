@@ -1,0 +1,110 @@
+# CodeKeeper 忽略规则配置文件
+# ================================
+# 
+# 本文档定义了 CodeKeeper 扫描项目的规则
+# 支持四种规则类型：
+#   - scan_exclude: 完全不扫描（节省时间和存储）
+#   - map_exclude: 扫描但不加入地图（参与依赖分析）
+#   - privacy_mask: 扫描且加入地图，但隐藏具体内容
+#   - include: 明确包含的路径（优先级最高）
+
+# === 完全不扫描（节省时间和存储）===
+[scan_exclude]
+# 依赖目录
+node_modules/
+.git/
+__pycache__/
+.venv/
+venv/
+.env/
+
+# 数据文件（如 3w 张照片的 dataset）
+dataset/
+data/raw/**
+*.csv
+*.parquet
+
+# 媒体文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.avi
+*.mov
+
+# 二进制文件
+*.bin
+*.exe
+*.dll
+*.so
+*.dylib
+*.pyc
+*.pyo
+
+# 日志和锁文件
+*.log
+*.lock
+
+# 构建产物
+build/
+dist/
+*.egg-info/
+
+
+# === 扫描但不加入地图（参与依赖分析）===
+[map_exclude]
+# 测试代码（通常不需要导航）
+tests/
+test_*.py
+*_test.py
+testing/
+mocks/
+fixtures/
+
+# 文档
+docs/
+*.md
+README*
+CHANGELOG*
+
+# 配置文件（不含敏感信息）
+*.yaml
+*.yml
+*.toml
+setup.py
+requirements.txt
+
+
+# === 扫描且加入地图，但隐藏具体内容（只显示符号名）===
+[privacy_mask]
+# 敏感配置文件
+.env
+.env.*
+*secret*
+*password*
+*credential*
+*api_key*
+config/secrets.json
+config/credentials.yml
+
+# 数据库相关
+*.sqlite
+*.db
+database.yml
+
+
+# === 明确包含的路径（优先级最高）===
+[include]
+# 源代码目录
+src/
+backend/
+frontend/
+extension/src/
+tools/
+packages/
+
+# 配置文件（非敏感）
+config.py
+settings.py
+pyproject.toml
