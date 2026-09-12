@@ -4,8 +4,8 @@
 __pycache__/
 .git/
 backup/
-src/view/lens/lib/
-src/view/lens/output/
-src/view/lens/design/
-src/view/lens-pcb/lib/
-src/view/lens-pcb/design/
+lens/lib/
+lens/output/
+lens/design/
+lens-pcb/lib/
+lens-pcb/design/

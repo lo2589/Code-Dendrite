@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codedendrite"
+version = "0.1.0"
+description = "基于 AST 的代码因果导航系统：用静态分析替代向量搜索"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+# 装完就能直接 `cdd xxx`：实体是 src/usage/cli/cdd，入口是 usage.cli.main。
+[project.scripts]
+cdd = "usage.cli.human:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.yml", "*.yaml", "cdd"]

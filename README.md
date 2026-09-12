@@ -25,9 +25,11 @@
 | `src/analyzer/` | **分析器**：符号 → 锚点身份 + 因果边。`identity/`（结构哈希与漂移）、`anchors/`、`inherit/`、`dataflow/`、`dynamic/`、`path/`、`control_flow/`、`ui/`、`shared/` |
 | `src/api/` | **对外查询面**：`inspector/`、`navigator/`、`query/`、`relations/` |
 | `src/usage/` | **使用面**：`cli/`、`packets/`、`workflow/`、`profiles/`、`tools/`、`repair/`、`structure/`、`analyze/` |
-| `src/view/` | **可视化**：`browser/`、`code_map/`、`relations/`、`timeline/`、`module_tree/`、`pipeline/`、`html/`，以及 DSH 插件 `lens/` 与并行分支 `lens-pcb/` |
+| `src/view/` | **可视化**：`browser/`、`code_map/`、`relations/`、`timeline/`、`module_tree/`、`pipeline/`、`html/` |
+| `lens/` | DSH 插件 `dsh-cdd-lens`：会话轨迹侧栏 + 可交互的锚点图（node 包，独立于 `src/`） |
+| `lens-pcb/` | lens 的并行分支（PCB 形态布局），build 戳独立 |
 | `mcp/` | MCP 服务器：把上面几层暴露成工具 |
-| `skills/` | agent skills（预留位） |
+| `skills/` | 给 agent 的三个 skill：`cdd-understand`（理解项目）、`cdd-rebuild`（拓扑重构）、`cdd-learn`（分层带学） |
 | `src/tests/` | 测试与夹具 |
 
 依赖单向：`scanner` → `analyzer` → `api` → `usage` / `view`。
