@@ -1,0 +1,11 @@
+[scan_exclude]
+.cache/
+.codedendrite/
+__pycache__/
+.git/
+backup/
+src/view/lens/lib/
+src/view/lens/output/
+src/view/lens/design/
+src/view/lens-pcb/lib/
+src/view/lens-pcb/design/

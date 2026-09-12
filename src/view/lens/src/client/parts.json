@@ -1,0 +1,839 @@
+{
+  "order": [
+    "runtime/api.js",
+    "graph/model.js",
+    "state/store.js",
+    "graph/visible.js",
+    "state/persist.js",
+    "session/trajectory.js",
+    "engine/fetch.js",
+    "engine/explore.js",
+    "engine/selection.js",
+    "engine/ingest.js",
+    "engine/gather.js",
+    "engine/engine.js",
+    "session/trace.js",
+    "view/record.js",
+    "view/tree.js",
+    "view/outline.js",
+    "view/panels.js",
+    "view/needIndex.js",
+    "view/node.js",
+    "view/hscroll.js",
+    "layout/camera.js",
+    "layout/prep.js",
+    "styles/graph.js",
+    "layout/cardBox.js",
+    "layout/metrics.js",
+    "layout/grid.js",
+    "skins/pcb/group.js",
+    "skins/tiers/group.js",
+    "skins/flow/group.js",
+    "layout/channels.js",
+    "routing/geometry.js",
+    "routing/select.js",
+    "routing/ortho.js",
+    "routing/bus.js",
+    "routing/lanes.js",
+    "routing/hops.js",
+    "routing/emit.js",
+    "routing/curve.js",
+    "routing/avoid.js",
+    "skins/pcb/route.js",
+    "skins/tiers/route.js",
+    "skins/flow/route.js",
+    "layout/gather.js",
+    "layout/skin.js",
+    "layout/space.js",
+    "layout/layout.js",
+    "view/stream.js",
+    "shell/chatSeat.js",
+    "shell/panel.js",
+    "shell/viewState.js",
+    "shell/viewCanvas.js",
+    "shell/viewToolbar.js",
+    "shell/boundary.js",
+    "shell/graphView.js",
+    "shell/dock.js",
+    "styles/shell.js",
+    "entry.js"
+  ],
+  "parts": [
+    {
+      "file": "runtime/api.js",
+      "lines": 32,
+      "exports": [
+        "BUILD",
+        "ROUTE",
+        "api"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "graph/model.js",
+      "lines": 64,
+      "exports": [
+        "emptyGraph",
+        "addNode",
+        "addEdge"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "state/store.js",
+      "lines": 162,
+      "exports": [
+        "shared",
+        "publish",
+        "requestViewport",
+        "useShared",
+        "useRightInset"
+      ],
+      "needs": {
+        "graph/model.js": [
+          "emptyGraph"
+        ]
+      }
+    },
+    {
+      "file": "graph/visible.js",
+      "lines": 49,
+      "exports": [
+        "STICKY_TURNS",
+        "stickyByRecency",
+        "visible"
+      ],
+      "needs": {
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "state/persist.js",
+      "lines": 139,
+      "exports": [
+        "PLACE_KEY",
+        "loadPlacement",
+        "savePlacement",
+        "usePlacement",
+        "NODE_POSITIONS_KEY",
+        "readAllNodePositions",
+        "ensureNodePositions",
+        "saveNodePosition",
+        "clearNodePositions"
+      ],
+      "needs": {
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "session/trajectory.js",
+      "lines": 195,
+      "exports": [
+        "TARGET",
+        "VERBS",
+        "parseArgs",
+        "touchesOf",
+        "walkCalls",
+        "foldTrajectory"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "engine/fetch.js",
+      "lines": 102,
+      "exports": [
+        "fetchMethods"
+      ],
+      "needs": {
+        "runtime/api.js": [
+          "api"
+        ],
+        "state/persist.js": [
+          "ensureNodePositions"
+        ],
+        "state/store.js": [
+          "publish",
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "engine/explore.js",
+      "lines": 132,
+      "exports": [
+        "exploreMethods"
+      ],
+      "needs": {
+        "graph/model.js": [
+          "addEdge",
+          "addNode",
+          "emptyGraph"
+        ],
+        "runtime/api.js": [
+          "api"
+        ],
+        "state/store.js": [
+          "publish",
+          "requestViewport",
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "engine/selection.js",
+      "lines": 73,
+      "exports": [
+        "selectionMethods"
+      ],
+      "needs": {
+        "state/store.js": [
+          "publish",
+          "requestViewport",
+          "shared"
+        ],
+        "state/persist.js": [
+          "saveNodePosition"
+        ]
+      }
+    },
+    {
+      "file": "engine/ingest.js",
+      "lines": 224,
+      "exports": [
+        "ingestMethods"
+      ],
+      "needs": {
+        "runtime/api.js": [
+          "ROUTE",
+          "api"
+        ],
+        "graph/model.js": [
+          "addEdge",
+          "addNode"
+        ],
+        "state/store.js": [
+          "publish",
+          "requestViewport",
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "engine/engine.js",
+      "lines": 60,
+      "exports": [
+        "currentSession",
+        "makeEngine"
+      ],
+      "needs": {
+        "engine/explore.js": [
+          "exploreMethods"
+        ],
+        "engine/fetch.js": [
+          "fetchMethods"
+        ],
+        "engine/ingest.js": [
+          "ingestMethods"
+        ],
+        "engine/selection.js": [
+          "selectionMethods"
+        ],
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "session/trace.js",
+      "lines": 115,
+      "exports": [
+        "useConversationTrace"
+      ],
+      "needs": {
+        "session/trajectory.js": [
+          "TARGET",
+          "foldTrajectory"
+        ],
+        "graph/model.js": [
+          "emptyGraph"
+        ],
+        "state/store.js": [
+          "publish",
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "view/record.js",
+      "lines": 80,
+      "exports": [
+        "stateOf",
+        "dotClass",
+        "orderOf",
+        "turnLabel",
+        "degenerate",
+        "short"
+      ],
+      "needs": {
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "view/tree.js",
+      "lines": 210,
+      "exports": [
+        "treeRows",
+        "TreeRow",
+        "Tree"
+      ],
+      "needs": {
+        "view/record.js": [
+          "dotClass",
+          "orderOf",
+          "short",
+          "stateOf",
+          "turnLabel"
+        ],
+        "state/store.js": [
+          "shared"
+        ],
+        "graph/visible.js": [
+          "visible"
+        ]
+      }
+    },
+    {
+      "file": "view/outline.js",
+      "lines": 122,
+      "exports": [
+        "Outline",
+        "Draw"
+      ],
+      "needs": {
+        "runtime/api.js": [
+          "ROUTE"
+        ],
+        "view/record.js": [
+          "dotClass",
+          "stateOf"
+        ],
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "view/panels.js",
+      "lines": 162,
+      "exports": [
+        "Source",
+        "History",
+        "Search",
+        "Legend",
+        "Unresolved"
+      ],
+      "needs": {
+        "view/record.js": [
+          "dotClass",
+          "short",
+          "stateOf"
+        ],
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "view/needIndex.js",
+      "lines": 60,
+      "exports": [
+        "NeedIndex"
+      ],
+      "needs": {
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "view/node.js",
+      "lines": 201,
+      "exports": [
+        "GraphNode"
+      ],
+      "needs": {
+        "view/record.js": [
+          "dotClass",
+          "stateOf",
+          "turnLabel"
+        ],
+        "state/store.js": [
+          "shared"
+        ],
+        "graph/visible.js": [
+          "stickyByRecency"
+        ]
+      }
+    },
+    {
+      "file": "view/hscroll.js",
+      "lines": 83,
+      "exports": [
+        "HScroll"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "layout/camera.js",
+      "lines": 176,
+      "exports": [
+        "CHAR",
+        "ROW",
+        "GAPX",
+        "MAX_PER_ROW",
+        "edgeHasType",
+        "dependencyEdge",
+        "edgeFocusOf",
+        "cameraLayout"
+      ],
+      "needs": {
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "layout/metrics.js",
+      "lines": 82,
+      "exports": [
+        "boxMetrics"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "layout/placement.js",
+      "lines": 113,
+      "exports": [
+        "placeBoxes",
+        "deriveFileBoxes"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "layout/channels.js",
+      "lines": 80,
+      "exports": [
+        "buildChannels"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "routing/select.js",
+      "lines": 80,
+      "exports": [
+        "chooseEdges"
+      ],
+      "needs": {
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "routing/ortho.js",
+      "lines": 143,
+      "exports": [
+        "routeOrtho"
+      ],
+      "needs": {
+        "view/record.js": [
+          "stateOf"
+        ]
+      }
+    },
+    {
+      "file": "routing/bus.js",
+      "lines": 73,
+      "exports": [
+        "mergeBuses"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "routing/lanes.js",
+      "lines": 76,
+      "exports": [
+        "spreadLanes"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "routing/hops.js",
+      "lines": 53,
+      "exports": [
+        "markHops"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "routing/emit.js",
+      "lines": 101,
+      "exports": [
+        "emitWires"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "routing/curve.js",
+      "lines": 73,
+      "exports": [
+        "emitCurves"
+      ],
+      "needs": {
+        "view/record.js": [
+          "stateOf"
+        ]
+      }
+    },
+    {
+      "file": "layout/tiers.js",
+      "lines": 0,
+      "exports": [
+        "tiered",
+        "placeTiers"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "routing/tier.js",
+      "lines": 0,
+      "exports": [
+        "routeTiers"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "layout/layout.js",
+      "lines": 98,
+      "exports": [
+        "layout"
+      ],
+      "needs": {
+        "layout/metrics.js": [
+          "boxMetrics"
+        ],
+        "layout/channels.js": [
+          "buildChannels"
+        ],
+        "layout/camera.js": [
+          "cameraLayout"
+        ],
+        "routing/select.js": [
+          "chooseEdges"
+        ],
+        "layout/placement.js": [
+          "deriveFileBoxes",
+          "placeBoxes"
+        ],
+        "routing/curve.js": [
+          "emitCurves"
+        ],
+        "routing/emit.js": [
+          "emitWires"
+        ],
+        "routing/hops.js": [
+          "markHops"
+        ],
+        "routing/bus.js": [
+          "mergeBuses"
+        ],
+        "routing/ortho.js": [
+          "routeOrtho"
+        ],
+        "routing/lanes.js": [
+          "spreadLanes"
+        ],
+        "layout/space.js": [
+          "fitExtent",
+          "shiftDrawing"
+        ],
+        "layout/prep.js": [
+          "layoutScope",
+          "orientFlow",
+          "rankFiles"
+        ]
+      }
+    },
+    {
+      "file": "view/stream.js",
+      "lines": 0,
+      "exports": [
+        "Stream",
+        "stepsOf"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "shell/chatSeat.js",
+      "lines": 40,
+      "exports": [
+        "activateChatTab",
+        "openDockBesideChat"
+      ],
+      "needs": {
+        "state/store.js": [
+          "publish",
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "shell/panel.js",
+      "lines": 174,
+      "exports": [
+        "LensPanel"
+      ],
+      "needs": {
+        "runtime/api.js": [
+          "BUILD",
+          "api"
+        ],
+        "view/outline.js": [
+          "Draw",
+          "Outline"
+        ],
+        "view/panels.js": [
+          "History",
+          "Legend",
+          "Search",
+          "Source",
+          "Unresolved"
+        ],
+        "view/needIndex.js": [
+          "NeedIndex"
+        ],
+        "view/tree.js": [
+          "Tree"
+        ],
+        "view/record.js": [
+          "degenerate"
+        ],
+        "engine/engine.js": [
+          "makeEngine"
+        ],
+        "shell/chatSeat.js": [
+          "openDockBesideChat"
+        ],
+        "state/store.js": [
+          "shared",
+          "useRightInset",
+          "useShared"
+        ],
+        "session/trace.js": [
+          "useConversationTrace"
+        ],
+        "state/persist.js": [
+          "usePlacement"
+        ]
+      }
+    },
+    {
+      "file": "shell/viewState.js",
+      "lines": 148,
+      "exports": [
+        "useViewState"
+      ],
+      "needs": {
+        "layout/layout.js": [
+          "layout"
+        ],
+        "engine/engine.js": [
+          "makeEngine"
+        ],
+        "state/store.js": [
+          "shared",
+          "useRightInset",
+          "useShared"
+        ],
+        "session/trace.js": [
+          "useConversationTrace"
+        ]
+      }
+    },
+    {
+      "file": "shell/viewCanvas.js",
+      "lines": 155,
+      "exports": [
+        "renderCanvas"
+      ],
+      "needs": {
+        "view/outline.js": [
+          "Draw",
+          "Outline"
+        ],
+        "view/node.js": [
+          "GraphNode"
+        ],
+        "view/needIndex.js": [
+          "NeedIndex"
+        ],
+        "state/store.js": [
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "shell/viewToolbar.js",
+      "lines": 151,
+      "exports": [
+        "renderToolbar"
+      ],
+      "needs": {
+        "view/panels.js": [
+          "Search"
+        ],
+        "state/persist.js": [
+          "clearNodePositions"
+        ],
+        "graph/model.js": [
+          "emptyGraph"
+        ],
+        "shell/chatSeat.js": [
+          "openDockBesideChat"
+        ],
+        "state/store.js": [
+          "publish",
+          "shared"
+        ]
+      }
+    },
+    {
+      "file": "shell/graphView.js",
+      "lines": 117,
+      "exports": [
+        "LensView"
+      ],
+      "needs": {
+        "view/hscroll.js": [
+          "HScroll"
+        ],
+        "view/panels.js": [
+          "History",
+          "Legend",
+          "Source"
+        ],
+        "shell/viewCanvas.js": [
+          "renderCanvas"
+        ],
+        "shell/viewToolbar.js": [
+          "renderToolbar"
+        ],
+        "state/store.js": [
+          "shared"
+        ],
+        "shell/viewState.js": [
+          "useViewState"
+        ]
+      }
+    },
+    {
+      "file": "shell/dock.js",
+      "lines": 99,
+      "exports": [
+        "DOCK_WIDTH_KEY",
+        "loadDockWidth",
+        "LensDock",
+        "LensOverlay"
+      ],
+      "needs": {
+        "shell/panel.js": [
+          "LensPanel"
+        ],
+        "shell/graphView.js": [
+          "LensView"
+        ],
+        "state/store.js": [
+          "publish",
+          "shared",
+          "useShared"
+        ]
+      }
+    },
+    {
+      "file": "styles/shell.js",
+      "lines": 201,
+      "exports": [
+        "SHELL_CSS"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "styles/graph.js",
+      "lines": 135,
+      "exports": [
+        "GRAPH_CSS"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "entry.js",
+      "lines": 66,
+      "exports": [
+        "apply"
+      ],
+      "needs": {
+        "styles/graph.js": [
+          "GRAPH_CSS"
+        ],
+        "shell/dock.js": [
+          "LensOverlay"
+        ],
+        "shell/graphView.js": [
+          "LensView"
+        ],
+        "styles/shell.js": [
+          "SHELL_CSS"
+        ]
+      }
+    },
+    {
+      "file": "layout/space.js",
+      "lines": 264,
+      "exports": [
+        "fitExtent",
+        "shiftPlacement",
+        "shiftDrawing",
+        "separateOverlaps",
+        "reclaimStrays",
+        "restackBoxes"
+      ],
+      "needs": {}
+    },
+    {
+      "file": "layout/prep.js",
+      "lines": 164,
+      "exports": [
+        "layoutScope",
+        "rankFiles",
+        "orientFlow"
+      ],
+      "needs": {
+        "layout/camera.js": [
+          "edgeFocusOf"
+        ],
+        "state/store.js": [
+          "shared"
+        ],
+        "graph/visible.js": [
+          "visible"
+        ]
+      }
+    }
+  ]
+}
