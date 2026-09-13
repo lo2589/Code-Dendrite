@@ -148,6 +148,7 @@ window.__ModuleLoader__.load({
       // and an integer here would move both.
       var LANE_STEP = em(1.62)          // 12 — one lane's worth of corridor
       var WIRE_HOP = em(1.22) / 2       // 4.5 — hop arc radius
+      var WIRE_CORNER = em(1.35)        // 10 — rounded bend radius
       var CORRIDOR_MIN = em(1.08)       // 8 — narrowest usable corridor or side lane
       var SUBLANE_STEP = em(0.54)       // 4 — wires sharing one node gap fan out by this
       var HIT_PAD = em(0.41)            // 3 — a run this close to a box is through it
@@ -224,7 +225,7 @@ window.__ModuleLoader__.load({
         INNER_GAP_X: INNER_GAP_X, INNER_GAP_Y: INNER_GAP_Y,
         PORT_STUB: PORT_STUB, ARROW_EVERY: ARROW_EVERY,
         PORT_CLEAR: PORT_CLEAR, LAYER_GAP_X: LAYER_GAP_X, COL_STRIDE: COL_STRIDE,
-        LANE_STEP: LANE_STEP, WIRE_HOP: WIRE_HOP, CORRIDOR_MIN: CORRIDOR_MIN,
+        LANE_STEP: LANE_STEP, WIRE_HOP: WIRE_HOP, WIRE_CORNER: WIRE_CORNER, CORRIDOR_MIN: CORRIDOR_MIN,
         SUBLANE_STEP: SUBLANE_STEP, HIT_PAD: HIT_PAD,
         canvasWidth: canvasWidth, sizeOf: sizeOf, label: label }
     }

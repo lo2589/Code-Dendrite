@@ -275,7 +275,8 @@ window.__ModuleLoader__.load({
         })
       })
 
-      var route = { polylines: polylines, LANE_STEP: metrics.LANE_STEP, HOP: metrics.WIRE_HOP, ARROW_EVERY: metrics.ARROW_EVERY }
+      var route = { polylines: polylines, LANE_STEP: metrics.LANE_STEP, HOP: metrics.WIRE_HOP,
+        WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }
       repairCrossings(route, orient, metrics)
       var drawn = emitWires(route, markHops(route))
       return { route: route, drawn: drawn }

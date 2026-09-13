@@ -8,11 +8,32 @@ const { Worker } = require('worker_threads')
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lens-worker-'))
 fs.mkdirSync(path.join(root, '.codedendrite'))
-const anchor = (file, symbol, s, e) => ({ file, symbol, line_start: s, line_end: e, symbol_type: 'function' })
+const anchor = (file, symbol, s, e, extra = {}) => ({ file, symbol, line_start: s, line_end: e, symbol_type: 'function', ...extra })
 fs.writeFileSync(path.join(root, '.codedendrite', 'anchors.json'), JSON.stringify({
-  'a.py::f': anchor('a.py', 'f', 1, 9),
-  'a.py::g': anchor('a.py', 'g', 10, 19),
+  // `callers` / `callees` 是 anchors.json 那一半，必须和边表说的一致：
+  // 上下游现在是"边表 ∩ 记录字段"，夹具里两者打架的话，测的就不是代码了。
+  'a.py::f': anchor('a.py', 'f', 1, 9, {
+    hash: 'hash-of-f', qualified_name: 'f', imports: ['os'],
+    callers: ['a.py::g', 'a.py::h'], callees: ['a.py::g'],
+    mro: ['a.py::f'], own_methods: ['a.py::f'],
+  }),
+  'a.py::g': anchor('a.py', 'g', 10, 19, {
+    hash: 'hash-of-g', qualified_name: 'g', imports: ['sys'],
+    callers: ['a.py::f'], callees: ['a.py::f'],
+  }),
   'a.py::h': anchor('a.py', 'h', 20, 29),
+  'a.py::main': anchor('a.py', 'main', 30, 39),
+  'a.py::main#if': anchor('a.py', 'main#if', 34, 37, {
+    symbol_type: 'virtual_block',
+    is_virtual: true,
+    virtual_kind: 'condition',
+    parent_anchor: 'a.py::main',
+  }),
+  'a.py::child': anchor('a.py', 'child', 40, 49),
+  'frontend/src/app.ts::boot': anchor('frontend/src/app.ts', 'boot', 1, 9),
+  'frontend/src/app.ts::renderThing': anchor('frontend/src/app.ts', 'renderThing', 10, 19),
+  'node_modules/pkg/index.ts::vendored': anchor('node_modules/pkg/index.ts', 'vendored', 1, 9),
+  'tests/stats.py::stats': anchor('tests/stats.py', 'stats', 1, 9),
 }))
 fs.writeFileSync(path.join(root, '.codedendrite', 'relations.json'), JSON.stringify({
   edges: [
@@ -21,6 +42,8 @@ fs.writeFileSync(path.join(root, '.codedendrite', 'relations.json'), JSON.string
     { from_id: 'a.py::f', to_id: 'a.py::f', edge_type: 'call' },
     { from_id: 'a.py::g', to_id: 'a.py::f', edge_type: 'call' },
     { from_id: 'a.py::h', to_id: 'a.py::f', edge_type: 'call' },
+    { from_id: 'a.py::main', to_id: 'a.py::main#if', edge_type: 'call' },
+    { from_id: 'a.py::main#if', to_id: 'a.py::child', edge_type: 'call' },
   ],
 }))
 
@@ -51,9 +74,25 @@ const down = await ask('neighbors', { id: 'a.py::f', direction: 'down' })
 const up = await ask('neighbors', { id: 'a.py::f', direction: 'up' })
 check('self-loop not counted: f.down === 1', anchor_f.anchor.down === 1)
 check('self-loop not listed: expand shows 1 peer', down.peers.length === 1)
+check('neighbors returns same-snapshot source anchor', down.anchor.id === 'a.py::f' && down.anchor.down === down.peers.length)
+// A DOM node IS an anchor: what CodeDendrite stored has to reach the browser,
+// both for the node that is drawn and for every node an expand creates. A
+// node carrying a stripped stub cannot draw itself or expand honestly.
+const RECORD = ['hash', 'qualified_name', 'imports', 'callers', 'mro', 'own_methods', 'symbol_type']
+const carried = (subject, stored) => RECORD
+  .filter(f => stored[f] !== undefined)
+  .every(f => JSON.stringify(subject[f]) === JSON.stringify(stored[f]))
+check('a drawn node carries its whole stored anchor',
+  carried(anchor_f.anchor, { hash: 'hash-of-f', qualified_name: 'f', imports: ['os'], callers: ['a.py::g', 'a.py::h'], callees: ['a.py::g'], mro: ['a.py::f'], own_methods: ['a.py::f'], symbol_type: 'function' }))
+check('a node born from an expand carries its whole stored anchor',
+  carried(down.peers[0], { hash: 'hash-of-g', qualified_name: 'g', imports: ['sys'], callers: ['a.py::f'], symbol_type: 'function' }))
+check('the anchor beside an expand result is the same record',
+  carried(up.anchor, { hash: 'hash-of-f', qualified_name: 'f', callers: ['a.py::g', 'a.py::h'] }))
 check('button count === expand count (down)', anchor_f.anchor.down === down.peers.length)
 check('button count === expand count (up)', anchor_f.anchor.up === up.peers.length && up.peers.length === 2)
-check('call+dataflow to one peer is one neighbour', down.peers[0].id === 'a.py::g' && down.peers[0].types.length === 2)
+// 邻居只由 call 决定，线也只画那条 call 边：出和入不许共用一条边，types 不许多挂。
+check('a peer reached by call is one neighbour, wired as call',
+  down.peers[0].id === 'a.py::g' && down.peers[0].types.length === 1 && down.peers[0].types[0] === 'call')
 check('neighbors carries stamp', typeof down.stamp === 'string')
 
 const ver = await ask('verify', { ids: ['a.py::f', 'a.py::gone'] })
@@ -64,6 +103,33 @@ check('verify carries stamp', typeof ver.stamp === 'string')
 const chain = await ask('chain', { ids: 'a.py::f', hops: 1 })
 check('chain carries stamp', typeof chain.stamp === 'string')
 check('chain self-loop out of layering: f and g on layers', chain.trees.length === 1)
+
+const stats = await ask('stats', {})
+check('stats hides virtual anchors', stats.anchors === 9)
+const mainAnchor = await ask('anchor', { id: 'a.py::main' })
+const mainDown = await ask('neighbors', { id: 'a.py::main', direction: 'down' })
+check('virtual block folded out of neighbour count', mainAnchor.anchor.down === 1)
+check('expand skips virtual block and reaches real child',
+  mainDown.peers.length === 1 && mainDown.peers[0].id === 'a.py::child')
+const virtualBlock = await ask('anchor', { id: 'a.py::main#if' })
+check('virtual block stays hidden if addressed directly', virtualBlock.anchor.hidden === true)
+const virtualSearch = await ask('search', { q: 'main#if', limit: 8 })
+check('search hides virtual blocks', virtualSearch.hits.length === 0)
+const foldedChain = await ask('chain', { ids: 'a.py::main', hops: 1 })
+const foldedIds = foldedChain.trees.flatMap(tree => tree.nodes.map(node => node.id))
+check('chain folds virtual blocks out',
+  foldedIds.includes('a.py::child') && !foldedIds.includes('a.py::main#if'))
+
+const ts = await ask('search', { q: 'ts', limit: 8 })
+check('short ts search means TypeScript, not tests/stats noise',
+  ts.hits.length >= 2
+  && ts.hits[0].file === 'frontend/src/app.ts'
+  && ts.hits.every(hit => hit.file !== 'tests/stats.py'))
+const dotTs = await ask('search', { q: '.ts', limit: 8 })
+check('.ts extension search only returns TypeScript files',
+  dotTs.hits.length >= 2 && dotTs.hits.every(hit => hit.file.endsWith('.ts')))
+check('extension search keeps vendored files behind project files',
+  dotTs.hits[0].file === 'frontend/src/app.ts')
 }
 
 main().then(() => {

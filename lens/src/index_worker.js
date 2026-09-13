@@ -55,6 +55,7 @@ class Repo {
   constructor(root) {
     this.root = root
     this.anchors = new Map()
+    this.visible = new Set()
     this.byFile = new Map()
     this.out = new Map()
     this.in = new Map()
@@ -86,6 +87,26 @@ function push(map, key, value) {
   else list.push(value)
 }
 
+function virtualAnchor(anchor) {
+  return anchor !== undefined && anchor !== null
+    && (anchor.isVirtual === true || anchor.kind === 'virtual_block')
+}
+
+function addRelation(repo, from, to, type) {
+  const edge = { from, to, type }
+  push(repo.out, from, edge)
+  push(repo.in, to, edge)
+}
+
+function addVisibleRelation(repo, seen, from, to, type) {
+  if (from === to) return
+  if (!repo.visible.has(from) || !repo.visible.has(to)) return
+  const key = `${from}\u0000${to}\u0000${type}`
+  if (seen.has(key)) return
+  seen.add(key)
+  addRelation(repo, from, to, type)
+}
+
 /**
  * Parse one root's index into the query shapes.
  *
@@ -109,8 +130,20 @@ function build(root) {
       start: typeof a.line_start === 'number' ? a.line_start : null,
       end: typeof a.line_end === 'number' ? a.line_end : null,
       kind: a.symbol_type ?? null,
+      isVirtual: a.is_virtual === true || a.symbol_type === 'virtual_block',
+      virtualKind: a.virtual_kind ?? null,
+      parentAnchor: a.parent_anchor ?? null,
+      // The stored record, whole. A DOM node IS an anchor: what it draws, what
+      // it expands into and which relations it shows all come from this, so it
+      // has to travel with the node instead of being dropped at build time.
+      // `hash`, `qualified_name`, `imports`, `callers`, `parent_classes`,
+      // `mro`, `own_methods` and `effective_methods` used to stop here, which
+      // left every card and every node born from an expand holding a stub.
+      record: a,
     }
     repo.anchors.set(id, node)
+    if (virtualAnchor(node)) continue
+    repo.visible.add(id)
     push(repo.byFile, node.file, node)
     // `Class.method` — the dot is inside the symbol half, after `::`.
     const dot = node.symbol.indexOf('.')
@@ -121,14 +154,37 @@ function build(root) {
   }
 
   const rel = JSON.parse(fs.readFileSync(relationsPath, 'utf8'))
+  const rawOut = new Map()
   for (const e of rel.edges ?? []) {
     // Edges reaching outside the index (builtins like `print`, third-party
     // calls) are dropped rather than drawn as phantom nodes: the graph shows
     // this repository, and a node with no anchor has no source to open.
     if (!repo.anchors.has(e.from_id) || !repo.anchors.has(e.to_id)) continue
-    const edge = { from: e.from_id, to: e.to_id, type: e.edge_type }
-    push(repo.out, e.from_id, edge)
-    push(repo.in, e.to_id, edge)
+    push(rawOut, e.from_id, { from: e.from_id, to: e.to_id, type: e.edge_type })
+  }
+
+  const seen = new Set()
+  const walkVirtual = (from, first, type, visited) => {
+    if (visited.has(first)) return
+    visited.add(first)
+    for (const next of rawOut.get(first) ?? []) {
+      const target = repo.anchors.get(next.to)
+      if (target === undefined) continue
+      if (virtualAnchor(target)) {
+        walkVirtual(from, next.to, type, visited)
+      } else {
+        addVisibleRelation(repo, seen, from, next.to, type)
+      }
+    }
+  }
+
+  for (const from of repo.visible) {
+    for (const edge of rawOut.get(from) ?? []) {
+      const target = repo.anchors.get(edge.to)
+      if (target === undefined) continue
+      if (virtualAnchor(target)) walkVirtual(from, edge.to, edge.type, new Set())
+      else addVisibleRelation(repo, seen, from, edge.to, edge.type)
+    }
   }
   return repo
 }
@@ -144,43 +200,149 @@ function repoFor(root) {
   return built
 }
 
-/** Distinct edges to `id`'s neighbours in one direction, deduped by target. */
-function hop(repo, id, direction) {
+/**
+ * 记录里的 `callers` / `callees` 字段——anchors.json 那一半。
+ *
+ * 它是**裸调用名单**，不是解析好的邻居表：`callees` 里常常写着 `len`、
+ * `bounding_box` 这种短名字，要按 import 上下文才解析得到具体 anchor，而记录
+ * 本身不带解析结果。所以这个字段只能用来**对账报警**，不能拿它过滤邻居——实测
+ * `visual_computer_operate` 上 ↓ 方向有 89 条真边因为记录里只写了裸名字而被滤掉，
+ * 那正是"有的没抓到"。
+ *
+ * 返回 null 表示"这条记录没算过这个方向"，**不是**"这个方向没人"：没算过的字段
+ * 序列化成 null（`_ws_handshake_headers` 的 callers 就是 None，而它确实被
+ * make_handler 调用）。
+ */
+function recordPeers(repo, id, direction) {
+  const rec = repo.anchors.get(id)?.record
+  const list = direction === 'up' ? rec?.callers : rec?.callees
+  if (!Array.isArray(list) || list.length === 0) return null
+  const found = new Set()
+  for (const raw of list) {
+    const key = String(raw)
+    if (key === id) continue
+    if (!repo.anchors.has(key) || !repo.visible.has(key)) continue
+    found.add(key)
+  }
+  return found
+}
+
+/**
+ * 上下键的邻居：**只认 call**，而且两端都必须是真实 anchor。
+ *
+ * 两个文件一起用，分工是这样：relations.json 给出**已经解析好的** call 边（谁
+ * 调用谁、那个名字在这段上下文里指哪里），anchors.json 把边两端的 id 变成一条
+ * 真实记录——记录取得到，这个 peer 才建得出 node。缺前者就没有方向，缺后者就
+ * 没有节点。
+ *
+ * dataflow 不能算进来。它的箭头指的是**数据**往哪走，不是谁调用谁：`return`
+ * 边写成 `被调用方 -> 调用方`，于是同一个调用者在 ↑ 里出现一次、又在 ↓ 里出现
+ * 一次——实测 `vco/models.py::GridSpec` 的 ↓60 里有 35 个（58%）正是刚按 ↑ 拉
+ * 进来那批，按下去自然"没有新东西"。inherit / impact / dispatch 同理。
+ *
+ * 这里是上下键的**唯一真相**：按钮上的数字、展开出来的名单、画出来的节点都由
+ * 它出，所以三者不可能对不上。
+ */
+function callPeers(repo, id, direction) {
   const edges = (direction === 'up' ? repo.in : repo.out).get(id) ?? []
-  const byPeer = new Map()
+  const found = new Set()
   for (const e of edges) {
+    if (e.type !== 'call') continue
     const peer = direction === 'up' ? e.from : e.to
     if (peer === id) continue
-    const seen = byPeer.get(peer)
-    // A pair can carry several relation kinds — `update_anchors_for_files` reaches
-    // `_generate_anchors_for_paths` as both `call` and `dataflow`. Both are true,
-    // so both are reported and the view draws one line per kind.
-    if (seen === undefined) byPeer.set(peer, { id: peer, types: [e.type] })
-    else if (!seen.types.includes(e.type)) seen.types.push(e.type)
+    if (!repo.anchors.has(peer) || !repo.visible.has(peer)) continue
+    found.add(peer)
   }
-  return [...byPeer.values()].map(entry => ({
-    ...entry,
-    ...describe(repo, entry.id),
+  // 一条 call 边只可能属于一个方向：from === id 是下行，to === id 是上行，
+  // 不可能同时成立 —— 出和入永远不会共用同一条边。
+  return [...found].sort()
+}
+
+/** 两个来源的差集：只做情报，不参与过滤。onlyInEdges 通常是记录写了裸名字。 */
+function crossCheck(repo, id, direction) {
+  const fromEdges = new Set(callPeers(repo, id, direction))
+  const record = recordPeers(repo, id, direction)
+  if (record === null) {
+    return { edges: fromEdges.size, record: null, agreed: fromEdges.size, onlyInEdges: [], onlyInRecord: [] }
+  }
+  const onlyInEdges = [...fromEdges].filter(x => !record.has(x))
+  const onlyInRecord = [...record].filter(x => !fromEdges.has(x))
+  return {
+    edges: fromEdges.size,
+    record: record.size,
+    agreed: fromEdges.size - onlyInEdges.length,
+    onlyInEdges,
+    onlyInRecord,
+  }
+}
+
+/**
+ * 这条线的类型：恒为 `call`。
+ *
+ * 邻居既然只由 call 边决定，画出来的线就只能是那条 call 边本身。以前这里把两个
+ * 节点之间的**所有**关系塞进 types，于是一条下行线身上可能挂着反向的 dataflow，
+ * 出和入看着像同一条边——`cddl-wire` 的语义、`select.js` 的过滤都跟着含糊。
+ */
+function peerTypes() {
+  return ['call']
+}
+
+/** Distinct edges to `id`'s neighbours in one direction, deduped by target. */
+function hop(repo, id, direction) {
+  return callPeers(repo, id, direction).map(peer => ({
+    id: peer,
+    types: peerTypes(repo, id, peer),
+    ...describe(repo, peer),
   }))
 }
 
-/** The wire shape of one anchor, plus the counts a collapsed node has to show. */
+/**
+ * A class's own methods.
+ *
+ * The record carries `own_methods`, which is what CodeDendrite decided the
+ * class owns — including a method whose symbol does not nest under the class.
+ * Splitting the symbol on its dot is only the fallback for an anchor that has
+ * no record to speak from. Ids that are not in this index cannot become a
+ * card, so they are dropped rather than promised.
+ */
+function memberIds(repo, id) {
+  const own = repo.anchors.get(id)?.record?.own_methods
+  if (Array.isArray(own) && own.length > 0) {
+    const known = own.filter(m => repo.anchors.has(m) && repo.visible.has(m))
+    if (known.length > 0) return known
+  }
+  return repo.members.get(id) ?? []
+}
+
+/**
+ * The wire shape of one anchor: the whole stored record, plus the counts a
+ * collapsed node has to show.
+ *
+ * The record goes out first so a node carries its anchor — `hash`,
+ * `qualified_name`, `imports`, `callers`, `parent_classes`, `mro`,
+ * `own_methods`, `effective_methods`, `symbol_type`. The normalized fields
+ * follow and win, because they are what the reader is written against.
+ */
 function describe(repo, id) {
   const a = repo.anchors.get(id)
   if (a === undefined) return { id, missing: true }
+  if (!repo.visible.has(id)) return { id, hidden: true }
   return {
+    ...(a.record ?? {}),
     id,
     file: a.file,
     symbol: a.symbol,
     start: a.start,
     end: a.end,
     kind: a.kind,
-    members: (repo.members.get(id) ?? []).length,
+    members: memberIds(repo, id).length,
     // Self-loops are excluded for one reason: hop() skips them, so a recursive
     // function counting itself here made the button promise one neighbour more
     // than expand can ever list. The number on the button IS the expand count.
-    up: new Set((repo.in.get(id) ?? []).filter(e => e.from !== id).map(e => e.from)).size,
-    down: new Set((repo.out.get(id) ?? []).filter(e => e.to !== id).map(e => e.to)).size,
+    // 按钮上的数字就是展开出来的名单长度——两边都走 callPeers，同一次判断，
+    // 不可能出现"说 60 只给出 25 个"。只认 call，理由见 callPeers。
+    up: callPeers(repo, id, 'up').length,
+    down: callPeers(repo, id, 'down').length,
   }
 }
 
@@ -212,17 +374,97 @@ function fileSymbols(repo, file) {
     .map(a => describe(repo, a.id))
 }
 
-function search(repo, query, limit) {
-  const needle = query.toLowerCase()
-  const exact = []
-  const partial = []
-  for (const a of repo.anchors.values()) {
-    const symbol = a.symbol.toLowerCase()
-    if (symbol === needle) exact.push(a.id)
-    else if (symbol.includes(needle) || a.file.toLowerCase().includes(needle)) partial.push(a.id)
-    if (exact.length + partial.length > limit * 6) break
+function fileName(file) {
+  const slash = file.lastIndexOf('/')
+  return slash < 0 ? file : file.slice(slash + 1)
+}
+
+function stem(file) {
+  const name = fileName(file)
+  const dot = name.lastIndexOf('.')
+  return dot < 0 ? name : name.slice(0, dot)
+}
+
+function words(text) {
+  return text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+}
+
+function vendored(file) {
+  return /(^|\/)(node_modules|vendor|dist|build|coverage|__pycache__)(\/|$)/.test(file)
+}
+
+function langExtensions(needle) {
+  const langs = {
+    ts: ['.ts', '.tsx'],
+    typescript: ['.ts', '.tsx'],
+    js: ['.js', '.jsx', '.mjs', '.cjs'],
+    javascript: ['.js', '.jsx', '.mjs', '.cjs'],
+    py: ['.py'],
+    python: ['.py'],
   }
-  return [...exact, ...partial].slice(0, limit).map(id => describe(repo, id))
+  return langs[needle] || null
+}
+
+function searchMode(raw) {
+  const needle = raw.trim().toLowerCase()
+  if (needle.length === 0) return { kind: 'empty', needle }
+  if (needle.startsWith('path:')) return { kind: 'path', needle: needle.slice(5).trim() }
+  if (needle.startsWith('lang:')) {
+    const lang = needle.slice(5).trim()
+    return { kind: 'extension', needle: lang, extensions: langExtensions(lang) || [lang[0] === '.' ? lang : '.' + lang] }
+  }
+  if (/^\.[a-z0-9]+$/.test(needle)) return { kind: 'extension', needle, extensions: [needle] }
+  return { kind: 'normal', needle, extensions: langExtensions(needle) }
+}
+
+function scoreSearchAnchor(a, mode) {
+  if (mode.kind === 'empty') return null
+  const file = a.file.toLowerCase()
+  const name = fileName(file)
+  const base = stem(file)
+  const symbol = a.symbol.toLowerCase()
+  const short = mode.needle.length <= 2
+  let score = null
+
+  if (mode.kind === 'path') {
+    if (mode.needle.length === 0 || !file.includes(mode.needle)) return null
+    score = fileName(file).includes(mode.needle) ? 760 : 620
+  } else if (mode.kind === 'extension') {
+    if (!mode.extensions.some(ext => file.endsWith(ext))) return null
+    score = symbol.includes('.') ? 720 : 780
+  } else {
+    if (mode.extensions !== null && mode.extensions.some(ext => file.endsWith(ext))) score = 820
+    if (symbol === mode.needle) score = Math.max(score || 0, 1000)
+    if (symbol.split('.').pop() === mode.needle) score = Math.max(score || 0, 950)
+    if (base === mode.needle || name === mode.needle) score = Math.max(score || 0, 900)
+    if (words(symbol).indexOf(mode.needle) >= 0) score = Math.max(score || 0, 840)
+    if (words(file).indexOf(mode.needle) >= 0) score = Math.max(score || 0, 800)
+    if (!short && symbol.startsWith(mode.needle)) score = Math.max(score || 0, 740)
+    if (!short && name.startsWith(mode.needle)) score = Math.max(score || 0, 700)
+    if (!short && symbol.includes(mode.needle)) score = Math.max(score || 0, 560)
+    if (!short && file.includes(mode.needle)) score = Math.max(score || 0, 520)
+  }
+
+  if (score === null) return null
+  if (vendored(file)) score -= 320
+  if (symbol.includes('.')) score -= 8
+  return score
+}
+
+function search(repo, query, limit) {
+  const mode = searchMode(query)
+  const ranked = []
+  for (const a of repo.anchors.values()) {
+    if (!repo.visible.has(a.id)) continue
+    const score = scoreSearchAnchor(a, mode)
+    if (score === null) continue
+    ranked.push({ id: a.id, score, file: a.file, symbol: a.symbol })
+  }
+  ranked.sort((l, r) => r.score - l.score
+    || l.file.localeCompare(r.file)
+    || l.symbol.localeCompare(r.symbol)
+    || l.id.localeCompare(r.id))
+  return ranked.slice(0, limit).map(hit => describe(repo, hit.id))
 }
 
 /**
@@ -294,7 +536,7 @@ function sourceOf(repo, id, pad) {
  * set must not silently grow into the whole repository.
  */
 function among(repo, ids, bridge) {
-  const want = new Set(ids.filter(id => repo.anchors.has(id)))
+  const want = new Set(ids.filter(id => repo.visible.has(id)))
   const edges = []
   const seen = new Set()
   const add = (e) => {
@@ -369,7 +611,7 @@ function among(repo, ids, bridge) {
  *   layers and its own edges, plus the seeds that reached nothing.
  */
 function chain(repo, seeds, hops) {
-  const start = seeds.filter(id => repo.anchors.has(id))
+  const start = seeds.filter(id => repo.visible.has(id))
   const nodes = new Set(start)
   const edges = new Map()
   const addEdge = (from, to, type) => {
@@ -480,7 +722,7 @@ function chain(repo, seeds, hops) {
 const handlers = {
   stats: (repo) => ({
     root: repo.root,
-    anchors: repo.anchors.size,
+    anchors: repo.visible.size,
     files: repo.byFile.size,
     edges: [...repo.out.values()].reduce((total, list) => total + list.length, 0),
     stamp: repo.stamp,
@@ -488,7 +730,15 @@ const handlers = {
   outline: repo => ({ dirs: outline(repo) }),
   file: (repo, q) => ({ file: q.file, symbols: fileSymbols(repo, q.file) }),
   anchor: (repo, q) => ({ anchor: describe(repo, q.id) }),
-  neighbors: (repo, q) => ({ id: q.id, direction: q.direction, peers: hop(repo, q.id, q.direction), stamp: repo.stamp }),
+  neighbors: (repo, q) => ({
+    id: q.id,
+    direction: q.direction,
+    anchor: describe(repo, q.id),
+    peers: hop(repo, q.id, q.direction),
+    // 关系表与 anchor 记录的差集。两个来源不一致时摆出来，不静默取一个。
+    crossCheck: crossCheck(repo, q.id, q.direction),
+    stamp: repo.stamp,
+  }),
   chain: (repo, q) => {
     const ids = typeof q.ids === 'string' ? q.ids.split(',').filter(Boolean) : (q.ids ?? [])
     const hops = Math.max(1, Math.min(3, Number(q.hops) || 1))
@@ -501,7 +751,7 @@ const handlers = {
     const ids = typeof q.ids === 'string' ? q.ids.split(',').filter(Boolean) : (q.ids ?? [])
     return { stamp: repo.stamp, nodes: ids.map(id => describe(repo, id)) }
   },
-  members: (repo, q) => ({ id: q.id, members: (repo.members.get(q.id) ?? []).map(m => describe(repo, m)) }),
+  members: (repo, q) => ({ id: q.id, members: memberIds(repo, q.id).map(m => describe(repo, m)) }),
   search: (repo, q) => ({ hits: search(repo, q.q ?? '', Number(q.limit) || 30) }),
   locate: (repo, q) => {
     const from = Number(q.line)
@@ -516,7 +766,7 @@ const handlers = {
   among: (repo, q) => {
     const ids = typeof q.ids === 'string' ? q.ids.split(',').filter(Boolean) : (q.ids ?? [])
     const result = among(repo, ids, q.bridge === '1' || q.bridge === true)
-    return { edges: result.edges, bridges: result.bridges, known: ids.filter(id => repo.anchors.has(id)) }
+    return { edges: result.edges, bridges: result.bridges, known: ids.filter(id => repo.visible.has(id)) }
   },
 }
 

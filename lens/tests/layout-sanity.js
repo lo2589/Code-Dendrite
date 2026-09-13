@@ -581,11 +581,129 @@ for (const [label, seed, filter, avail] of CASES) {
         + ' chain 调用 ' + chainCalls + ' · 带层 ' + (seated ? '✓' : '✗')
         + ' · 尾列 ' + rest.length + ' · 节点 ' + m.nodes.length + '/2')
       if (!ok) bad += 1
-      finish()
+      return nodeExpansionContract().then(finish)
     })
     .catch(error => {
       console.log('✗ focus 盖层    抛错: ' + String(error && error.message || error))
       bad += 1
       finish()
     })
+
+  function nodeExpansionContract() {
+    const calls = []
+    B.ctx.fetch = url => {
+      const u = String(url)
+      calls.push(u)
+      if (u.indexOf('/neighbors') >= 0 && u.indexOf('dir=down') >= 0) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({
+          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, start: 1, end: 20, up: 2, down: 2 },
+          peers: [
+            { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0, start: 30, end: 44, up: 1, down: 0, types: ['call'] },
+            { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0, start: 10, end: 28, up: 1, down: 0, types: ['dataflow'] },
+          ],
+          stamp: 'expand-contract',
+        }) })
+      }
+      if (u.indexOf('/neighbors') >= 0 && u.indexOf('dir=up') >= 0) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({
+          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, start: 1, end: 20, up: 2, down: 2 },
+          peers: [
+            { id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function', members: 0, start: 8, end: 18, up: 0, down: 1, types: ['call'] },
+            { id: 'pkg/cli.js::main', symbol: 'main', file: 'pkg/cli.js', kind: 'function', members: 0, start: 50, end: 68, up: 0, down: 1, types: ['dispatch'] },
+          ],
+          stamp: 'expand-contract',
+        }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }
+
+    const g = side.emptyGraph()
+    side.addNode(g, {
+      id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function',
+      members: 0, start: 1, end: 20, up: 2, down: 2,
+    })
+    g.rootId = 'pkg/core.js::root'
+    Object.assign(side.shared, {
+      graph: g, trace: {}, turn: 1, selected: null, edgeFocus: null,
+      nodePositions: {}, pins: {}, gather: null, skin: 'auto', graphStamp: 'expand-contract',
+    })
+    const engine2 = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
+    return engine2.expand('pkg/core.js::root', 'down')
+      .then(() => engine2.expand('pkg/core.js::root', 'up'))
+      .then(() => {
+        const ids = Object.keys(side.shared.graph.nodes)
+        const edgeKey = e => e.from + '->' + e.to + ':' + (e.types || []).join(',')
+        const edges = side.shared.graph.edges.map(edgeKey).sort()
+        const expectedEdges = [
+          'pkg/api.js::handle->pkg/core.js::root:call',
+          'pkg/cli.js::main->pkg/core.js::root:dispatch',
+          'pkg/core.js::root->pkg/core.js::parse:call',
+          'pkg/core.js::root->pkg/io.js::load:dataflow',
+        ].sort()
+        const expectedIds = [
+          'pkg/api.js::handle',
+          'pkg/cli.js::main',
+          'pkg/core.js::parse',
+          'pkg/core.js::root',
+          'pkg/io.js::load',
+        ].sort()
+        const root = side.shared.graph.nodes['pkg/core.js::root']
+        const ok = calls.filter(u => u.indexOf('/neighbors') >= 0).length === 2
+          && root.anchor.up === 2 && root.anchor.down === 2
+          && ids.sort().join('|') === expectedIds.join('|')
+          && edges.join('|') === expectedEdges.join('|')
+          && root.up === true && root.down === true
+        console.log((ok ? '✓ ' : '✗ ') + '节点展开'.padEnd(12)
+          + ' 上游 2/2 · 下游 2/2 · 边方向 ' + (edges.join('|') === expectedEdges.join('|') ? '✓' : '✗'))
+        if (!ok) bad += 1
+        return nodeExpansionRefreshesShortDirection()
+      })
+  }
+
+  function nodeExpansionRefreshesShortDirection() {
+    const calls = []
+    B.ctx.fetch = url => {
+      const u = String(url)
+      calls.push(u)
+      if (u.indexOf('/neighbors') >= 0 && u.indexOf('dir=down') >= 0) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({
+          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, start: 1, end: 20, up: 1, down: 2 },
+          peers: [
+            { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0, start: 30, end: 44, up: 1, down: 0, types: ['call'] },
+            { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0, start: 10, end: 28, up: 1, down: 0, types: ['dataflow'] },
+          ],
+          stamp: 'expand-contract',
+        }) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    }
+
+    const g = side.emptyGraph()
+    side.addNode(g, {
+      id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function',
+      members: 0, start: 1, end: 20, up: 1, down: 2,
+    })
+    side.addNode(g, {
+      id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function',
+      members: 0, start: 8, end: 18, up: 0, down: 1,
+    })
+    side.addEdge(g, 'pkg/api.js::handle', 'pkg/core.js::root', ['call'])
+    g.rootId = 'pkg/core.js::root'
+    g.nodes['pkg/core.js::root'].down = true
+    Object.assign(side.shared, {
+      graph: g, trace: {}, turn: 1, selected: null, edgeFocus: null,
+      nodePositions: {}, pins: {}, gather: null, skin: 'auto', graphStamp: 'expand-contract',
+    })
+    const engine3 = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
+    return engine3.expand('pkg/core.js::root', 'down').then(() => {
+      const fetched = calls.filter(u => u.indexOf('/neighbors') >= 0 && u.indexOf('dir=down') >= 0).length
+      const edges = side.shared.graph.edges
+      const hasDown = edges.some(e => e.from === 'pkg/core.js::root' && e.to === 'pkg/core.js::parse')
+        && edges.some(e => e.from === 'pkg/core.js::root' && e.to === 'pkg/io.js::load')
+      const ok = fetched === 1 && hasDown && side.shared.graph.nodes['pkg/core.js::root'].down === true
+      console.log((ok ? '✓ ' : '✗ ') + '展开补齐'.padEnd(12)
+        + ' 反向边不冒充下游 · 请求 ' + fetched + ' · 下游补齐 ' + (hasDown ? '✓' : '✗'))
+      if (!ok) bad += 1
+    })
+  }
 })()

@@ -35,6 +35,25 @@ from analyzer.anchors.build_effective_methods_table import _build_leaf_symbol_id
 _JS_LANGUAGES = {"javascript", "typescript", "js", "ts", "jsx", "tsx"}
 
 
+def _rust_cfg_base_symbol(symbol: str) -> str:
+    marker = "@cfg("
+    if marker in symbol and symbol.endswith(")"):
+        return symbol[:symbol.rfind(marker)]
+    return symbol
+
+
+def _symbol_leaf(symbol: str) -> str:
+    return str(symbol or "").replace("::", ".").rsplit(".", 1)[-1]
+
+
+def _rust_cfg_keys(anchor) -> set[str]:
+    keys = set()
+    for item in getattr(anchor, "block_metadata", {}).get("decorators", []) or []:
+        if isinstance(item, dict) and item.get("name") == "cfg" and item.get("key"):
+            keys.add(str(item["key"]))
+    return keys
+
+
 class _ResolveIndex:
     """解析循环里复用的一份查表。
 
@@ -47,11 +66,17 @@ class _ResolveIndex:
     def __init__(self, anchors: dict):
         self.by_symbol: dict = {}
         self.by_file_tail: dict = {}
+        self.by_file_rust_cfg_leaf: dict = {}
         for anchor in anchors.values():
             symbol = str(anchor.symbol or "")
             self.by_symbol.setdefault(symbol, []).append(anchor.id)
             key = (anchor.file.replace("\\", "/"), symbol.rsplit(".", 1)[-1])
             self.by_file_tail.setdefault(key, []).append(anchor.id)
+            if getattr(anchor, "language", "") == "rust":
+                base = _rust_cfg_base_symbol(symbol)
+                if base != symbol:
+                    cfg_key = (anchor.file.replace("\\", "/"), _symbol_leaf(base))
+                    self.by_file_rust_cfg_leaf.setdefault(cfg_key, []).append(anchor.id)
 
 
 def _resolve_import_attribute(target: str, raw_callee: dict, anchors: dict,
@@ -293,6 +318,35 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
             return candidate
     return unique_symbol_ids.get(target) or (unique_leaf_ids or {}).get(target)
 
+
+def _resolve_rust_cfg_variant_ids(raw_callee, caller_anchor, anchors: dict,
+                                  index: "_ResolveIndex") -> list[str]:
+    """Resolve bare Rust calls to cfg-suffixed same-file variants."""
+    if getattr(caller_anchor, "language", "") != "rust":
+        return []
+    if isinstance(raw_callee, dict) and raw_callee.get("call_kind") == "attribute":
+        return []
+    target = str(_call_target(raw_callee) or "").replace("\\", "/")
+    if not target or "::" in target or target in BUILTIN_NOISE:
+        return []
+    file_name = str(getattr(caller_anchor, "file", "") or "").replace("\\", "/")
+    candidates = [
+        anchor_id for anchor_id in index.by_file_rust_cfg_leaf.get((file_name, target), [])
+        if anchor_id in anchors
+    ]
+    if not candidates:
+        return []
+    caller_cfg = _rust_cfg_keys(caller_anchor)
+    if caller_cfg:
+        same_cfg = [
+            anchor_id for anchor_id in candidates
+            if caller_cfg & _rust_cfg_keys(anchors[anchor_id])
+        ]
+        if same_cfg:
+            return same_cfg
+    return list(dict.fromkeys(candidates))
+
+
 def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None,
                            root=None) -> None:
     """Re-resolve callees/call_sites for every anchor, or only a scoped subset.
@@ -373,6 +427,11 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None,
         )
         if direct:
             return [direct]
+        cfg_targets = _resolve_rust_cfg_variant_ids(
+            resolution_ref, anchor, anchors, index,
+        )
+        if cfg_targets:
+            return cfg_targets
         if not isinstance(resolution_ref, dict) or resolution_ref.get("call_kind") != "attribute":
             return []
         method_name = str(resolution_ref.get("target") or "")
@@ -503,6 +562,14 @@ def _finalize_anchor_graph(anchors: dict, *, only_ids: "set[str] | None" = None,
                 continue
             if anchor.id not in target.callers:
                 target.callers.append(anchor.id)
+
+    # `callers` 是集合，但它的顺序由 anchors 字典的插入顺序决定——全量重建按文件
+    # 走一遍，增量更新是"老 anchor + 改动文件的新 anchor"，同一个集合会排出两种
+    # 顺序。排序把它钉死，否则同一份代码两条路写出两种 anchors.json，
+    # 关系边的 seq 也会跟着漂。
+    for anchor in anchors.values():
+        if anchor.callers:
+            anchor.callers.sort()
 
 def _normalize_file_ref(root: Path, file_path) -> str:
     path = Path(str(file_path).replace("\\", "/"))

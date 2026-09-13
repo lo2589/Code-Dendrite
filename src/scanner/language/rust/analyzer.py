@@ -23,26 +23,79 @@ class RustAnalyzer(BaseAnalyzer):
     def is_supported_file(self, file_path: str) -> bool:
         return any(file_path.endswith(ext) for ext in self.SUPPORTED_EXTENSIONS)
 
+    # 注释 / raw string / 普通字符串（认转义）/ 字符字面量，一趟扫描，
+    # 这样 "https://..." 里的 // 不会被当注释，"\"a\"" 也不会让引号错位吞掉后面的代码
+    _MASK_PATTERN = re.compile(
+        r'//[^\n]*'
+        r'|/\*.*?\*/'
+        r'|(?<!\w)b?r(#*)".*?"\1'
+        r'|"(?:\\.|[^"\\])*"'
+        r"|'(?:\\.|[^'\\\n])'",
+        re.DOTALL,
+    )
+
     def _preprocess(self, content: str) -> str:
-        """移除注释"""
-        # 移除单行注释
-        content = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
-        # 移除多行注释
-        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
-        # 简化字符串
-        content = re.sub(r'"[^"]*"', '""', content)
-        return content
+        """注释和字符串替换为等长空白（保留换行），偏移与原文一一对应，可直接回原文算行号"""
+        return self._MASK_PATTERN.sub(lambda m: re.sub(r'[^\n]', ' ', m.group(0)), content)
+
+    @staticmethod
+    def _compact_cfg(value: str) -> str:
+        """Stable, shell-friendly cfg label for duplicate platform symbols."""
+        value = re.sub(r'\s+', '', value)
+        return value.replace('"', '').replace("'", "")
+
+    def _extract_attributes(self, source: str, start_pos: int, func_name: str) -> List[dict]:
+        """Return directly-attached Rust attributes immediately above a function."""
+        line_start = source.rfind('\n', 0, start_pos) + 1
+        lines = source[:line_start].splitlines()
+        attrs = []
+        for line in reversed(lines):
+            stripped = line.strip()
+            if not stripped:
+                if attrs:
+                    continue
+                break
+            match = re.match(r'#\[(.+)\]$', stripped)
+            if not match:
+                break
+            raw = match.group(1).strip()
+            item = {"name": raw, "raw": "#[{}]".format(raw)}
+            cfg = re.match(r'cfg\s*\((.*)\)\s*$', raw)
+            if cfg:
+                item["name"] = "cfg"
+                item["key"] = self._compact_cfg(cfg.group(1))
+            elif raw.startswith("tauri::command"):
+                item["name"] = "tauri::command"
+                rename = re.search(r'\brename\s*=\s*"([^"]+)"', raw)
+                item["key"] = rename.group(1) if rename else func_name
+            attrs.append(item)
+        attrs.reverse()
+        return attrs
+
+    @staticmethod
+    def _decode(data: bytes) -> str:
+        """UTF-8 → GB18030 → UTF-8(replace)。
+        GBK 文件按 UTF-8 ignore 读时首字节被丢、尾字节 0x5C 留成反斜杠（如「乗」），
+        紧贴右引号就成了 \\"，字符串一路吞到下一个引号，中间的函数全丢"""
+        for encoding in ('utf-8', 'gb18030'):
+            try:
+                return data.decode(encoding)
+            except UnicodeDecodeError:
+                continue
+        return data.decode('utf-8', errors='replace')
 
     def analyze_file(self, file_path: str) -> ModuleInfo:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            source = f.read()
+        with open(file_path, 'rb') as f:
+            source = self._decode(f.read())
 
         module_name = os.path.basename(file_path)
         module_info = ModuleInfo(name=module_name, file_path=file_path, line_number=1)
 
         module_info.imports = self._extract_imports(source)
-        module_info.classes = self._extract_structs(source)
-        
+        struct_infos = self._extract_struct_infos(source)
+        module_info.classes = [item['name'] for item in struct_infos]
+        module_info.class_infos = struct_infos
+
         # 提取函数和方法
         module_info.functions.extend(self._extract_functions(source, file_path))
         # 提取 impl 块中的方法
@@ -65,17 +118,21 @@ class RustAnalyzer(BaseAnalyzer):
         return imports
 
     def _extract_structs(self, source: str) -> List[str]:
-        """提取结构体和枚举名"""
+        """提取结构体、枚举、trait 名"""
+        return [item['name'] for item in self._extract_struct_infos(source)]
+
+    def _extract_struct_infos(self, source: str) -> List[dict]:
+        """struct / enum / trait 及起止行（pipeline 按 start_line / end_line 读）。
+        在去掉注释和字符串的源码上匹配，注释里的 struct Foo 不算；元组结构体取到分号"""
+        preprocessed = self._preprocess(source)
         items = []
-        # struct
-        pattern = r'(?:pub\s+)?struct\s+(\w+)'
-        items.extend(re.findall(pattern, source))
-        # enum
-        pattern = r'(?:pub\s+)?enum\s+(\w+)'
-        items.extend(re.findall(pattern, source))
-        # trait
-        pattern = r'(?:pub\s+)?trait\s+(\w+)'
-        items.extend(re.findall(pattern, source))
+        for match in re.finditer(r'\b(?:struct|enum|trait)\s+(\w+)', preprocessed):
+            end_pos = self._body_end(preprocessed, match.end())
+            items.append({
+                'name': match.group(1),
+                'start_line': preprocessed[:match.start()].count('\n') + 1,
+                'end_line': preprocessed[:end_pos].count('\n') + 1,
+            })
         return items
 
     def _extract_functions(self, source: str, file_path: str) -> List[FunctionInfo]:
@@ -107,10 +164,12 @@ class RustAnalyzer(BaseAnalyzer):
                 name=func_name,
                 file_path=file_path,
                 line_number=source[:match.start()].count('\n') + 1,
+                line_end=source[:self._body_end(preprocessed, match.end())].count('\n') + 1,
                 parameters=params,
                 return_type=return_type.strip() if return_type else None,
                 is_async='async' in preprocessed[max(0, match.start()-10):match.start()],
-                is_method=False
+                is_method=False,
+                decorators=self._extract_attributes(source, match.start(), func_name),
             )
             
             # 提取函数体中的调用
@@ -136,8 +195,7 @@ class RustAnalyzer(BaseAnalyzer):
             
             # 找到 impl 块结束
             impl_body = self._get_block_body(preprocessed, impl_start - 1)
-            impl_start_line = source[:impl_match.start()].count('\n') + 1
-            
+
             # 在 impl 块内查找方法
             method_pattern = r'(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*\(([^)]*)\)(?:\s*->\s*([^\{]+))?'
             
@@ -152,12 +210,15 @@ class RustAnalyzer(BaseAnalyzer):
                 func_info = FunctionInfo(
                     name=method_name,
                     file_path=file_path,
-                    line_number=impl_start_line + impl_body[:method_match.start()].count('\n'),
+                    # impl_body[0] 对应 preprocessed[impl_start]，偏移加回去即原文位置
+                    line_number=source[:impl_start + method_match.start()].count('\n') + 1,
+                    line_end=source[:impl_start + self._body_end(impl_body, method_match.end())].count('\n') + 1,
                     parameters=params,
                     return_type=return_type.strip() if return_type else None,
                     is_async='async' in impl_body[max(0, method_match.start()-10):method_match.start()],
                     is_method=is_self_method,
-                    class_name=struct_name
+                    class_name=struct_name,
+                    decorators=self._extract_attributes(source, impl_start + method_match.start(), method_name),
                 )
                 
                 method_body = self._get_function_body(impl_body, method_match.end())
@@ -196,6 +257,14 @@ class RustAnalyzer(BaseAnalyzer):
         if brace_start == -1:
             return ""
         return self._get_block_body(content, brace_start)
+
+    def _body_end(self, content: str, start_pos: int) -> int:
+        """函数体结束位置：右大括号；无函数体的声明（trait 里的 fn x();）取分号"""
+        brace = content.find('{', start_pos)
+        semi = content.find(';', start_pos)
+        if brace == -1 or (semi != -1 and semi < brace):
+            return semi if semi != -1 else start_pos
+        return brace + len(self._get_block_body(content, brace)) + 1
 
     def _get_block_body(self, content: str, brace_pos: int) -> str:
         """获取大括号内的内容"""

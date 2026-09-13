@@ -104,7 +104,8 @@ window.__ModuleLoader__.load({
           from:w.edge.from,to:w.edge.to,type:w.type,pts:pts,
           fromFile:a.file,toFile:b.file,faded:w.edge.faded===true})
       })
-      var route = {polylines:polylines,LANE_STEP:metrics.LANE_STEP,HOP:metrics.WIRE_HOP,ARROW_EVERY:metrics.ARROW_EVERY}
+      var route = {polylines:polylines,LANE_STEP:metrics.LANE_STEP,HOP:metrics.WIRE_HOP,
+        WIRE_CORNER:metrics.WIRE_CORNER,ARROW_EVERY:metrics.ARROW_EVERY}
       repairCrossings(route,orient,metrics)
       var drawn = emitWires(route,markHops(route))
       drawn.route = route

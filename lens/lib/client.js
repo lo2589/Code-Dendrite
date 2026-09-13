@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_24_DOCK_OPEN_PERSIST_007
+// build: V1_27_CALL_EDGE_ONE_DIRECTION_001
 // parts: 57
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -82,8 +82,11 @@ window.__ModuleLoader__.load({
         graph.nodes[anchor.id].anchor = anchor
         return false
       }
+      // up/down 是按钮状态（用户按出来的）；autoUp/autoDown 是 gather 选中时
+      // 自动拉进来的邻居。两者分开，按钮才不会被 gather 代按。
       graph.nodes[anchor.id] = {
-        anchor: anchor, down: false, up: false, members: false, pinned: false,
+        anchor: anchor, down: false, up: false, autoDown: false, autoUp: false,
+        members: false, pinned: false,
       }
       graph.order.push(anchor.id)
       return true
@@ -446,9 +449,11 @@ window.__ModuleLoader__.load({
         if (node === undefined) continue
         graph.edges.forEach(function (e) {
           // `always` edges join the session's own anchors; they show whether or
-          // not anyone pressed expand.
-          if (e.from === id && (node.down || e.always)) stack.push(e.to)
-          if (e.to === id && (node.up || e.always)) stack.push(e.from)
+          // not anyone pressed expand. `autoUp`/`autoDown` are what gather pulled
+          // in on selection: they must be drawn, but they are NOT the button's
+          // state — the button only reads up/down (node.js:74,88).
+          if (e.from === id && (node.down || node.autoDown || e.always)) stack.push(e.to)
+          if (e.to === id && (node.up || node.autoUp || e.always)) stack.push(e.from)
         })
       }
       return seen
@@ -1087,13 +1092,27 @@ window.__ModuleLoader__.load({
           publish()
           return engine.source(anchor.id)
         },
-        expand: function (id, direction) {
+        /**
+         * 展开一个方向。
+         *
+         * `auto` 是 gather 在选中节点时替你把邻居拉进来的那条路。它**不许**写
+         * `node.up` / `node.down`——那是按钮的状态。以前它写了，于是你点中一个
+         * 节点，两个按钮就已经是"按下"的样子、标题写着"收起"；你第一次按 ↓ 其实
+         * 是在把它**收起来**（63 个节点掉到 38 个），数字和看到的东西当然对不上。
+         *
+         * 自动拉进来的东西仍然要画出来，所以走一个独立的标记 `autoUp`/`autoDown`，
+         * 只有 visible() 认它。你亲手按的那一下才把 `up`/`down` 打开，按钮从此
+         * 反映的是你自己的动作。
+         */
+        expand: function (id, direction, auto) {
           var node = shared.graph.nodes[id]
           if (node === undefined) return Promise.resolve()
-          shared.selected = id
-          requestViewport(id, 'center')
-          node['manual' + direction] = false
-          if (node[direction]) return Promise.resolve()
+          if (!auto) {
+            shared.selected = id
+            requestViewport(id, 'center')
+            node['manual' + direction] = false
+          }
+          if (node[direction] || node['auto' + direction]) return Promise.resolve()
           node.loading = direction
           publish()
           return api('/neighbors', params({ id: id, dir: direction })).then(function (body) {
@@ -1103,7 +1122,8 @@ window.__ModuleLoader__.load({
               if (direction === 'down') addEdge(shared.graph, id, peer.id, peer.types)
               else addEdge(shared.graph, peer.id, id, peer.types)
             })
-            node[direction] = true
+            if (auto) node['auto' + direction] = true
+            else node[direction] = true
             node.loading = null
             publish()
             // Expand assigns no layer: a layer is a whole-graph fact and only
@@ -1125,6 +1145,9 @@ window.__ModuleLoader__.load({
           if (node === undefined) return
           shared.selected = id
           node[direction] = false
+          // 用户亲手收起就是真的收起：gather 自动拉进来的那一批也一起收掉，
+          // 否则 visible() 还认着 autoDown，节点赖在图上不走。
+          node['auto' + direction] = false
           node['manual' + direction] = true
           requestViewport(id, 'center')
           publish()
@@ -1192,6 +1215,8 @@ window.__ModuleLoader__.load({
         reveal: function (id) {
           shared.selected = id
           shared.focused = id
+          shared.edgeFocus = null
+          shared.lit = null
           requestViewport(id, 'center')
           publish()
           return engine.source(id)
@@ -1286,12 +1311,14 @@ window.__ModuleLoader__.load({
           } else {
             shared.edgeFocus = { from: from, to: to, type: type }
             shared.focused = null
+            requestViewport(from, 'center')
           }
           publish()
         },
         blurEdge: function () {
           if (shared.edgeFocus === null || shared.edgeFocus === undefined) return
           shared.edgeFocus = null
+          shared.lit = null
           publish()
         },
         moveNode: function (id, point, commit) {
@@ -1529,6 +1556,7 @@ window.__ModuleLoader__.load({
                 if (shared.graph.nodes[anchor.id] === undefined) {
                   addNode(shared.graph, anchor)
                   shared.graph.nodes[anchor.id].bridge = true
+                  shared.graph.nodes[anchor.id].synthetic = true
                 }
               })
               link.edges.forEach(function (e) {
@@ -1557,11 +1585,18 @@ window.__ModuleLoader__.load({
           var grow = function () {
             var edits = Object.keys(shared.trace || {}).filter(function (id) {
               var record = shared.trace[id]
-              return record.state === 'edited' || record.state === 'working'
+              var node = shared.graph.nodes[id]
+              return (record.state === 'edited' || record.state === 'working')
+                && node !== undefined && node.synthetic !== true && node.bridge !== true
             })
             // Nothing was edited yet — a session that has only read so far still
             // deserves a picture, so the reads stand in as seeds.
-            if (edits.length === 0) edits = Object.keys(shared.trace || {})
+            if (edits.length === 0) {
+              edits = Object.keys(shared.trace || {}).filter(function (id) {
+                var node = shared.graph.nodes[id]
+                return node !== undefined && node.synthetic !== true && node.bridge !== true
+              })
+            }
             return engine.chain(edits, 1)
           }
 
@@ -1649,8 +1684,12 @@ window.__ModuleLoader__.load({
           stampFlight()
           publish()
           var loads = []
-          if (node.up !== true) loads.push(engine.expand(id, 'up'))
-          if (node.down !== true) loads.push(engine.expand(id, 'down'))
+          var anchor = node.anchor || {}
+          // `auto=true`：拉邻居，但不碰按钮状态。选中一个节点不等于替用户按了
+          // 上下键——以前它直接写 node.up/node.down，于是你点中节点时两个按钮
+          // 已经是"收起"态，你按的第一下其实是在收起来。
+          if (node.up !== true && node.autoUp !== true && anchor.up !== 0) loads.push(engine.expand(id, 'up', true))
+          if (node.down !== true && node.autoDown !== true && anchor.down !== 0) loads.push(engine.expand(id, 'down', true))
           if (loads.length === 0) return Promise.resolve()
           return Promise.all(loads).then(function () {
             // The selection may have moved on while the neighbours loaded;
@@ -2070,6 +2109,7 @@ window.__ModuleLoader__.load({
       var record = stateOf(row.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === row.id
+      var synthetic = row.node !== undefined && (row.node.synthetic === true || row.node.bridge === true)
       var cls = 'cddl-node'
         + (selected ? ' cddl-sel' : '')
         + (faded ? ' cddl-faded' : '')
@@ -2079,7 +2119,7 @@ window.__ModuleLoader__.load({
       var kids = [
         h('span', { key: 'i', className: 'cddl-ind', style: { width: (row.depth * 17) + 'px' } }),
       ]
-      if (!row.member && (anchor.members > 0)) {
+      if (!row.member && !synthetic && (anchor.members > 0)) {
         kids.push(h('button', {
           key: 't', className: 'cddl-twist', title: anchor.members + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(row.id) },
@@ -2093,7 +2133,7 @@ window.__ModuleLoader__.load({
         : h('span', { key: 'r', className: 'cddl-rank', title: '第 ' + rank + ' 个被碰到' }, rank))
       kids.push(h('span', { key: 'd', className: dotClass(record) }))
       kids.push(h('span', { key: 's', className: 'cddl-sym', title: anchor.id }, anchor.symbol))
-      if (!row.member && anchor.members > 0) {
+      if (!row.member && !synthetic && anchor.members > 0) {
         kids.push(h('span', { key: 'k', className: 'cddl-kind' }, '类 ' + anchor.members))
       }
       if (row.node !== undefined && row.node.bridge === true) {
@@ -2106,21 +2146,24 @@ window.__ModuleLoader__.load({
       if (badge !== null) kids.push(React.cloneElement(badge, { key: 'b' }))
       if (faded) kids.push(h('span', { key: 'f', className: 'cddl-kind' }, '压缩'))
       var hop = function (dir, count, label) {
+        var disabled = count === 0 || synthetic
         // A zero count is a fact about the index, not a button. Leaving it
         // clickable makes every press look broken; disabling it says the index
         // has no such edge, which is the actual answer.
         return h('button', {
           key: dir,
-          disabled: count === 0,
-          title: count === 0
+          disabled: disabled,
+          title: synthetic
+            ? '桥接节点只解释连接，不继续展开'
+            : count === 0
             ? (dir === 'u' ? '索引里没有谁用它' : '索引里它没用任何东西')
             : ((row.node && row.node[dir === 'u' ? 'up' : 'down'] ? '收起' : '展开')
               + (dir === 'u' ? '：谁在用它（' : '：它在用谁（') + count + '）'),
           className: (row.node && row.node[dir === 'u' ? 'up' : 'down'] ? 'on' : '')
-            + (count === 0 ? ' cddl-off' : ''),
+            + (disabled ? ' cddl-off' : ''),
           onClick: function (e) {
             e.stopPropagation()
-            if (count === 0) return
+            if (disabled) return
             var direction = dir === 'u' ? 'up' : 'down'
             if (row.node && row.node[direction]) engine.collapse(row.id, direction)
             else engine.expand(row.id, direction)
@@ -2298,8 +2341,23 @@ window.__ModuleLoader__.load({
      * working tool, so it is shown as itself. Same-origin, so it needs no bridge.
      */
     function drawStampAfter(before, body) {
-      if (body.ready !== true || !body.stamp || body.stamp === before.stamp) return before
-      return { stamp: body.stamp }
+      var hasMeta = before.ready !== undefined || before.building !== undefined || before.error !== undefined
+      if (!hasMeta) {
+        if (body.ready !== true || !body.stamp || body.stamp === before.stamp) return before
+        return { stamp: body.stamp }
+      }
+      var next = {
+        stamp: before.stamp || 0,
+        ready: body.ready === true,
+        building: body.building === true,
+        error: body.error || null,
+      }
+      if (body.ready === true && body.stamp && body.stamp !== before.stamp) {
+        next.stamp = body.stamp
+      }
+      if (next.stamp === before.stamp && next.ready === before.ready
+          && next.building === before.building && next.error === before.error) return before
+      return next
     }
 
     function Draw(props) {
@@ -2308,7 +2366,7 @@ window.__ModuleLoader__.load({
       // page: the paged browser shell when it exists, or the server-owned build
       // shell while it is being regenerated. Client-side loading/error cards
       // only hid that real shell and could get stuck in front of it.
-      var state = useState({ stamp: 0 })
+      var state = useState({ stamp: 0, ready: false, building: false, error: null })
       var query = new URLSearchParams(engine.params()).toString()
       var src = ROUTE + '/draw?' + query
         + (state[0].stamp ? '&v=' + state[0].stamp : '')
@@ -2604,7 +2662,12 @@ window.__ModuleLoader__.load({
       var record = stateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
-      var isClass = anchor.kind === 'class' || anchor.members > 0
+      var synthetic = p.node.synthetic === true || p.node.bridge === true || anchor.hidden === true
+      var isClass = !synthetic && (anchor.kind === 'class' || anchor.members > 0)
+      // A class and a function are two different things, and the card has to say
+      // so in colour rather than in a 1.5px border nobody can see. `kind` rides
+      // in on the anchor, so this reads the record instead of guessing.
+      var isFn = !synthetic && !isClass
 
       var head = h('div', { className: 'cddl-gtop' + (isClass ? ' cddl-class-header' : ''), key: 'top' }, [
         h('span', { key: 'd', className: dotClass(record) }),
@@ -2627,7 +2690,14 @@ window.__ModuleLoader__.load({
       var upOpen = p.node.up === true
       var downOpen = p.node.down === true
 
-      var actions =
+      var actions = synthetic
+        ? h('div', { key: 'h', className: 'cddl-node-actions cddl-node-actions-bridge' }, [
+          h('span', {
+            key: 'b', className: 'cddl-kind cddl-bridgetag',
+            title: '它只是把两个真实 anchor 连起来的中间点，不参与继续展开。',
+          }, '桥'),
+        ])
+        :
         h('div', { key: 'h', className: 'cddl-node-actions' }, [
           h('button', {
             key: 'u',
@@ -2671,7 +2741,7 @@ window.__ModuleLoader__.load({
         ])
 
       var members = null
-      if (p.node.members && p.node.memberList !== undefined) {
+      if (!synthetic && p.node.members && p.node.memberList !== undefined) {
         members = h('div', { className: 'cddl-members', key: 'm' },
           p.node.memberList.map(function (member) {
             var mrec = stateOf(member.id)
@@ -2730,7 +2800,9 @@ window.__ModuleLoader__.load({
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
             + (p.node.island ? ' cddl-island' : '')
-            + (isClass ? ' cddl-cls cddl-class' : ''),
+            + (synthetic ? ' cddl-bridge' : '')
+            + (isClass ? ' cddl-cls cddl-class' : '')
+            + (isFn ? ' cddl-fn' : ''),
           title: anchor.id,
           'data-anchor-id': anchor.id,
           onPointerDown: function (event) {
@@ -3258,7 +3330,7 @@ window.__ModuleLoader__.load({
       '.cddl-scroll{overflow:auto;height:100%}',
       '.cddl-frame{width:100%;height:100%;min-height:320px;border:0;background:#fff;display:block}',
       '.cddl-wires{position:absolute;left:0;top:0;pointer-events:none}',
-      '.cddl-wire{fill:none;stroke:var(--dsw-alias-state-business-primary);stroke-width:1.8}',
+      '.cddl-wire{fill:none;stroke:var(--dsw-alias-state-business-primary);stroke-width:1.65;opacity:.78;stroke-linecap:round;stroke-linejoin:round}',
       '.cddl-wire-hit{fill:none;stroke:transparent;stroke-width:18;pointer-events:stroke;cursor:pointer}',
       '.cddl-wire.cddl-dataflow{stroke:var(--dsw-alias-state-warn-primary);stroke-dasharray:4 3}',
       '.cddl-wire.cddl-inherit{stroke:var(--dsw-alias-label-tertiary);stroke-dasharray:1 3}',
@@ -3282,8 +3354,8 @@ window.__ModuleLoader__.load({
       '.cddl-action-pin.on{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}',
       '.cddl-action-pin.auto{color:var(--dsw-alias-state-business-primary);border-style:dashed}',
       '.cddl-junction{fill:var(--dsw-alias-label-primary);stroke:var(--dsw-alias-bg-base);stroke-width:1.2}',
-      '.cddl-wire.cddl-hot{stroke-width:2.6;opacity:1}',
-      '.cddl-wire.cddl-cold{opacity:.22}',
+      '.cddl-wire.cddl-hot{stroke-width:2.9;opacity:1}',
+      '.cddl-wire.cddl-cold{opacity:.12}',
       '.cddl-arrowhead.cddl-hot{opacity:1}',
       '.cddl-arrowhead.cddl-cold{opacity:.22}',
       '.cddl-filebox{position:absolute;box-sizing:border-box;border:2px dashed var(--dsw-alias-border-l4);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 34%,transparent)}',
@@ -3380,11 +3452,12 @@ window.__ModuleLoader__.load({
       '.cddl-rail-insert{font-size:9.5px;padding:1px 6px;border-radius:5px;flex:none;cursor:pointer;border:1px solid var(--dsw-alias-border-l3);background:transparent;color:var(--dsw-alias-label-tertiary);font-family:inherit}',
       '.cddl-rail-insert:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-state-business-primary)}',
       '.cddl-rail-why{font-size:9px;color:var(--dsw-alias-label-quaternary);flex:none}',
-      '.cddl-wire.cddl-lit{stroke-width:2.2;opacity:1}',
-      '.cddl-wire.cddl-unlit{opacity:.13}',
+      '.cddl-wire.cddl-lit{stroke-width:3;opacity:1;filter:drop-shadow(0 0 3px color-mix(in srgb,var(--dsw-alias-state-business-primary) 58%,transparent))}',
+      '.cddl-wire.cddl-unlit{opacity:.05}',
       '.cddl-gnode.cddl-lit{border-color:var(--dsw-alias-state-business-primary)}',
-      '.cddl-gnode.cddl-unlit{opacity:.3}',
-      '.cddl-arrowhead.cddl-unlit{opacity:.13}',
+      '.cddl-gnode.cddl-unlit{opacity:.24}',
+      '.cddl-arrowhead.cddl-lit{opacity:1}',
+      '.cddl-arrowhead.cddl-unlit{opacity:.05}',
       '.cddl-node-shell{position:absolute}',
       // Gather flights only. Scoped to the window so panning or dragging a
       // settled drawing never lags; 260ms matches GATHER_MS in engine/gather.
@@ -3413,7 +3486,12 @@ window.__ModuleLoader__.load({
       '.cddl-gnode:hover{border-color:var(--dsw-alias-border-l4)}',
       '.cddl-gnode.cddl-sel{border-color:var(--dsw-alias-state-warn-primary);box-shadow:0 0 0 1px var(--dsw-alias-state-warn-tertiary),0 6px 18px rgba(0,0,0,.45)}',
       '.cddl-gnode.cddl-island{border-style:dashed}',
-      '.cddl-gnode.cddl-cls{background:var(--dsw-alias-bg-layer-1);border-width:1.5px}',
+      // 类和函数是两种东西，颜色必须一眼分得出：类走 business（蓝），函数走
+      // success（绿），左边一条 3px 实色竖条把归属钉死。底色用 color-mix 兑出来，
+      // 浏览器不认这条声明就退回基础底色，不会变透明。
+      '.cddl-gnode.cddl-cls{background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, var(--dsw-alias-bg-layer-2));border-color:var(--dsw-alias-state-business-tertiary);border-left:3px solid var(--dsw-alias-state-business-primary)}',
+      '.cddl-gnode.cddl-fn{background:color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, var(--dsw-alias-bg-layer-2));border-color:var(--dsw-alias-border-l2);border-left:3px solid var(--dsw-alias-state-success-primary)}',
+      '.cddl-gnode.cddl-cls:hover,.cddl-gnode.cddl-fn:hover{border-top-color:var(--dsw-alias-border-l4);border-right-color:var(--dsw-alias-border-l4);border-bottom-color:var(--dsw-alias-border-l4)}',
       '.cddl-gnode.cddl-cls .cddl-gtop{padding-bottom:2px}',
       '.cddl-gnode .cddl-sym{min-width:0;flex:1;overflow-wrap:anywhere;white-space:normal;line-height:16px;font-size:13.5px;font-weight:500}',
       '.cddl-gfile{font-family:var(--ds-font-family-code,monospace);font-size:9.5px;color:var(--dsw-alias-label-caption);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
@@ -3673,6 +3751,7 @@ window.__ModuleLoader__.load({
       // and an integer here would move both.
       var LANE_STEP = em(1.62)          // 12 — one lane's worth of corridor
       var WIRE_HOP = em(1.22) / 2       // 4.5 — hop arc radius
+      var WIRE_CORNER = em(1.35)        // 10 — rounded bend radius
       var CORRIDOR_MIN = em(1.08)       // 8 — narrowest usable corridor or side lane
       var SUBLANE_STEP = em(0.54)       // 4 — wires sharing one node gap fan out by this
       var HIT_PAD = em(0.41)            // 3 — a run this close to a box is through it
@@ -3749,7 +3828,7 @@ window.__ModuleLoader__.load({
         INNER_GAP_X: INNER_GAP_X, INNER_GAP_Y: INNER_GAP_Y,
         PORT_STUB: PORT_STUB, ARROW_EVERY: ARROW_EVERY,
         PORT_CLEAR: PORT_CLEAR, LAYER_GAP_X: LAYER_GAP_X, COL_STRIDE: COL_STRIDE,
-        LANE_STEP: LANE_STEP, WIRE_HOP: WIRE_HOP, CORRIDOR_MIN: CORRIDOR_MIN,
+        LANE_STEP: LANE_STEP, WIRE_HOP: WIRE_HOP, WIRE_CORNER: WIRE_CORNER, CORRIDOR_MIN: CORRIDOR_MIN,
         SUBLANE_STEP: SUBLANE_STEP, HIT_PAD: HIT_PAD,
         canvasWidth: canvasWidth, sizeOf: sizeOf, label: label }
     }
@@ -4558,8 +4637,15 @@ window.__ModuleLoader__.load({
             var down = a.y < b.y
             var sideL = boxS.x + CORRIDOR_MIN
             var sideR = boxS.x + boxS.w - CORRIDOR_MIN
-            // Prefer the side with more room from the node edges.
-            var useLeft = (a.x - boxS.x) <= (boxS.x + boxS.w - (a.x + a.w))
+            var ax = a.x + a.w / 2
+            var bx = b.x + b.w / 2
+            // When two anchors sit in the same column, putting every vertical
+            // same-file relation on the same margin makes one unreadable rail.
+            // Split upward and downward traffic, and use the target side when
+            // there is a real horizontal move between columns.
+            var useLeft = Math.abs(ax - bx) > CORRIDOR_MIN
+              ? bx < ax
+              : !down
             var lane = useLeft ? sideL : sideR
             var portA = useLeft ? a.x : a.x + a.w
             var portB = useLeft ? b.x : b.x + b.w
@@ -4877,8 +4963,59 @@ window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/routing/emit',
   factory: (require) => {
     var geometry = require('dsh-cdd-lens/routing/geometry')
+    function pointAtCorner(from, corner, to, radius) {
+      var dx1 = corner.x - from.x
+      var dy1 = corner.y - from.y
+      var dx2 = to.x - corner.x
+      var dy2 = to.y - corner.y
+      var len1 = Math.abs(dx1) + Math.abs(dy1)
+      var len2 = Math.abs(dx2) + Math.abs(dy2)
+      if (len1 < 1 || len2 < 1) return null
+      var turn = Math.abs(dx1) < .5 ? Math.abs(dy2) < .5 : Math.abs(dx2) < .5
+      if (!turn) return null
+      var r = Math.min(radius, len1 / 2, len2 / 2)
+      if (r < 2) return null
+      return {
+        enter: { x: corner.x - Math.sign(dx1) * r, y: corner.y - Math.sign(dy1) * r },
+        leave: { x: corner.x + Math.sign(dx2) * r, y: corner.y + Math.sign(dy2) * r },
+      }
+    }
+
+    function appendHorizontal(d, from, to, base, originalTo, segments, see, arcs) {
+      var seg = segments.get(base)
+      if (!seg || seg.q !== originalTo || !seg.hops.length) return d + ' L' + to.x + ',' + to.y
+      var forward = to.x > from.x
+      var start = Math.min(from.x, to.x)
+      var end = Math.max(from.x, to.x)
+      var order = forward ? seg.hops : seg.hops.slice().reverse()
+      order.forEach(function (span) {
+        var spanLo = Math.max(span.lo, start)
+        var spanHi = Math.min(span.hi, end)
+        if (spanHi <= spanLo) return
+        var before = forward ? spanLo : spanHi
+        var after = forward ? spanHi : spanLo
+        d += ' L' + before + ',' + from.y
+        if (span.gap) d += ' M' + after + ',' + from.y
+        else {
+          var rx = (spanHi - spanLo) / 2
+          var ry = span.radius
+          d += ' A' + rx + ',' + ry + ' 0 0 ' + ((forward === span.up) ? 1 : 0) + ' ' + after + ',' + from.y
+          see(spanLo, from.y + (span.up ? -ry : ry)); see(spanHi, from.y)
+        }
+        arcs.push(span)
+      })
+      return d + ' L' + to.x + ',' + to.y
+    }
+
+    function arrowDistances(total, every) {
+      if (total <= 0) return []
+      if (total < every * 1.45) return [total * .55]
+      return [Math.max(16,total * .28), Math.min(total - 16,total * .72)]
+    }
+
     function emitWires(route,hops) {
       var wires=[],labels=[],junctions=[],arrows=[],segments=new Map()
+      var cornerRadius = route.CORNER || route.WIRE_CORNER || 10
       hops.hSegs.forEach(function (s) { segments.set(s.p,s) })
       route.polylines.forEach(function (line) {
         var pts=line.pts
@@ -4886,37 +5023,37 @@ window.__ModuleLoader__.load({
         var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity
         var see=function (x,y) { minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y) }
         pts.forEach(function (p) { see(p.x,p.y) })
-        var d='M'+pts[0].x+','+pts[0].y,arcs=[]
+        var corner = {}
+        for (var c=1;c<pts.length-1;c++) {
+          var cut = pointAtCorner(pts[c-1],pts[c],pts[c+1],cornerRadius)
+          if (cut) corner[c] = cut
+        }
+        var d='M'+pts[0].x+','+pts[0].y,arcs=[],cursor=pts[0]
         for (var i=1;i<pts.length;i++) {
-          var p=pts[i-1],q=pts[i],seg=segments.get(p)
-          if (seg && seg.q===q && seg.hops.length) {
-            var forward=q.x>p.x,order=forward?seg.hops:seg.hops.slice().reverse()
-            order.forEach(function (span) {
-              var before=forward?span.lo:span.hi,after=forward?span.hi:span.lo
-              d+=' L'+before+','+p.y
-              if (span.gap) d+=' M'+after+','+p.y
-              else {
-                var rx=(span.hi-span.lo)/2,ry=span.radius
-                d+=' A'+rx+','+ry+' 0 0 '+((forward===span.up)?1:0)+' '+after+','+p.y
-                see(span.lo,p.y+(span.up?-ry:ry));see(span.hi,p.y)
-              }
-              arcs.push(span)
-            })
+          var p=pts[i-1],q=pts[i]
+          var target = corner[i] ? corner[i].enter : q
+          if (Math.abs(cursor.y-target.y)<.5 && Math.abs(cursor.x-target.x)>=.5) {
+            d = appendHorizontal(d,cursor,target,p,q,segments,see,arcs)
+          } else {
+            d+=' L'+target.x+','+target.y
           }
-          d+=' L'+q.x+','+q.y
+          if (corner[i]) {
+            d+=' Q'+q.x+','+q.y+' '+corner[i].leave.x+','+corner[i].leave.y
+            cursor=corner[i].leave
+            see(q.x,q.y)
+          } else {
+            cursor=q
+          }
         }
         wires.push({ id:line.id,d:d,type:line.type,faded:line.faded,from:line.from,to:line.to,
           fromFile:line.fromFile,toFile:line.toFile,pts:pts,arcs:arcs,
           sourcePort:line.sourcePort,targetPort:line.targetPort,
           bounds:{minX:minX,minY:minY,maxX:maxX,maxY:maxY} })
-        var total=geometry.length(pts),every=route.ARROW_EVERY,distances=[]
-        // Keep the final head off the port badge, and always give short wires a head.
-        for (var t=every*0.55;t<total;t+=every) distances.push(t)
-        if (!distances.length) distances.push(total/2)
+        var total=geometry.length(pts),distances=arrowDistances(total,route.ARROW_EVERY)
         distances.forEach(function (distance,j) {
           var at=geometry.atDistance(pts,distance)
           if (arcs.some(function (arc) { return Math.abs(at.y-arc.y)<0.5 && at.x>=arc.lo-2 && at.x<=arc.hi+2 })) return
-          arrows.push({ id:line.id+':head'+j,from:line.from,to:line.to,type:line.type,
+          arrows.push({ id:line.id+':head'+j,wireId:line.id,from:line.from,to:line.to,type:line.type,
             x:at.x,y:at.y,angle:at.angle,faded:line.faded })
         })
         // Position by walked distance, so a two-point route is a valid route.
@@ -4989,7 +5126,7 @@ window.__ModuleLoader__.load({
           })
           var at = cubicPoint(p0, p1, p2, p3, .78)
           arrows.push({
-            id: id + ':arrow', from: edge.from, to: edge.to,
+            id: id + ':arrow', wireId: id, from: edge.from, to: edge.to,
             x: at.x, y: at.y, angle: cubicAngle(p0, p1, p2, p3, .78),
             type: type, faded: faded,
           })
@@ -5268,6 +5405,7 @@ window.__ModuleLoader__.load({
      */
     function routeBoard(edges, orient, relationFilter, metrics, channels) {
       var route = routeOrtho(edges, orient, relationFilter, channels, metrics)
+      route.WIRE_CORNER = metrics.WIRE_CORNER
       mergeBuses(route)
       spreadLanes(route, metrics, orient)
       repairCrossings(route, orient, metrics)
@@ -5393,7 +5531,8 @@ window.__ModuleLoader__.load({
           from:w.edge.from,to:w.edge.to,type:w.type,pts:pts,
           fromFile:a.file,toFile:b.file,faded:w.edge.faded===true})
       })
-      var route = {polylines:polylines,LANE_STEP:metrics.LANE_STEP,HOP:metrics.WIRE_HOP,ARROW_EVERY:metrics.ARROW_EVERY}
+      var route = {polylines:polylines,LANE_STEP:metrics.LANE_STEP,HOP:metrics.WIRE_HOP,
+        WIRE_CORNER:metrics.WIRE_CORNER,ARROW_EVERY:metrics.ARROW_EVERY}
       repairCrossings(route,orient,metrics)
       var drawn = emitWires(route,markHops(route))
       drawn.route = route
@@ -5682,7 +5821,8 @@ window.__ModuleLoader__.load({
         })
       })
 
-      var route = { polylines: polylines, LANE_STEP: metrics.LANE_STEP, HOP: metrics.WIRE_HOP, ARROW_EVERY: metrics.ARROW_EVERY }
+      var route = { polylines: polylines, LANE_STEP: metrics.LANE_STEP, HOP: metrics.WIRE_HOP,
+        WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }
       repairCrossings(route, orient, metrics)
       var drawn = emitWires(route, markHops(route))
       return { route: route, drawn: drawn }
@@ -7464,6 +7604,7 @@ window.__ModuleLoader__.load({
                   event.preventDefault()
                   event.stopPropagation()
                   engine.lightEdge(wire.from, wire.to, wire.type)
+                  engine.focusEdge(wire.from, wire.to, wire.type)
                 },
               })
             })).concat(model.arrows.map(function (arrow) {
@@ -7473,6 +7614,7 @@ window.__ModuleLoader__.load({
                 key: 'a' + arrow.id,
                 className: 'cddl-arrowhead cddl-' + arrow.type
                   + (arrow.faded ? ' cddl-faded' : '')
+                  + litClass(arrow.wireId || arrow.id)
                   + (shared.edgeFocus ? ' cddl-hot' : '')
                   + (shared.focused === null || shared.focused === undefined ? ''
                     : (arrow.from === shared.focused || arrow.to === shared.focused ? ' cddl-hot' : ' cddl-cold')),

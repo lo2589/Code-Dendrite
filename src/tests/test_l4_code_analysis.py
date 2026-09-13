@@ -466,6 +466,44 @@ fn add(a: i32, b: i32) -> i32 {
         
         assert result is not None
 
+    def test_rust_masks_strings_without_shifting_offsets(self, tmp_path):
+        """Rust strings/comments are masked in place so later line numbers survive."""
+        rust_file = tmp_path / "scanner.rs"
+        rust_file.write_text(
+            "\n".join([
+                "fn scan_claude() {",
+                '    let wire = "\\"type\\":\\"user\\"";',
+                '    let url = "https://example.test/session";',
+                "}",
+                "",
+                "fn scan_kimi() {",
+                "    scan_claude();",
+                "}",
+                "",
+                "fn scan_codex() {",
+                "}",
+                "",
+                "fn parse_kimi_wire_waiting() -> bool {",
+                "    true",
+                "}",
+                "",
+                "fn live_cwds() {",
+                "}",
+                "",
+            ]),
+            encoding="utf-8",
+        )
+
+        analyzer = RustAnalyzer(str(tmp_path))
+        result = analyzer.analyze_file(str(rust_file))
+        functions = {func.name: func for func in result.functions}
+
+        assert {"scan_claude", "scan_kimi", "scan_codex", "parse_kimi_wire_waiting", "live_cwds"} <= set(functions)
+        assert functions["scan_claude"].line_number == 1
+        assert functions["scan_claude"].line_end == 4
+        assert functions["scan_kimi"].line_number == 6
+        assert functions["scan_kimi"].line_end == 8
+
 
 # ============ 运行测试 ============
 

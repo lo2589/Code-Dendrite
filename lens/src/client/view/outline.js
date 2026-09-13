@@ -124,8 +124,23 @@ window.__ModuleLoader__.load({
      * working tool, so it is shown as itself. Same-origin, so it needs no bridge.
      */
     function drawStampAfter(before, body) {
-      if (body.ready !== true || !body.stamp || body.stamp === before.stamp) return before
-      return { stamp: body.stamp }
+      var hasMeta = before.ready !== undefined || before.building !== undefined || before.error !== undefined
+      if (!hasMeta) {
+        if (body.ready !== true || !body.stamp || body.stamp === before.stamp) return before
+        return { stamp: body.stamp }
+      }
+      var next = {
+        stamp: before.stamp || 0,
+        ready: body.ready === true,
+        building: body.building === true,
+        error: body.error || null,
+      }
+      if (body.ready === true && body.stamp && body.stamp !== before.stamp) {
+        next.stamp = body.stamp
+      }
+      if (next.stamp === before.stamp && next.ready === before.ready
+          && next.building === before.building && next.error === before.error) return before
+      return next
     }
 
     function Draw(props) {
@@ -134,7 +149,7 @@ window.__ModuleLoader__.load({
       // page: the paged browser shell when it exists, or the server-owned build
       // shell while it is being regenerated. Client-side loading/error cards
       // only hid that real shell and could get stuck in front of it.
-      var state = useState({ stamp: 0 })
+      var state = useState({ stamp: 0, ready: false, building: false, error: null })
       var query = new URLSearchParams(engine.params()).toString()
       var src = ROUTE + '/draw?' + query
         + (state[0].stamp ? '&v=' + state[0].stamp : '')

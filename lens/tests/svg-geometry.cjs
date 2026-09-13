@@ -1,8 +1,9 @@
 // Independent SVG oracle for routing tests: parse commands, not numeric pairs.
-// The production renderer emits axis-aligned half-ellipse A commands.
+// The production renderer emits axis-aligned half-ellipse A commands and small
+// quadratic Q corners.
 function segments(d) {
   const out=[];let p=null;
-  for (const m of String(d).matchAll(/([MLA])([^MLA]*)/g)) {
+  for (const m of String(d).matchAll(/([MLAQ])([^MLAQ]*)/g)) {
     const n=(m[2].match(/[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi)||[]).map(Number);
     if(m[1]==='M') {p={x:n[0],y:n[1]};continue;}
     if(m[1]==='L') {const q={x:n[0],y:n[1]};if(p)out.push([p,q]);p=q;continue;}
@@ -14,6 +15,17 @@ function segments(d) {
       for(let k=1;k<=32;k++) {
         const theta=Math.PI*k/32;
         const q={x:cx+(forward?-1:1)*n[0]*Math.cos(theta),y:cy+(up?-1:1)*n[1]*Math.sin(theta)};
+        out.push([p,q]);p=q;
+      }
+      p=end;
+      continue;
+    }
+    if(m[1]==='Q') {
+      if(n.length!==4) throw Error('unexpected quadratic '+m[0]);
+      const c={x:n[0],y:n[1]},end={x:n[2],y:n[3]},start=p;
+      for(let k=1;k<=16;k++) {
+        const t=k/16,u=1-t;
+        const q={x:u*u*start.x+2*u*t*c.x+t*t*end.x,y:u*u*start.y+2*u*t*c.y+t*t*end.y};
         out.push([p,q]);p=q;
       }
       p=end;

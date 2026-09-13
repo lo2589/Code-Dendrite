@@ -25,8 +25,11 @@ window.__ModuleLoader__.load({
         graph.nodes[anchor.id].anchor = anchor
         return false
       }
+      // up/down 是按钮状态（用户按出来的）；autoUp/autoDown 是 gather 选中时
+      // 自动拉进来的邻居。两者分开，按钮才不会被 gather 代按。
       graph.nodes[anchor.id] = {
-        anchor: anchor, down: false, up: false, members: false, pinned: false,
+        anchor: anchor, down: false, up: false, autoDown: false, autoUp: false,
+        members: false, pinned: false,
       }
       graph.order.push(anchor.id)
       return true

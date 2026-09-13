@@ -181,7 +181,10 @@ def update(
         )
         print("Anchor update: {}".format(result.get("anchors.updated", result)))
 
-    _print_relations(generate_relations(root=target))
+    # relations 也走增量：`changed` 是这一步真正知道的变更集（显式给的，或者
+    # HashDB 扫出来的）。不传的话 generate_relations 会把两万多条边整表重推，
+    # 改一个文件和改一万个文件一样慢——这就是之前"局部更新"只省 0.5 秒的原因。
+    _print_relations(generate_relations(root=target, changed_files=changed))
     if not topology_only:
         module_tree = generate_module_tree(root=target)
         print(

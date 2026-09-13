@@ -25,6 +25,8 @@ _AXIOS_CALL = re.compile(
     re.I,
 )
 _FETCH_CALL = re.compile(r"\bfetch\s*\(\s*['\"]([^'\"]+)['\"]", re.I)
+_TAURI_INVOKE = re.compile(r"\binvoke\s*\(\s*['\"]([^'\"]+)['\"]")
+_TAURI_GENERATE_HANDLER = re.compile(r"\btauri::generate_handler!\s*\[([^\]]*)\]", re.S)
 
 
 def _path(value: str) -> str:
@@ -410,9 +412,101 @@ def apply_js_worker_bridges(root: str | Path, anchors: dict) -> set[str]:
     return touched
 
 
+def _tauri_command_targets(anchors: dict) -> dict[str, list]:
+    commands: dict[str, list] = {}
+    for anchor in anchors.values():
+        if getattr(anchor, "language", "") != "rust":
+            continue
+        keys = set()
+        if getattr(anchor, "registered_as", None):
+            keys.add(str(anchor.registered_as))
+        for item in getattr(anchor, "block_metadata", {}).get("decorators", []) or []:
+            if (
+                isinstance(item, dict)
+                and item.get("name") == "tauri::command"
+                and item.get("key")
+            ):
+                keys.add(str(item["key"]))
+        for key in keys:
+            commands.setdefault(key, []).append(anchor)
+    return commands
+
+
+def apply_tauri_bridges(root: str | Path, anchors: dict) -> set[str]:
+    """Connect Tauri JS invoke literals and generate_handler registrations."""
+    root_path = Path(root)
+    touched = _remove_old_bridge_sites(anchors, "tauri-command")
+    touched.update(_remove_old_bridge_sites(anchors, "tauri-command-registration"))
+    commands = _tauri_command_targets(anchors)
+    if not commands:
+        return touched
+
+    by_file: dict[str, list] = {}
+    for anchor in anchors.values():
+        if not anchor.is_virtual:
+            by_file.setdefault(anchor.file, []).append(anchor)
+    for values in by_file.values():
+        values.sort(key=lambda item: (item.line_start, item.line_end))
+
+    sources = {}
+    for file in by_file:
+        suffix = Path(file).suffix.lower()
+        if suffix not in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".rs"}:
+            continue
+        try:
+            sources[file] = (root_path / file).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+    for file, source in sources.items():
+        if Path(file).suffix.lower() not in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}:
+            continue
+        for match in _TAURI_INVOKE.finditer(source):
+            targets = commands.get(match.group(1), [])
+            if len(targets) != 1:
+                continue
+            line = source.count("\n", 0, match.start()) + 1
+            caller = _anchor_for_line(by_file, file, line)
+            if _add_bridge(
+                caller,
+                targets[0],
+                line=line,
+                column=match.start() - source.rfind("\n", 0, match.start()) - 1,
+                kind="tauri-command",
+                evidence="tauri-invoke-literal",
+                raw_target=match.group(1),
+            ):
+                touched.add(caller.id)
+
+    for file, source in sources.items():
+        if Path(file).suffix.lower() != ".rs":
+            continue
+        for match in _TAURI_GENERATE_HANDLER.finditer(source):
+            line = source.count("\n", 0, match.start()) + 1
+            caller = _anchor_for_line(by_file, file, line)
+            if caller is None:
+                continue
+            for name in re.findall(r"\b[A-Za-z_]\w*\b", match.group(1)):
+                targets = commands.get(name, [])
+                if len(targets) != 1:
+                    continue
+                if _add_bridge(
+                    caller,
+                    targets[0],
+                    line=line,
+                    column=match.start() - source.rfind("\n", 0, match.start()) - 1,
+                    kind="tauri-command-registration",
+                    evidence="tauri-generate-handler",
+                    raw_target=name,
+                ):
+                    touched.add(caller.id)
+    return touched
+
+
 def apply_runtime_bridges(root: str | Path, anchors: dict) -> set[str]:
     touched = set()
     touched.update(apply_http_bridges(root, anchors))
     touched.update(apply_js_http_bridges(root, anchors))
     touched.update(apply_js_worker_bridges(root, anchors))
+    touched.update(apply_tauri_bridges(root, anchors))
     return touched

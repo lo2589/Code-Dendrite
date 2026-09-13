@@ -81,13 +81,27 @@ window.__ModuleLoader__.load({
           publish()
           return engine.source(anchor.id)
         },
-        expand: function (id, direction) {
+        /**
+         * 展开一个方向。
+         *
+         * `auto` 是 gather 在选中节点时替你把邻居拉进来的那条路。它**不许**写
+         * `node.up` / `node.down`——那是按钮的状态。以前它写了，于是你点中一个
+         * 节点，两个按钮就已经是"按下"的样子、标题写着"收起"；你第一次按 ↓ 其实
+         * 是在把它**收起来**（63 个节点掉到 38 个），数字和看到的东西当然对不上。
+         *
+         * 自动拉进来的东西仍然要画出来，所以走一个独立的标记 `autoUp`/`autoDown`，
+         * 只有 visible() 认它。你亲手按的那一下才把 `up`/`down` 打开，按钮从此
+         * 反映的是你自己的动作。
+         */
+        expand: function (id, direction, auto) {
           var node = shared.graph.nodes[id]
           if (node === undefined) return Promise.resolve()
-          shared.selected = id
-          requestViewport(id, 'center')
-          node['manual' + direction] = false
-          if (node[direction]) return Promise.resolve()
+          if (!auto) {
+            shared.selected = id
+            requestViewport(id, 'center')
+            node['manual' + direction] = false
+          }
+          if (node[direction] || node['auto' + direction]) return Promise.resolve()
           node.loading = direction
           publish()
           return api('/neighbors', params({ id: id, dir: direction })).then(function (body) {
@@ -97,7 +111,8 @@ window.__ModuleLoader__.load({
               if (direction === 'down') addEdge(shared.graph, id, peer.id, peer.types)
               else addEdge(shared.graph, peer.id, id, peer.types)
             })
-            node[direction] = true
+            if (auto) node['auto' + direction] = true
+            else node[direction] = true
             node.loading = null
             publish()
             // Expand assigns no layer: a layer is a whole-graph fact and only
@@ -119,6 +134,9 @@ window.__ModuleLoader__.load({
           if (node === undefined) return
           shared.selected = id
           node[direction] = false
+          // 用户亲手收起就是真的收起：gather 自动拉进来的那一批也一起收掉，
+          // 否则 visible() 还认着 autoDown，节点赖在图上不走。
+          node['auto' + direction] = false
           node['manual' + direction] = true
           requestViewport(id, 'center')
           publish()

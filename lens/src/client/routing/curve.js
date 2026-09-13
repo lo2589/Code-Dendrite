@@ -58,7 +58,7 @@ window.__ModuleLoader__.load({
           })
           var at = cubicPoint(p0, p1, p2, p3, .78)
           arrows.push({
-            id: id + ':arrow', from: edge.from, to: edge.to,
+            id: id + ':arrow', wireId: id, from: edge.from, to: edge.to,
             x: at.x, y: at.y, angle: cubicAngle(p0, p1, p2, p3, .78),
             type: type, faded: faded,
           })

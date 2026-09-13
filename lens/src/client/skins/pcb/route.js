@@ -31,6 +31,7 @@ window.__ModuleLoader__.load({
      */
     function routeBoard(edges, orient, relationFilter, metrics, channels) {
       var route = routeOrtho(edges, orient, relationFilter, channels, metrics)
+      route.WIRE_CORNER = metrics.WIRE_CORNER
       mergeBuses(route)
       spreadLanes(route, metrics, orient)
       repairCrossings(route, orient, metrics)

@@ -26,6 +26,8 @@ class ParsedAnchor:
     imports: list[str] = field(default_factory=list)
     callees: list[str] = field(default_factory=list)
     call_sites: list[dict] = field(default_factory=list)
+    block_metadata: dict = field(default_factory=dict)
+    registered_as: str | None = None
 
 
 
@@ -90,6 +92,41 @@ def _class_name(item) -> str:
     return str(getattr(item, "name", "") or "")
 
 
+def _function_qualified_name(func) -> str:
+    name = str(getattr(func, "name", "") or "")
+    owner = str(getattr(func, "class_name", "") or "")
+    lexical_parent = str(getattr(func, "parent_function", "") or "")
+    return f"{owner}.{name}" if owner else f"{lexical_parent}.{name}" if lexical_parent else name
+
+
+def _rust_cfg_suffix(func, ordinal: int) -> str:
+    decorators = list(getattr(func, "decorators", []) or [])
+    cfg_keys = [
+        str(item.get("key") or "")
+        for item in decorators
+        if isinstance(item, dict) and item.get("name") == "cfg" and item.get("key")
+    ]
+    if cfg_keys:
+        return "@cfg(" + "+".join(cfg_keys) + ")"
+    return "#{}".format(ordinal)
+
+
+def _decorator_metadata(func) -> tuple[dict, str | None]:
+    decorators = list(getattr(func, "decorators", []) or [])
+    block_metadata = {"decorators": decorators} if decorators else {}
+    registered = next(
+        (
+            str(item.get("key") or "")
+            for item in decorators
+            if isinstance(item, dict)
+            and item.get("name") == "tauri::command"
+            and item.get("key")
+        ),
+        "",
+    )
+    return block_metadata, registered or None
+
+
 def parse_paths(root: str | Path, paths: Iterable[str | Path], *, include_python: bool = False):
     root_path = Path(root)
     parsed: dict[str, ParsedAnchor] = {}
@@ -122,13 +159,25 @@ def parse_paths(root: str | Path, paths: Iterable[str | Path], *, include_python
                     line_start=start, line_end=max(start, end),
                     language=spec.name, symbol_type="class", imports=imports,
                 ))
-            for func in getattr(module, "functions", []) or []:
+            functions = list(getattr(module, "functions", []) or [])
+            qualified_counts = {}
+            qualified_seen = {}
+            for func in functions:
+                qualified_name = _function_qualified_name(func)
+                if qualified_name:
+                    qualified_counts[qualified_name] = qualified_counts.get(qualified_name, 0) + 1
+            for func in functions:
                 name = str(getattr(func, "name", "") or "")
                 if not name:
                     continue
                 owner = str(getattr(func, "class_name", "") or "")
                 lexical_parent = str(getattr(func, "parent_function", "") or "")
-                qualified = f"{owner}.{name}" if owner else f"{lexical_parent}.{name}" if lexical_parent else name
+                base_qualified = _function_qualified_name(func)
+                qualified = base_qualified
+                if spec.name == "rust" and qualified_counts.get(base_qualified, 0) > 1:
+                    ordinal = qualified_seen.get(base_qualified, 0) + 1
+                    qualified_seen[base_qualified] = ordinal
+                    qualified = base_qualified + _rust_cfg_suffix(func, ordinal)
                 anchor_id = f"{rel}::{qualified}"
                 start = int(getattr(func, "line_number", 1) or 1) + line_offset
                 end = int(getattr(func, "line_end", 0) or start) + (line_offset if getattr(func, "line_end", 0) else 0)
@@ -155,12 +204,14 @@ def parse_paths(root: str | Path, paths: Iterable[str | Path], *, include_python
                 if not digest:
                     digest = hashlib.sha1(
                         f"{rel}:{qualified}:{start}:{end}".encode()).hexdigest()[:16]
+                block_metadata, registered_as = _decorator_metadata(func)
                 parsed[anchor_id] = ParsedAnchor(
                     id=anchor_id, symbol=qualified, file=rel,
                     line_start=start, line_end=max(start, end), language=spec.name,
                     symbol_type="method" if owner else "function", hash=digest,
                     signature=signature, parent_anchor=f"{rel}::{owner}" if owner else None,
                     imports=imports, callees=[str(call) for call in calls], call_sites=sites,
+                    block_metadata=block_metadata, registered_as=registered_as,
                 )
                 if lexical_parent and not owner:
                     parsed[anchor_id].parent_anchor = f"{rel}::{lexical_parent}"

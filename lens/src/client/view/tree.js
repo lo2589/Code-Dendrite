@@ -107,6 +107,7 @@ window.__ModuleLoader__.load({
       var record = stateOf(row.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === row.id
+      var synthetic = row.node !== undefined && (row.node.synthetic === true || row.node.bridge === true)
       var cls = 'cddl-node'
         + (selected ? ' cddl-sel' : '')
         + (faded ? ' cddl-faded' : '')
@@ -116,7 +117,7 @@ window.__ModuleLoader__.load({
       var kids = [
         h('span', { key: 'i', className: 'cddl-ind', style: { width: (row.depth * 17) + 'px' } }),
       ]
-      if (!row.member && (anchor.members > 0)) {
+      if (!row.member && !synthetic && (anchor.members > 0)) {
         kids.push(h('button', {
           key: 't', className: 'cddl-twist', title: anchor.members + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(row.id) },
@@ -130,7 +131,7 @@ window.__ModuleLoader__.load({
         : h('span', { key: 'r', className: 'cddl-rank', title: '第 ' + rank + ' 个被碰到' }, rank))
       kids.push(h('span', { key: 'd', className: dotClass(record) }))
       kids.push(h('span', { key: 's', className: 'cddl-sym', title: anchor.id }, anchor.symbol))
-      if (!row.member && anchor.members > 0) {
+      if (!row.member && !synthetic && anchor.members > 0) {
         kids.push(h('span', { key: 'k', className: 'cddl-kind' }, '类 ' + anchor.members))
       }
       if (row.node !== undefined && row.node.bridge === true) {
@@ -143,21 +144,24 @@ window.__ModuleLoader__.load({
       if (badge !== null) kids.push(React.cloneElement(badge, { key: 'b' }))
       if (faded) kids.push(h('span', { key: 'f', className: 'cddl-kind' }, '压缩'))
       var hop = function (dir, count, label) {
+        var disabled = count === 0 || synthetic
         // A zero count is a fact about the index, not a button. Leaving it
         // clickable makes every press look broken; disabling it says the index
         // has no such edge, which is the actual answer.
         return h('button', {
           key: dir,
-          disabled: count === 0,
-          title: count === 0
+          disabled: disabled,
+          title: synthetic
+            ? '桥接节点只解释连接，不继续展开'
+            : count === 0
             ? (dir === 'u' ? '索引里没有谁用它' : '索引里它没用任何东西')
             : ((row.node && row.node[dir === 'u' ? 'up' : 'down'] ? '收起' : '展开')
               + (dir === 'u' ? '：谁在用它（' : '：它在用谁（') + count + '）'),
           className: (row.node && row.node[dir === 'u' ? 'up' : 'down'] ? 'on' : '')
-            + (count === 0 ? ' cddl-off' : ''),
+            + (disabled ? ' cddl-off' : ''),
           onClick: function (e) {
             e.stopPropagation()
-            if (count === 0) return
+            if (disabled) return
             var direction = dir === 'u' ? 'up' : 'down'
             if (row.node && row.node[direction]) engine.collapse(row.id, direction)
             else engine.expand(row.id, direction)

@@ -121,6 +121,102 @@ render('目录为 null', () => require_('dsh-cdd-lens/view/outline').Outline({ e
 
 shared.outline = undefined
 
+// A visible wire click must enter line focus, not only paint a weak highlight.
+// The old handler called lightEdge alone, so the toolbar promised "链路聚焦"
+// while the graph stayed in the crowded PCB view.
+;(function wireClickFocusesAndArrowFollowsHighlight() {
+  const renderCanvas = require_('dsh-cdd-lens/shell/viewCanvas').renderCanvas
+  const calls = []
+  shared.lit = { key: 'a→b:call', type: 'call', nodes: {}, wires: { 'a→b:call': true } }
+  shared.edgeFocus = null
+  shared.focused = null
+  const out = renderCanvas({}, {
+    context: { indexed: true },
+    tab: ['graph'],
+    zoom: [1],
+    engine: {
+      lightEdge: (from, to, type) => { calls.push(['lightEdge', from, to, type]) },
+      focusEdge: (from, to, type) => { calls.push(['focusEdge', from, to, type]) },
+    },
+    model: {
+      width: 200, height: 120, files: [], rows: [], junctions: [],
+      nodes: [
+        {
+          id: 'a', x: 10, y: 30, w: 70, h: 45,
+          node: { anchor: { id: 'a', symbol: 'a', file: 'a.js', kind: 'function', start: 1, end: 4, up: 0, down: 1 } },
+        },
+        {
+          id: 'b', x: 120, y: 30, w: 70, h: 45,
+          node: { anchor: { id: 'b', symbol: 'b', file: 'b.js', kind: 'function', start: 5, end: 8, up: 1, down: 0 } },
+        },
+      ],
+      wires: [{ id: 'a→b:call', d: 'M10,10 L120,10', type: 'call', from: 'a', to: 'b' }],
+      arrows: [{ id: 'a→b:call:head0', wireId: 'a→b:call', type: 'call', from: 'a', to: 'b', x: 80, y: 10, angle: 0 }],
+    },
+  })
+  let hit = null
+  let arrow = null
+  ;(function walk(n) {
+    if (!n || typeof n !== 'object') return
+    const cls = n.props && n.props.className
+    if (cls === 'cddl-wire-hit') hit = n
+    if (typeof cls === 'string' && cls.includes('cddl-arrowhead')) arrow = n
+    ;(n.kids || []).forEach(walk)
+  })(out)
+  assert(hit !== null, 'wire hit path must render')
+  hit.props.onClick({ preventDefault() {}, stopPropagation() {} })
+  assert.deepEqual(calls, [['lightEdge', 'a', 'b', 'call'], ['focusEdge', 'a', 'b', 'call']])
+  assert(arrow.props.className.includes('cddl-lit'), 'arrowhead must follow the lit wire')
+  shared.lit = null
+  console.log('✓ ' + '线点击'.padEnd(10) + '进入链路聚焦，箭头跟随高亮')
+})()
+
+;(function bridgeNodesDoNotExpand() {
+  const { GraphNode } = require_('dsh-cdd-lens/view/node')
+  const { TreeRow } = require_('dsh-cdd-lens/view/tree')
+  const { makeEngine } = require_('dsh-cdd-lens/engine/engine')
+  const anchor = {
+    id: 'a.py::bridge', symbol: 'bridge', file: 'a.py', kind: 'function',
+    start: 2, end: 6, up: 4, down: 5, members: 3,
+  }
+  shared.graph = model.emptyGraph()
+  model.addNode(shared.graph, anchor)
+  shared.graph.nodes[anchor.id].bridge = true
+  shared.graph.nodes[anchor.id].synthetic = true
+  shared.graph.rootId = anchor.id
+  shared.selected = null
+  shared.trace = {}
+  shared.turn = 1
+
+  const buttonActions = []
+  const disabledTreeButtons = []
+  const walk = n => {
+    if (!n || typeof n !== 'object') return
+    if (n.type === 'button' && n.props && n.props['data-action']) buttonActions.push(n.props['data-action'])
+    if (n.type === 'button' && n.props && n.props.disabled === true) disabledTreeButtons.push(textOf(n))
+    ;(n.kids || []).forEach(walk)
+  }
+  walk(GraphNode({
+    engine: {}, zoom: 1,
+    p: { id: anchor.id, x: 0, y: 0, w: 180, h: 80, node: shared.graph.nodes[anchor.id] },
+  }))
+  const treeRow = TreeRow({
+    engine: { select() {}, members() {}, expand() { throw new Error('bridge tree row expanded') }, collapse() {}, pin() {} },
+    row: { id: anchor.id, depth: 0, node: shared.graph.nodes[anchor.id] },
+  })
+  walk(treeRow)
+  assert(!buttonActions.includes('expand-callers') && !buttonActions.includes('expand-callees'),
+    'bridge graph card must not expose expand buttons')
+  assert(disabledTreeButtons.includes('↑4') && disabledTreeButtons.includes('↓5'),
+    'bridge tree row must render disabled hop buttons')
+
+  const engine = makeEngine({ on: () => () => {}, emit: () => {} })
+  engine.expand(anchor.id, 'down')
+  assert.strictEqual(shared.graph.nodes[anchor.id].down, false, 'bridge expand guard must not mark down open')
+  assert.strictEqual(shared.graph.nodes[anchor.id].loading, undefined, 'bridge expand guard must not enter loading')
+  console.log('✓ ' + '桥接节点'.padEnd(10) + '只解释连接，不再展开上下游')
+})()
+
 // 用真的 engine 渲染，不用手捏的。
 //
 // `cdd draw` 从来没打开过：Draw 调 engine.params()，而 makeEngine 只把 params

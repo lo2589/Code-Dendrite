@@ -35,9 +35,11 @@ window.__ModuleLoader__.load({
         if (node === undefined) continue
         graph.edges.forEach(function (e) {
           // `always` edges join the session's own anchors; they show whether or
-          // not anyone pressed expand.
-          if (e.from === id && (node.down || e.always)) stack.push(e.to)
-          if (e.to === id && (node.up || e.always)) stack.push(e.from)
+          // not anyone pressed expand. `autoUp`/`autoDown` are what gather pulled
+          // in on selection: they must be drawn, but they are NOT the button's
+          // state — the button only reads up/down (node.js:74,88).
+          if (e.from === id && (node.down || node.autoDown || e.always)) stack.push(e.to)
+          if (e.to === id && (node.up || node.autoUp || e.always)) stack.push(e.from)
         })
       }
       return seen

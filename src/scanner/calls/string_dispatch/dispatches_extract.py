@@ -112,13 +112,15 @@ def extract_dispatches_from_file(file_path: str, root: str = ".") -> List[Dict]:
     
     return edges
 
-def find_string_dispatches(root: str) -> List[Dict]:
+def find_string_dispatches(root: str, only_files: Optional[List[str]] = None) -> List[Dict]:
     """
     扫描项目根目录下所有 Python 文件，提取 dispatch 边。
-    
+
     Args:
         root: 项目根目录
-        
+        only_files: 只扫这些项目内相对路径的文件——增量更新用。全量走 os.walk
+            一趟 190k 行的库要 3 秒多，改一个文件没必要把每个文件重读一遍。
+
     Returns:
         dispatch edge dict 列表
     """
@@ -130,6 +132,19 @@ def find_string_dispatches(root: str) -> List[Dict]:
     ignore = CodeDendriteIgnore(root)
     root_path = Path(root)
     edges = []
+
+    if only_files is not None:
+        wanted = {str(item).replace("\\", "/").lstrip("./") for item in only_files}
+        for rel in sorted(wanted):
+            fp = root_path / rel
+            if fp.suffix != ".py" or not fp.exists() or not ignore.should_scan(fp):
+                continue
+            try:
+                edges.extend(extract_dispatches_from_file(str(fp), root))
+            except Exception as ex:
+                print(f"[string_dispatch] 跳过文件 {fp}: {ex}")
+        return edges
+
     for dirpath, dirnames, filenames in os.walk(root):
         dp = Path(dirpath)
         dirnames[:] = [d for d in dirnames if ignore.should_scan(dp / d / "_x.py")]

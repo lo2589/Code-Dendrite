@@ -386,13 +386,19 @@ def compute_strict_dataflow(
     root: str,
     anchors: dict,
     skip_pairs: Optional[Set[Tuple[str, str]]] = None,
+    only: Optional[Set[str]] = None,
 ) -> List[dict]:
     """计算严谨数据流边。
+
+    `only` 给了就只分析这些 anchor 的调用现场——增量更新走这条。解析表
+    (id_index) 仍然用**全部** anchor 来建：只拿脏集建表的话，指向未改动文件的
+    callee 会解析不到，脏集里的 caller 会平白少一批出边。
 
     返回: [{from_id, to_id, kinds, seq, condition, data_in, data_out, evidence}, ...]
     """
     root_path = Path(root)
     skip_pairs = skip_pairs or set()
+    wanted = {_norm(item) for item in only} if only is not None else None
     id_index = {_norm(a.id): a for a in anchors.values()}
 
     file_cache: Dict[str, Optional[object]] = {}   # py 文件 -> AST
@@ -466,6 +472,10 @@ def compute_strict_dataflow(
     # (from_id, to_id, condition) -> 累积
     acc: Dict[Tuple[str, str, Optional[str]], dict] = {}
 
+    # 谁的分析发出了这条边。增量更新靠它决定旧边要不要丢：`return` 边的两端
+    # 都不是发出者，按 from_id 丢会连坐掉一批无辜的边。
+    emitter_holder = {"id": ""}
+
     def _emit(from_id: str, to_id: str, kind: str, seq: int,
               condition: Optional[str], detail: str) -> None:
         if from_id == to_id:
@@ -480,6 +490,7 @@ def compute_strict_dataflow(
                 "seq": [],
                 "condition": condition,
                 "details": [],
+                "emitter": emitter_holder["id"],
             }
         entry["kinds"].add(kind)
         if seq not in entry["seq"]:
@@ -492,10 +503,13 @@ def compute_strict_dataflow(
             continue
         if getattr(anchor, "symbol_type", "") not in ("function", "method"):
             continue
+        if wanted is not None and _norm(anchor.id) not in wanted:
+            continue
         refs = _iter_call_refs(anchor)
         if not refs:
             continue
         caller_id = _norm(anchor.id)
+        emitter_holder["id"] = caller_id
 
         # 只保留能解析到真实 anchor 的调用
         resolved = []  # (ref, callee_anchor)
@@ -563,12 +577,26 @@ def compute_strict_dataflow(
                     if prod_id and prod_id not in (caller_id, callee_id):
                         _emit(prod_id, callee_id, "relay", seq, condition, var)
 
-    # state: 同类方法间 self.attr 写 -> 读
+    # state: 同类方法间 self.attr 写 -> 读。
+    #
+    # 这一段按**类**整体算，所以增量收窄的单位也是类：只要这个类里有一个方法
+    # 落在脏集里，整类重算；一个方法都没脏的类直接跳过。这是本函数最大的一笔
+    # 固定开销——不按类收窄的话，`only=` 收得再小也省不下来，因为每个方法都要
+    # 读源码做 AST 分析。
+    emitter_holder["id"] = ""
+    dirty_classes = None
+    if wanted is not None:
+        dirty_classes = set()
+        for anchor in anchors.values():
+            if _norm(anchor.id) in wanted and "." in str(getattr(anchor, "symbol", "")):
+                dirty_classes.add(_norm(anchor.id).rsplit(".", 1)[0])
     class_methods: Dict[Tuple[str, str], list] = {}
     for anchor in anchors.values():
         if getattr(anchor, "is_virtual", False):
             continue
         if getattr(anchor, "symbol_type", "") != "method":
+            continue
+        if dirty_classes is not None and _norm(anchor.id).rsplit(".", 1)[0] not in dirty_classes:
             continue
         symbol = getattr(anchor, "symbol", "") or ""
         if "." not in symbol:
@@ -601,6 +629,7 @@ def compute_strict_dataflow(
             "data_in": ";".join(sorted(set(entry["details"])))[:200],
             "data_out": "+".join(kinds),
             "evidence": "strict-dataflow:{}".format("+".join(kinds)),
+            "emitter": entry.get("emitter", ""),
         })
     return results
 

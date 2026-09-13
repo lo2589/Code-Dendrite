@@ -32,7 +32,12 @@ window.__ModuleLoader__.load({
       var record = stateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
-      var isClass = anchor.kind === 'class' || anchor.members > 0
+      var synthetic = p.node.synthetic === true || p.node.bridge === true || anchor.hidden === true
+      var isClass = !synthetic && (anchor.kind === 'class' || anchor.members > 0)
+      // A class and a function are two different things, and the card has to say
+      // so in colour rather than in a 1.5px border nobody can see. `kind` rides
+      // in on the anchor, so this reads the record instead of guessing.
+      var isFn = !synthetic && !isClass
 
       var head = h('div', { className: 'cddl-gtop' + (isClass ? ' cddl-class-header' : ''), key: 'top' }, [
         h('span', { key: 'd', className: dotClass(record) }),
@@ -55,7 +60,14 @@ window.__ModuleLoader__.load({
       var upOpen = p.node.up === true
       var downOpen = p.node.down === true
 
-      var actions =
+      var actions = synthetic
+        ? h('div', { key: 'h', className: 'cddl-node-actions cddl-node-actions-bridge' }, [
+          h('span', {
+            key: 'b', className: 'cddl-kind cddl-bridgetag',
+            title: '它只是把两个真实 anchor 连起来的中间点，不参与继续展开。',
+          }, '桥'),
+        ])
+        :
         h('div', { key: 'h', className: 'cddl-node-actions' }, [
           h('button', {
             key: 'u',
@@ -99,7 +111,7 @@ window.__ModuleLoader__.load({
         ])
 
       var members = null
-      if (p.node.members && p.node.memberList !== undefined) {
+      if (!synthetic && p.node.members && p.node.memberList !== undefined) {
         members = h('div', { className: 'cddl-members', key: 'm' },
           p.node.memberList.map(function (member) {
             var mrec = stateOf(member.id)
@@ -158,7 +170,9 @@ window.__ModuleLoader__.load({
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
             + (p.node.island ? ' cddl-island' : '')
-            + (isClass ? ' cddl-cls cddl-class' : ''),
+            + (synthetic ? ' cddl-bridge' : '')
+            + (isClass ? ' cddl-cls cddl-class' : '')
+            + (isFn ? ' cddl-fn' : ''),
           title: anchor.id,
           'data-anchor-id': anchor.id,
           onPointerDown: function (event) {

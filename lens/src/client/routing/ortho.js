@@ -81,8 +81,15 @@ window.__ModuleLoader__.load({
             var down = a.y < b.y
             var sideL = boxS.x + CORRIDOR_MIN
             var sideR = boxS.x + boxS.w - CORRIDOR_MIN
-            // Prefer the side with more room from the node edges.
-            var useLeft = (a.x - boxS.x) <= (boxS.x + boxS.w - (a.x + a.w))
+            var ax = a.x + a.w / 2
+            var bx = b.x + b.w / 2
+            // When two anchors sit in the same column, putting every vertical
+            // same-file relation on the same margin makes one unreadable rail.
+            // Split upward and downward traffic, and use the target side when
+            // there is a real horizontal move between columns.
+            var useLeft = Math.abs(ax - bx) > CORRIDOR_MIN
+              ? bx < ax
+              : !down
             var lane = useLeft ? sideL : sideR
             var portA = useLeft ? a.x : a.x + a.w
             var portB = useLeft ? b.x : b.x + b.w

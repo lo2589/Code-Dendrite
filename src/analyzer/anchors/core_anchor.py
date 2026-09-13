@@ -85,6 +85,8 @@ def _merge_parsed_anchor(anchors: dict, parsed) -> None:
             parent_anchor=parsed.parent_anchor,
             callees=list(parsed.callees),
             call_sites=[dict(site) for site in parsed.call_sites],
+            block_metadata=dict(getattr(parsed, "block_metadata", {}) or {}),
+            registered_as=getattr(parsed, "registered_as", None),
         )
         return
     if parsed.line_end > existing.line_end:
@@ -101,6 +103,10 @@ def _merge_parsed_anchor(anchors: dict, parsed) -> None:
     if parsed.call_sites and not existing.call_sites:
         existing.call_sites = [dict(site) for site in parsed.call_sites]
         existing.callees = list(parsed.callees)
+    if getattr(parsed, "block_metadata", None):
+        existing.block_metadata.update(parsed.block_metadata)
+    if not existing.registered_as and getattr(parsed, "registered_as", None):
+        existing.registered_as = parsed.registered_as
 
 def _generate_anchors_for_paths(
     root: Path,
@@ -132,7 +138,13 @@ def _generate_anchors_for_paths(
 
     try:
         from scanner.language.pipeline import parse_paths
-        parsed, language_failures, language_completed = parse_paths(root, file_paths)
+        # `include_python=True` 不能省。默认是 False，Python 文件会被整批跳过，
+        # `_merge_parsed_anchor` 于是从来不为它们跑——增量更新出来的 anchor 就
+        # 缺 qualified_name / signature / imports，而全量重建是有的。同一份代码
+        # 走两条路得到两种记录，索引会随着每次编辑悄悄退化。
+        parsed, language_failures, language_completed = parse_paths(
+            root, file_paths, include_python=True
+        )
         for parsed_anchor in parsed.values():
             _merge_parsed_anchor(anchors, parsed_anchor)
         failed.extend(language_failures)

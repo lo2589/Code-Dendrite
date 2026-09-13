@@ -101,7 +101,8 @@ assert(bundle.includes('width:var(--cddl-rail-shut)!important'))
 // differs is only what a box groups by.
 assert(bundle.includes('function placeGroups'))
 assert(bundle.includes("p.flowDir = 'ltr'"))
-assert(bundle.includes("(p.flowDir === 'rtl' ? 'right' : 'left')"))
+assert(bundle.includes("var ports = p.routingPorts"))
+assert(bundle.includes("cddl-port-'+role+' cddl-port-'+port.side"))
 assert(bundle.includes('.cddl-port-top{left:50%;top:-25px'))
 assert(bundle.includes('.cddl-port-bottom{left:50%;top:auto;bottom:-25px'))
 // Two or three boxes across; the box stays the width of its widest name and

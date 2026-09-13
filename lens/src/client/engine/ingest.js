@@ -212,6 +212,7 @@ window.__ModuleLoader__.load({
                 if (shared.graph.nodes[anchor.id] === undefined) {
                   addNode(shared.graph, anchor)
                   shared.graph.nodes[anchor.id].bridge = true
+                  shared.graph.nodes[anchor.id].synthetic = true
                 }
               })
               link.edges.forEach(function (e) {
@@ -240,11 +241,18 @@ window.__ModuleLoader__.load({
           var grow = function () {
             var edits = Object.keys(shared.trace || {}).filter(function (id) {
               var record = shared.trace[id]
-              return record.state === 'edited' || record.state === 'working'
+              var node = shared.graph.nodes[id]
+              return (record.state === 'edited' || record.state === 'working')
+                && node !== undefined && node.synthetic !== true && node.bridge !== true
             })
             // Nothing was edited yet — a session that has only read so far still
             // deserves a picture, so the reads stand in as seeds.
-            if (edits.length === 0) edits = Object.keys(shared.trace || {})
+            if (edits.length === 0) {
+              edits = Object.keys(shared.trace || {}).filter(function (id) {
+                var node = shared.graph.nodes[id]
+                return node !== undefined && node.synthetic !== true && node.bridge !== true
+              })
+            }
             return engine.chain(edits, 1)
           }
 

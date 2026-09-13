@@ -143,6 +143,87 @@ def test_worker_postmessage_connects_both_message_handlers(tmp_path):
     assert returned["target"].startswith("host.js::createProjector.on")
 
 
+def test_rust_cfg_duplicates_and_tauri_invokes_are_preserved(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.js").write_text(
+        "import { invoke } from '@tauri-apps/api/core';\n"
+        "async function focusAgent() {\n"
+        "  await invoke('focus', { windowId: 'w', agentId: 'a' });\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src" / "main.rs").write_text(
+        "#[cfg(target_os = \"macos\")]\n"
+        "fn run_server() {}\n"
+        "\n"
+        "#[cfg(target_os = \"windows\")]\n"
+        "fn run_server() {}\n"
+        "\n"
+        "#[cfg(target_os = \"macos\")]\n"
+        "fn keystroke_yes() {}\n"
+        "\n"
+        "#[cfg(target_os = \"windows\")]\n"
+        "fn keystroke_yes() {}\n"
+        "\n"
+        "#[tauri::command]\n"
+        "fn approve() { keystroke_yes(); }\n"
+        "\n"
+        "#[tauri::command]\n"
+        "fn focus() {}\n"
+        "\n"
+        "#[tauri::command]\n"
+        "fn set_auto_approve() {}\n"
+        "\n"
+        "#[tauri::command]\n"
+        "fn get_auto_approve() {}\n"
+        "\n"
+        "fn main() {\n"
+        "  run_server();\n"
+        "  tauri::Builder::default()\n"
+        "    .invoke_handler(tauri::generate_handler![approve, focus, set_auto_approve, get_auto_approve]);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+
+    generate_all_anchors(str(tmp_path))
+    anchors = load_anchors(str(tmp_path))
+
+    run_server_ids = sorted(aid for aid in anchors if aid.startswith("src/main.rs::run_server"))
+    assert run_server_ids == [
+        "src/main.rs::run_server@cfg(target_os=macos)",
+        "src/main.rs::run_server@cfg(target_os=windows)",
+    ]
+    keystroke_ids = sorted(aid for aid in anchors if aid.startswith("src/main.rs::keystroke_yes"))
+    assert keystroke_ids == [
+        "src/main.rs::keystroke_yes@cfg(target_os=macos)",
+        "src/main.rs::keystroke_yes@cfg(target_os=windows)",
+    ]
+    assert anchors["src/main.rs::focus"].registered_as == "focus"
+
+    focus_agent = anchors["src/app.js::focusAgent"]
+    invoke_site = next(site for site in focus_agent.call_sites if site.get("bridge_kind") == "tauri-command")
+    assert invoke_site["target"] == "src/main.rs::focus"
+
+    main = anchors["src/main.rs::main"]
+    assert set(run_server_ids) <= set(main.callees)
+    registered = {
+        site["target"]
+        for site in main.call_sites
+        if site.get("bridge_kind") == "tauri-command-registration"
+    }
+    assert registered == {
+        "src/main.rs::approve",
+        "src/main.rs::focus",
+        "src/main.rs::set_auto_approve",
+        "src/main.rs::get_auto_approve",
+    }
+    approve = anchors["src/main.rs::approve"]
+    assert set(keystroke_ids) <= set(approve.callees)
+    assert "src/app.js::focusAgent" in anchors["src/main.rs::focus"].callers
+    assert "src/main.rs::main" in anchors["src/main.rs::approve"].callers
+    assert "src/main.rs::approve" in anchors["src/main.rs::keystroke_yes@cfg(target_os=macos)"].callers
+
+
 def test_lens_plugin_self_chain_is_not_flattened_or_cross_wired():
     root = Path(__file__).resolve().parents[3] / "lens"   # 插件已拉到顶层，与 src 平级
     paths = [

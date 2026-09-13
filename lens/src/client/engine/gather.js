@@ -60,8 +60,12 @@ window.__ModuleLoader__.load({
           stampFlight()
           publish()
           var loads = []
-          if (node.up !== true) loads.push(engine.expand(id, 'up'))
-          if (node.down !== true) loads.push(engine.expand(id, 'down'))
+          var anchor = node.anchor || {}
+          // `auto=true`：拉邻居，但不碰按钮状态。选中一个节点不等于替用户按了
+          // 上下键——以前它直接写 node.up/node.down，于是你点中节点时两个按钮
+          // 已经是"收起"态，你按的第一下其实是在收起来。
+          if (node.up !== true && node.autoUp !== true && anchor.up !== 0) loads.push(engine.expand(id, 'up', true))
+          if (node.down !== true && node.autoDown !== true && anchor.down !== 0) loads.push(engine.expand(id, 'down', true))
           if (loads.length === 0) return Promise.resolve()
           return Promise.all(loads).then(function () {
             // The selection may have moved on while the neighbours loaded;

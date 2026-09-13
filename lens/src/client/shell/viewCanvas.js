@@ -111,6 +111,7 @@ window.__ModuleLoader__.load({
                   event.preventDefault()
                   event.stopPropagation()
                   engine.lightEdge(wire.from, wire.to, wire.type)
+                  engine.focusEdge(wire.from, wire.to, wire.type)
                 },
               })
             })).concat(model.arrows.map(function (arrow) {
@@ -120,6 +121,7 @@ window.__ModuleLoader__.load({
                 key: 'a' + arrow.id,
                 className: 'cddl-arrowhead cddl-' + arrow.type
                   + (arrow.faded ? ' cddl-faded' : '')
+                  + litClass(arrow.wireId || arrow.id)
                   + (shared.edgeFocus ? ' cddl-hot' : '')
                   + (shared.focused === null || shared.focused === undefined ? ''
                     : (arrow.from === shared.focused || arrow.to === shared.focused ? ' cddl-hot' : ' cddl-cold')),

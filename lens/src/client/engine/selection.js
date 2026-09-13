@@ -29,6 +29,8 @@ window.__ModuleLoader__.load({
         reveal: function (id) {
           shared.selected = id
           shared.focused = id
+          shared.edgeFocus = null
+          shared.lit = null
           requestViewport(id, 'center')
           publish()
           return engine.source(id)
@@ -123,12 +125,14 @@ window.__ModuleLoader__.load({
           } else {
             shared.edgeFocus = { from: from, to: to, type: type }
             shared.focused = null
+            requestViewport(from, 'center')
           }
           publish()
         },
         blurEdge: function () {
           if (shared.edgeFocus === null || shared.edgeFocus === undefined) return
           shared.edgeFocus = null
+          shared.lit = null
           publish()
         },
         moveNode: function (id, point, commit) {
