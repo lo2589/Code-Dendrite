@@ -5,6 +5,7 @@
 //          开什么树加进什么树，和屏幕上的节点有什么边连什么边。兼容 pinned: [id]（从一开始就 pin 着）。
 // 顺序（固定）：选中的树 → 加 pin → 展开 → pin 连边 → 旁边（不在树里的 seed，堆到树下面）
 // screen = { nodes, side, pinned, edges, buttons, anchors, expansions, trees, treeTotals, violations }
+//   anchors 只带前端还没有的那些（known 里的不重发）：一个 anchor 平均 4.7KB，整份重发一次近 1MB。
 'use strict'
 
 const { RELATIONS, peers } = require('./anchors.js')
@@ -113,8 +114,12 @@ function buttonsFor(ctx, ids, rels) {
   return buttons
 }
 
-function computeScreen(ctx, events, state) {
+/**
+ * @param known - 前端已经拿到过 anchor 记录的 id（这些不再重发）。
+ */
+function computeScreen(ctx, events, state, known) {
   const st = normalizeState(ctx, state || {}, events)
+  const have = new Set(Array.isArray(known) ? known : [])
   const seedState = seedsAt(events, st.turn, st.pins)
   const rels = RELATIONS.filter(r => st.rels[r])
   const { layer, expansions, side } = screenLayer(ctx, st, st.tree, seedState)
@@ -131,7 +136,7 @@ function computeScreen(ctx, events, state) {
     counter: Object.fromEntries(seedState.counter), faded: seedState.faded.length,
     nodes, side, edges: layer.edges,
     buttons: buttonsFor(ctx, shown, rels),
-    anchors: Object.fromEntries(shown.map(id => [id, ctx.anchors[id]])),
+    anchors: Object.fromEntries(shown.filter(id => !have.has(id)).map(id => [id, ctx.anchors[id]])),
     expansions, trees: layer.perRelation, treeTotals,
   }
   screen.violations = check(ctx, screen, seedState)
@@ -168,9 +173,9 @@ function check(ctx, s, seedState) {
 }
 
 /** touch（来自会话）+ 状态 → 屏幕。worker 和 shell 脚本都走这一个入口。 */
-function screenFor(ctx, touches, state) {
+function screenFor(ctx, touches, state, known) {
   const events = resolveAll(ctx, touches)
-  const screen = computeScreen(ctx, events, state)
+  const screen = computeScreen(ctx, events, state, known)
   const unresolved = {}
   events.filter(e => e.anchors.length === 0).forEach(e => { unresolved[e.reason] = (unresolved[e.reason] || 0) + 1 })
   screen.evidence = { touches: events.length, unresolved }

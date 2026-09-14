@@ -122,6 +122,14 @@ window.__ModuleLoader__.load({
           // Resolving before the root is known would ask the wrong repository.
           if (shared.root === undefined) return engine.context().then(function () { return engine.ingest(snap) })
           shared.turn = snap.turn
+          // 会话快照在 agent 流式输出时一秒变很多次，但证据（read/edit/write 及其状态）没变时，
+          // 屏幕不会变：不重折轨迹、不重算 /screen、不重画。
+          var signature = snap.calls
+            .filter(function (call) { return call.touches.length > 0 })
+            .map(function (call) { return call.key + (call.running ? 'r' : 's') + (call.remembered === false ? 'f' : 'k') + call.touches.length })
+            .join('|')
+          if (signature === shared.evidenceSignature) return Promise.resolve()
+          shared.evidenceSignature = signature
           shared.resolved = shared.resolved || {}
           var pending = []
           snap.calls.forEach(function (call) {

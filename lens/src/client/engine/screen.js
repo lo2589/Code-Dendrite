@@ -7,6 +7,7 @@
 //   ④ 交给布局
 // 其余（切树、切关系、pin、收起、会话往前走）改视图状态后调 /screen 整屏重算，
 // 后端同样重放这些展开，所以两边给出的节点一致。
+// anchor 记录按 id 缓存在 shared.anchorCache：/screen 只发前端还没有的（一个平均 4.7KB）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -33,6 +34,7 @@ window.__ModuleLoader__.load({
     var NATIVE = { 'call:up': 'callers', 'call:down': 'callees', 'inherit:down': 'parent_classes' }
 
     var shortId = function (id) { return String(id).split('::').pop() }
+    var kb = function (bytes) { return (bytes / 1024).toFixed(0) + 'KB' }
 
     function defaultView() {
       var rels = {}
@@ -43,6 +45,11 @@ window.__ModuleLoader__.load({
     function viewOf() {
       if (shared.view === null || shared.view === undefined) shared.view = defaultView()
       return shared.view
+    }
+
+    function cacheOf() {
+      if (shared.anchorCache === null || shared.anchorCache === undefined) shared.anchorCache = {}
+      return shared.anchorCache
     }
 
     function activePin(id) {
@@ -62,14 +69,18 @@ window.__ModuleLoader__.load({
       return out
     }
 
+    /** POST JSON，返回的 body 上带 __bytes（响应大小，写进 log）。 */
     function postJson(path, query, payload) {
       return fetch(ROUTE + path + '?' + new URLSearchParams(query).toString(), {
         method: 'POST', cache: 'no-store',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       }).then(function (res) {
-        return res.json().then(function (body) {
+        return res.text().then(function (text) {
+          if (text === '') throw new Error('HTTP ' + res.status + ' 空响应')
+          var body = JSON.parse(text)
           if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status))
+          body.__bytes = text.length
           return body
         })
       })
@@ -82,15 +93,28 @@ window.__ModuleLoader__.load({
       publish()
     }
 
+    /** 收下服务端发来的 anchor 记录；索引戳变了先清空缓存。 */
+    function remember(anchors, stamp) {
+      if (stamp !== undefined && shared.anchorCacheStamp !== stamp) {
+        shared.anchorCache = {}
+        shared.anchorCacheStamp = stamp
+      }
+      var cache = cacheOf()
+      Object.keys(anchors || {}).forEach(function (id) { cache[id] = anchors[id] })
+      return cache
+    }
+
     /** 屏幕 → shared.graph。已画过的位置、类成员展开状态原样带过去（展开时节点不跳）。 */
     function applyScreen(body) {
+      var cache = remember(body.anchors, body.stamp)
       var before = shared.graph || emptyGraph()
       var graph = emptyGraph()
       var side = {}
+      var missing = 0
       body.side.forEach(function (id) { side[id] = true })
       body.nodes.concat(body.side).forEach(function (id) {
-        var anchor = body.anchors[id]
-        if (anchor === undefined || anchor === null) return
+        var anchor = cache[id]
+        if (anchor === undefined || anchor === null) { missing += 1; return }
         addNode(graph, anchor)
         var oldUi = before.ui[id]
         if (oldUi !== undefined) {
@@ -101,6 +125,7 @@ window.__ModuleLoader__.load({
         var place = before.layout[id]
         if (place !== undefined && (place.side === true) === (side[id] === true)) graph.layout[id] = place
       })
+      if (missing > 0) note('error', '✗ 屏幕上有 ' + missing + ' 个节点缓存里没有 anchor 记录')
       body.edges.forEach(function (e) { graph.edges.push({ from: e.from, to: e.to, types: [e.type] }) })
       graph.rootId = graph.order.length > 0 ? graph.order[0] : null
       shared.graph = graph
@@ -153,13 +178,16 @@ window.__ModuleLoader__.load({
         again = false
         var view = viewOf()
         var t0 = Date.now()
+        var known = shared.anchorCacheStamp === undefined ? [] : Object.keys(cacheOf())
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
-          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(','))
-        return postJson('/screen', params(), { state: view }).then(function (body) {
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
+        return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
+          var fresh = Object.keys(body.anchors || {}).length
           applyScreen(body)
           shared.screenError = null
           note('screen', '← 节点 ' + body.nodes.length + ' · 旁边 ' + body.side.length + ' · 边 ' + body.edges.length
-            + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length + ' · ' + (Date.now() - t0) + 'ms'
+            + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length
+            + ' · 响应 ' + kb(body.__bytes) + '（新发 anchor ' + fresh + ' 个）· ' + (Date.now() - t0) + 'ms'
             + (body.reason ? ' · ' + body.reason : ''))
           ;(body.expansions || []).forEach(function (x) {
             if (x.skipped) note('screen', '  展开被跳过 ' + shortId(x.id) + ' ' + x.rel + x.dir + '：' + (x.skipped === 'relation-off' ? '这个关系没开' : '节点不在屏幕上'))
@@ -195,9 +223,10 @@ window.__ModuleLoader__.load({
         return postJson('/anchors', params(), { ids: ids }).then(function (body) {
           var got = Object.keys(body.anchors || {})
           var missing = body.missing || []
+          remember(body.anchors, body.stamp)
           note('expand', '② /anchors 拉回 ' + got.length + ' 个 anchor，拿不到 ' + missing.length + ' 个'
-            + (missing.length > 0 ? '（' + missing.slice(0, 4).map(shortId).join(', ') + (missing.length > 4 ? ' …' : '') + '：裸名字或不在索引）' : '')
-            + ' · ' + (Date.now() - t0) + 'ms')
+            + (missing.length > 0 ? '（' + missing.slice(0, 4).map(shortId).join(', ') + (missing.length > 4 ? ' …' : '') + '）' : '')
+            + ' · ' + kb(body.__bytes) + ' · ' + (Date.now() - t0) + 'ms')
           var fresh = 0
           var linked = 0
           var added = []

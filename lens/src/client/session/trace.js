@@ -61,6 +61,9 @@ window.__ModuleLoader__.load({
           // 视图状态（pin、展开）属于那个会话，换会话一起清掉。
           shared.view = null
           shared.screen = null
+          shared.anchorCache = {}
+          shared.anchorCacheStamp = undefined
+          shared.evidenceSignature = null
           shared.trace = {}
           shared.resolved = {}
           shared.unresolved = []

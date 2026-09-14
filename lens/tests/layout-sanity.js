@@ -549,7 +549,7 @@ for (const [label, seed, filter, avail] of CASES) {
       treeTotals: { degree1: { nodes: 2, edges: 2, side: 1 }, degree2: { nodes: 2, edges: 2, side: 1 }, edit: { nodes: 0, edges: 0, side: 3 } },
       violations: [], stamp: 's',
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body), text: () => Promise.resolve(JSON.stringify(body)) })
   }
   Object.assign(side.shared, { view: null, screen: null, trace: {}, turn: 4, selected: null, nodePositions: {}, gather: null })
   const engine = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })

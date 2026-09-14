@@ -382,7 +382,10 @@ module.exports = {
       const body = await readJson(req)
       const log = await readLog(q.session)
       const touches = log === null ? [] : touchesFromEvents(log.events)
-      const screen = await ask('screen', q, { touches, state: body.state ?? {} })
+      const screen = await ask('screen', q, {
+        touches, state: body.state ?? {},
+        known: Array.isArray(body.known) ? body.known : [], knownStamp: body.knownStamp ?? null,
+      })
       json(res, 200, { session: q.session ?? null, reason: log === null ? 'no-session' : null, ...screen })
     })
 

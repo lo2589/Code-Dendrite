@@ -29,6 +29,9 @@ CLAUDE.md
 
 # 测试用的临时项目（test_integration.py 会就地造一个）
 backend/
+doc/*
+docs/*
+*.
 
 # agent skill 的 SKILL.md 不是文档，是给 agent 的指令
 !/skills/**/*.md

@@ -728,10 +728,14 @@ const handlers = {
   },
   source: (repo, q) => ({ source: sourceOf(repo, q.id, Number(q.pad) || 0) }),
   // 计算单元（src/compute）：屏幕上有什么只由它算。repo.compute 在 build() 里随索引一起建。
-  screen: (repo, q) => ({
-    ...require('./compute/screen.js').screenFor(repo.compute, Array.isArray(q.touches) ? q.touches : [], q.state ?? {}),
-    stamp: repo.stamp,
-  }),
+  screen: (repo, q) => {
+    // 前端已经拿到过的 anchor 不再重发；前端的缓存是按旧索引建的（戳不一样）就全量重发。
+    const known = q.knownStamp === repo.stamp && Array.isArray(q.known) ? q.known : []
+    return {
+      ...require('./compute/screen.js').screenFor(repo.compute, Array.isArray(q.touches) ? q.touches : [], q.state ?? {}, known),
+      stamp: repo.stamp,
+    }
+  },
   // 展开：按 id 从新 anchor 表（anchors.json 原始记录 + relation 补边）里拿 anchor，
   // 顺带给出这些节点的按钮数字——和 /screen 走同一个 peers，数字不会对不上。
   anchors: (repo, q) => {

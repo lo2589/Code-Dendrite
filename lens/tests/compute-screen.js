@@ -136,6 +136,8 @@ check('关掉 call：没有 call 边、没有 call 按钮', off.edges.every(e =>
 check('三棵树都报节点数和关系数', ['degree1', 'degree2', 'edit'].every(m => Number.isInteger(pinX.treeTotals[m].nodes) && Number.isInteger(pinX.treeTotals[m].edges)))
 check('当前树的数字 = 屏幕', all.every(s => s.treeTotals[s.tree].nodes === s.nodes.length && s.treeTotals[s.tree].edges === s.edges.length))
 check('以上所有屏幕没有违例', all.every(s => s.violations.length === 0))
+const partial = screenFor(ctx, touches, { turn: 2, tree: 'degree1' }, [A('f')])
+check('前端已有的 anchor 不再重发（节点照样在屏幕上）', partial.anchors[A('f')] === undefined && partial.anchors[A('g')] !== undefined && partial.nodes.includes(A('f')))
 
 // 8 worker
 const worker = new Worker(path.join(__dirname, '..', 'src', 'index_worker.js'))
