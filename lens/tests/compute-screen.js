@@ -43,7 +43,11 @@ const raw = {}
 const edge = (from, to, type, extra = {}) => ({ from_id: `a.py::${from}`, to_id: `a.py::${to}`, edge_type: type, ...extra })
 const relations = { edges: [
   edge('f', 'g', 'call'), edge('p', 'q', 'call'), edge('q', 'h', 'call'), edge('h', 'x', 'call'), edge('x', 'k', 'call'),
-  edge('f', 'g', 'dataflow', { data_in: 'a' }), edge('f', 'g', 'dataflow', { data_in: 'b' }), edge('x', 'k', 'dataflow'),
+  edge('f', 'g', 'dataflow', { data_in: 'a', evidence: 'strict-dataflow:relay' }), edge('f', 'g', 'dataflow', { data_in: 'b', evidence: 'strict-dataflow:relay+return' }),
+  edge('x', 'k', 'dataflow', { evidence: 'strict-dataflow:return' }),
+  // 反例：dataflow 只算 return / relay。arg 就是 call，state（self.x 写 → 读）只是两个定义，没有证据的是生成器兜底——都不算。
+  edge('p', 'q', 'dataflow', { evidence: 'strict-dataflow:arg' }), edge('q', 'h', 'dataflow', { evidence: 'strict-dataflow:state' }),
+  edge('h', 'x', 'dataflow', { evidence: 'strict-dataflow:arg+state' }), edge('lonely', 'x', 'dataflow', { data_out: 'str, int' }),
 ] }
 fs.writeFileSync(path.join(root, '.codedendrite', 'anchors.json'), JSON.stringify(raw))
 fs.writeFileSync(path.join(root, '.codedendrite', 'relations.json'), JSON.stringify(relations))
@@ -82,6 +86,15 @@ const keep = s => { all.push(s); return s }
 // 1 新 anchor
 check('原始字段原样保留', same(Object.keys(raw[A('g')]).map(k => ctx.anchors[A('g')][k]), Object.values(raw[A('g')])))
 check('补 dataflowup 且去重', same(ctx.anchors[A('g')].dataflowup, [A('f')]))
+check('dataflow 不算 arg / state / arg+state / 无证据：不补字段', ['p', 'q', 'h', 'lonely'].every(id => ctx.anchors[A(id)].dataflowdown === undefined)
+  && ['q', 'h'].every(id => ctx.anchors[A(id)].dataflowup === undefined) && same(ctx.anchors[A('x')].dataflowdown, [A('k')]) && ctx.anchors[A('x')].dataflowup === undefined)
+check('dataflow 不算的边不出按钮', peers(ctx, A('q'), 'dataflow', 'up').length === 0 && peers(ctx, A('x'), 'dataflow', 'up').length === 0)
+{
+  const { countsAsRelation } = require(path.join(__dirname, '..', 'src', 'compute', 'anchors.js'))
+  check('老索引没有 evidence：data_out 是 kind 名照认、是类型名不认；其它关系原样算',
+    countsAsRelation({ edge_type: 'dataflow', data_out: 'relay+return' }) && !countsAsRelation({ edge_type: 'dataflow', data_out: 'arg' })
+    && !countsAsRelation({ edge_type: 'dataflow', data_out: 'str, int' }) && countsAsRelation({ edge_type: 'call' }) && countsAsRelation({ edge_type: 'inherit' }))
+}
 check('call 不补字段', ctx.anchors[A('f')].calldown === undefined && ctx.anchors[A('g')].callup === undefined)
 check('call 读原生字段并滤掉裸名字', same(peers(ctx, A('f'), 'call', 'down'), [A('g')]))
 check('节点上的 callees 不含裸名字：字段长度 = 按钮数字', same(ctx.anchors[A('f')].callees, [A('g')]) && raw[A('f')].callees.includes('print'))

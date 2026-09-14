@@ -38,7 +38,7 @@ fs.writeFileSync(path.join(root, '.codedendrite', 'anchors.json'), JSON.stringif
 fs.writeFileSync(path.join(root, '.codedendrite', 'relations.json'), JSON.stringify({
   edges: [
     { from_id: 'a.py::f', to_id: 'a.py::g', edge_type: 'call' },
-    { from_id: 'a.py::f', to_id: 'a.py::g', edge_type: 'dataflow' },
+    { from_id: 'a.py::f', to_id: 'a.py::g', edge_type: 'dataflow', evidence: 'strict-dataflow:relay' },
     { from_id: 'a.py::f', to_id: 'a.py::f', edge_type: 'call' },
     { from_id: 'a.py::g', to_id: 'a.py::f', edge_type: 'call' },
     { from_id: 'a.py::h', to_id: 'a.py::f', edge_type: 'call' },

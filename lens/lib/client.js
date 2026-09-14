@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_47_SESSION_READ_CACHE_001
+// build: V1_48_DATAFLOW_RETURN_RELAY_001
 // parts: 43
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_47_SESSION_READ_CACHE_001'
+    var BUILD = 'V1_48_DATAFLOW_RETURN_RELAY_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -2269,7 +2269,7 @@ __cddLocal.load({
             key: dir + ':' + rel,
             'data-relation': rel,
             'data-count': n,
-            title: (open ? '收起' : '展开') + (dir === 'up' ? '：谁在用它（' : '：它在用谁（') + n + '） · ' + rel,
+            title: (open ? '收起' : '展开') + '：' + (rel === 'dataflow' ? (dir === 'up' ? '数据从谁流进来' : '数据流到谁那里去') : (dir === 'up' ? '谁在用它' : '它在用谁')) + '（' + n + '） · ' + rel,
             className: 'cddl-rel-' + rel + (open ? ' on' : ''),
             onClick: function (e) { e.stopPropagation(); engine.toggleOpen(id, rel, dir) },
           }, (dir === 'up' ? '↑' : '↓') + n))
@@ -2841,7 +2841,7 @@ __cddLocal.load({
           var busy = engine.isBusy(id, rel, dir)
           out.push(h('button', {
             key: dir + ':' + rel,
-            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
+            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (rel === 'dataflow' ? (dir === 'up' ? '数据从谁流进来' : '数据流到谁那里去') : (dir === 'up' ? '谁在用它' : '它在用谁')) + '（' + n + '）\n点一下：展开/收起',
             className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : '') + (busy ? ' cddl-busy' : ''),
             'aria-busy': busy ? 'true' : 'false',
             'data-action': dir === 'up' ? 'expand-callers' : 'expand-callees',

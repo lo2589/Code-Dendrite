@@ -4,12 +4,45 @@
 //   原来没有的方向：字段名 = 关系名 + up/down（dataflowup、dispatchdown …）
 //   call、inherit↓ 本来就有（callers / callees / parent_classes）：读原生字段，过滤到只剩 anchor
 //   len(字段) 就是按钮上的数字；peers() 是唯一取数口。
+// dataflow 只算 return 和 relay（见 countsAsRelation）：arg 就是 call，self.x 写 → 读只是两个定义。
 'use strict'
 
 const RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
 
 /** anchor 本来就带的方向。没列在这里的方向一律补「关系名+up/down」。 */
 const NATIVE = { 'call:up': 'callers', 'call:down': 'callees', 'inherit:down': 'parent_classes' }
+
+const DATAFLOW_KINDS = new Set(['arg', 'return', 'relay', 'state'])
+
+/**
+ * 一条 dataflow 边的 kind 集合（arg / return / relay / state）。
+ *
+ * 口径同生成器 generate_relations.py::_edge_kinds：evidence 以 "strict-dataflow:" 开头，冒号后按 + 拆。
+ * 老索引没有 evidence 时，data_out 本身就是 kind 名（如 "relay+return"）才照认；
+ * 生成器兜底的「调用即数据流」data_out 是类型名，拆不出 kind，是空集。
+ */
+function dataflowKinds(edge) {
+  const evidence = String((edge && edge.evidence) || '')
+  if (evidence.startsWith('strict-dataflow:')) {
+    return new Set(evidence.slice('strict-dataflow:'.length).split('+').filter(Boolean))
+  }
+  if (evidence.length > 0) return new Set()
+  const parts = String((edge && edge.data_out) || '').split('+').map(s => s.trim()).filter(Boolean)
+  return parts.length > 0 && parts.every(p => DATAFLOW_KINDS.has(p)) ? new Set(parts) : new Set()
+}
+
+/**
+ * 这条边算不算关系。读 relations.json 的入口（fromIndex、index_worker.build）都先过这里。
+ *
+ * dataflow 只算 return（B 的返回值被 A 拿去当输入）和 relay（产出方 → 接收方）。
+ * arg（就是 call）、state（self.x 写 → 读，两个 anchor 只是定义）、没有 kind 的都不算。
+ * 其它关系类型原样算。
+ */
+function countsAsRelation(edge) {
+  if (edge === null || typeof edge !== 'object' || edge.edge_type !== 'dataflow') return true
+  const kinds = dataflowKinds(edge)
+  return kinds.has('return') || kinds.has('relay')
+}
 
 function isVirtual(a) {
   return a !== null && typeof a === 'object' && (a.is_virtual === true || a.symbol_type === 'virtual_block')
@@ -58,11 +91,11 @@ function pushUnique(obj, key, value) {
  * 一份索引 → 计算上下文。每次索引重建做一次。
  * @param root - 仓库根（绝对路径）。
  * @param raw - anchors.json 解析结果。
- * @param relationEdges - relations.json 的 edges。
+ * @param relationEdges - relations.json 的 edges（不算关系的 dataflow 在这里先滤掉）。
  */
 function fromIndex(root, raw, relationEdges) {
   const visible = new Set(Object.keys(raw).filter(id => !isVirtual(raw[id])))
-  const edges = visibleEdges(raw, visible, relationEdges || [])
+  const edges = visibleEdges(raw, visible, (relationEdges || []).filter(countsAsRelation))
   const extra = {}
   for (const id of visible) extra[id] = {}
   for (const e of edges) {
@@ -120,4 +153,4 @@ function extraFields(ctx) {
   return stats
 }
 
-module.exports = { RELATIONS, NATIVE, fromIndex, peers, asymmetry, extraFields }
+module.exports = { RELATIONS, NATIVE, dataflowKinds, countsAsRelation, fromIndex, peers, asymmetry, extraFields }

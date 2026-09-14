@@ -157,7 +157,10 @@ function build(root) {
   // 计算单元的上下文（新 anchor = 原始记录 + relation 补边）随索引一起建，不再单独解析一遍。
   repo.compute = require('./compute/anchors.js').fromIndex(root, raw, rel.edges ?? [])
   const rawOut = new Map()
+  // 旧查询（repo.in/out → relPeers → describe/expand/walk）和计算单元用同一个判断：dataflow 只算 return/relay。
+  const { countsAsRelation } = require('./compute/anchors.js')
   for (const e of rel.edges ?? []) {
+    if (!countsAsRelation(e)) continue
     // Edges reaching outside the index (builtins like `print`, third-party
     // calls) are dropped rather than drawn as phantom nodes: the graph shows
     // this repository, and a node with no anchor has no source to open.

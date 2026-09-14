@@ -53,7 +53,7 @@ window.__ModuleLoader__.load({
           var busy = engine.isBusy(id, rel, dir)
           out.push(h('button', {
             key: dir + ':' + rel,
-            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
+            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (rel === 'dataflow' ? (dir === 'up' ? '数据从谁流进来' : '数据流到谁那里去') : (dir === 'up' ? '谁在用它' : '它在用谁')) + '（' + n + '）\n点一下：展开/收起',
             className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : '') + (busy ? ' cddl-busy' : ''),
             'aria-busy': busy ? 'true' : 'false',
             'data-action': dir === 'up' ? 'expand-callers' : 'expand-callees',

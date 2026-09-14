@@ -79,7 +79,7 @@ window.__ModuleLoader__.load({
             key: dir + ':' + rel,
             'data-relation': rel,
             'data-count': n,
-            title: (open ? '收起' : '展开') + (dir === 'up' ? '：谁在用它（' : '：它在用谁（') + n + '） · ' + rel,
+            title: (open ? '收起' : '展开') + '：' + (rel === 'dataflow' ? (dir === 'up' ? '数据从谁流进来' : '数据流到谁那里去') : (dir === 'up' ? '谁在用它' : '它在用谁')) + '（' + n + '） · ' + rel,
             className: 'cddl-rel-' + rel + (open ? ' on' : ''),
             onClick: function (e) { e.stopPropagation(); engine.toggleOpen(id, rel, dir) },
           }, (dir === 'up' ? '↑' : '↓') + n))
