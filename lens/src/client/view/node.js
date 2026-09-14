@@ -5,6 +5,10 @@
 //   pin = engine.pin（计数器不减）
 // 这里不决定任何节点是否上屏。
 //
+// 画布上用 MemoNode：卡片自己的签名（位置、按钮、状态）没变就不重画——选中别的节点、
+// 高亮一根线时，其它卡片不跟着跑一遍 React。
+// 拖动不经过 React：直接挪这张卡片，线层只改它自己的线，松手才重排一次。
+//
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
@@ -33,8 +37,12 @@ window.__ModuleLoader__.load({
       return Array.isArray(anchor.own_methods) ? anchor.own_methods.length : 0
     }
 
+    function buttonsOf(id) {
+      return (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+    }
+
     function hopButtons(engine, id) {
-      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var counts = buttonsOf(id)
       var out = []
       REL_ORDER.forEach(function (rel) {
         // 上行在左、下行在右，同一关系两个方向挨着，颜色一致；数字是 0 的不画。
@@ -71,10 +79,87 @@ window.__ModuleLoader__.load({
       return opens.filter(function (o) { return o.id === id }).map(function (o) { return o.dir + ':' + o.rel }).sort().join(' ') || 'none'
     }
 
+    function busySlots(engine, id) {
+      return Object.keys(buttonsOf(id)).filter(function (k) {
+        var m = /^(.*)(up|down)$/.exec(k)
+        return m !== null && engine.isBusy(id, m[1], m[2])
+      }).join(' ')
+    }
+
+    function recordSig(r) {
+      if (r === null || r === undefined) return ''
+      var last = (r.events || [])[(r.events || []).length - 1] || {}
+      return [r.state, r.remembered, r.firstTurn, r.firstStep, r.lastTurn, r.lastStep, r.approx, (r.events || []).length, last.agent, last.reason].join(',')
+    }
+
+    /**
+     * 一张卡片画出来取决于什么。签名一样 → 画出来一样 → MemoNode 跳过这张卡片。
+     * GraphNode 读到的每个 shared 字段都必须列在这里，漏一项卡片就会停在旧样子。
+     */
+    function nodeSig(engine, p) {
+      var id = p.id
+      var ui = uiOf(shared.graph, id) || {}
+      // 只有被点亮的卡片自己变；其余变暗靠画布上的 cddl-litmode，不改卡片签名。
+      var lit = shared.lit !== null && shared.lit !== undefined && shared.lit.nodes[id] === true ? 'L' : ''
+      var members = ''
+      if (ui.members && ui.memberList !== undefined) {
+        members = ui.memberList.map(function (m) {
+          return m.id + (shared.selected === m.id ? '*' : '') + recordSig(stateOf(m.id))
+        }).join(';')
+      }
+      return [p.x, p.y, p.w, p.h, p.baseX, p.baseY, p.side ? 1 : 0, p.label, p.flowAxis,
+        shared.selected === id ? 1 : 0, lit, engine.isPinned(id) ? 1 : 0, openSlots(id), busySlots(engine, id),
+        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members].join('|')
+    }
+
+    /** 拖动：卡片用 transform 跟着指针，线层只改这张卡片的线；松手 publish 一次、重排一次。 */
+    function startDrag(event, engine, p, zoomProp) {
+      var shell = event.currentTarget.parentElement
+      var layer = require('dsh-cdd-lens/view/wireLayer')
+      // Drag in the coordinates a position is SAVED in, not the ones it
+      // is drawn at, or the node moves again on the next render.
+      var baseX = p.baseX === undefined ? p.x : p.baseX
+      var baseY = p.baseY === undefined ? p.y : p.baseY
+      var start = { clientX: event.clientX, clientY: event.clientY }
+      var latest = { x: baseX, y: baseY }
+      var moved = false
+      var wires = 0
+      var frames = 0
+      var t0 = Date.now()
+      var move = function (e) {
+        var zoom = shared.zoom || zoomProp || 1
+        var dx = (e.clientX - start.clientX) / zoom
+        var dy = (e.clientY - start.clientY) / zoom
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return
+        moved = true
+        latest = { x: Math.max(4, baseX + dx), y: Math.max(4, baseY + dy) }
+        var ox = latest.x - baseX
+        var oy = latest.y - baseY
+        if (shell) shell.style.transform = 'translate(' + ox + 'px,' + oy + 'px)'
+        wires = layer.dragNode(p.id, ox, oy)
+        frames += 1
+        engine.moveNode(p.id, latest, false)
+      }
+      var up = function () {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        if (!moved) { engine.select(p.id); engine.lightNode(p.id); return }
+        if (shell) {
+          shell.style.transform = ''
+          shell.style.left = (p.x + latest.x - baseX) + 'px'
+          shell.style.top = (p.y + latest.y - baseY) + 'px'
+        }
+        note('btn', '拖动 ' + String(p.id).split('::').pop() + ' → ' + Math.round(latest.x) + ',' + Math.round(latest.y)
+          + ' · ' + frames + ' 帧只改了卡片和它的 ' + wires + ' 根线 · ' + (Date.now() - t0) + 'ms · 松手重排一次')
+        engine.moveNode(p.id, latest, true)
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+    }
+
     function GraphNode(props) {
       var engine = props.engine
       var p = props.p
-      var zoom = props.zoom || 1
       var drag = useRef(null)
       // node 就是 anchor：不用再走 `.anchor` 那一跳。
       var anchor = p.node
@@ -150,8 +235,7 @@ window.__ModuleLoader__.load({
         h('div', {
           key: 'n',
           className: 'cddl-gnode'
-            + (shared.lit === null || shared.lit === undefined ? ''
-              : (shared.lit.nodes[p.id] === true ? ' cddl-lit' : ' cddl-unlit'))
+            + (shared.lit !== null && shared.lit !== undefined && shared.lit.nodes[p.id] === true ? ' cddl-lit' : '')
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
             + (p.side ? ' cddl-island' : '')
@@ -164,31 +248,8 @@ window.__ModuleLoader__.load({
             if (event.target.closest && event.target.closest('button')) return
             event.preventDefault()
             event.stopPropagation()
-            // Drag in the coordinates a position is SAVED in, not the ones it
-            // is drawn at, or the node moves again on the next render.
-            var baseX = p.baseX === undefined ? p.x : p.baseX
-            var baseY = p.baseY === undefined ? p.y : p.baseY
-            var start = { clientX: event.clientX, clientY: event.clientY, x: baseX, y: baseY }
-            var latest = { x: baseX, y: baseY }
-            var moved = false
-            drag.current = start
-            var move = function (e) {
-              var dx = (e.clientX - start.clientX) / zoom
-              var dy = (e.clientY - start.clientY) / zoom
-              if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return
-              moved = true
-              latest = { x: Math.max(4, start.x + dx), y: Math.max(4, start.y + dy) }
-              engine.moveNode(p.id, latest, false)
-            }
-            var up = function () {
-              drag.current = null
-              window.removeEventListener('pointermove', move)
-              window.removeEventListener('pointerup', up)
-              if (moved) engine.moveNode(p.id, latest, true)
-              else { engine.select(p.id); engine.lightNode(p.id) }
-            }
-            window.addEventListener('pointermove', move)
-            window.addEventListener('pointerup', up)
+            drag.current = true
+            startDrag(event, engine, p, props.zoom)
           },
         }, [
           head,
@@ -203,7 +264,14 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    module.exports = { GraphNode }
+    // 画布用这个：签名和 anchor 记录都没变就跳过。stub React（测试）没有 memo 时退回原组件。
+    var MemoNode = typeof React.memo === 'function'
+      ? React.memo(GraphNode, function (prev, next) {
+        return prev.sig === next.sig && prev.engine === next.engine && prev.p.node === next.p.node
+      })
+      : GraphNode
+
+    module.exports = { GraphNode, MemoNode, nodeSig }
     return module.exports
   },
 })

@@ -4,8 +4,8 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_42_RENDER_LOAD_001
-// parts: 41
+// build: V1_44_WIRE_LAYER_001
+// parts: 42
 
 ;(function () {
 var __cddHost = window.__ModuleLoader__
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_42_RENDER_LOAD_001'
+    var BUILD = 'V1_44_WIRE_LAYER_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -997,8 +997,20 @@ __cddLocal.load({
         },
 
         context: function () {
+          // 还没有会话、也没有仓库：不问。问了 host 只能猜一个仓库，猜错的代价是把别的项目整份索引读进内存。
+          var sid = session()
+          if ((sid === undefined || sid === null) && shared.root === undefined) {
+            require('dsh-cdd-lens/runtime/debug').note('req', '/context 跳过：还没有会话')
+            return Promise.resolve(undefined)
+          }
           return api('/context', params()).then(function (body) {
             shared.context = body
+            // host 答 no-session 时 root 是 null；不能记下来，否则每个请求都带 root=null。
+            if (typeof body.root !== 'string') {
+              require('dsh-cdd-lens/runtime/debug').note('res', '/context 没有仓库：' + (body.reason || 'no-root'))
+              publish()
+              return body
+            }
             shared.root = body.root
             // First contact teaches the graph its stamp; a later context that
             // disagrees with it means the index was rebuilt behind the page.
@@ -1159,15 +1171,6 @@ __cddLocal.load({
     var uiOf = __graph_model.uiOf
 
     function selectionMethods(ctx, engine, session, params) {
-      // 拖动中 pointermove 一秒上百次：一帧最多重画一次。
-      var frameQueued = false
-      var publishNextFrame = function () {
-        if (frameQueued) return
-        frameQueued = true
-        var run = function () { frameQueued = false; publish() }
-        if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(run)
-        else setTimeout(run, 16)
-      }
       return {
         reveal: function (id) {
           shared.selected = id
@@ -1245,8 +1248,9 @@ __cddLocal.load({
             if (shared.gather.freed === undefined) shared.gather.freed = {}
             shared.gather.freed[id] = true
           }
-          if (commit) { saveNodePosition(id, point); publish(); return }
-          publishNextFrame()
+          // 拖动中不 publish：卡片和它的线由 view/node.js + view/wireLayer.js 直接挪，
+          // 不经过 React、不重排；松手才 publish 一次，重排一次。
+          if (commit) { saveNodePosition(id, point); publish() }
         },
       }
     }
@@ -1378,7 +1382,13 @@ __cddLocal.load({
         ingest: function (snap) {
           if (snap === undefined || snap === null) return Promise.resolve()
           // Resolving before the root is known would ask the wrong repository.
-          if (shared.root === undefined) return engine.context().then(function () { return engine.ingest(snap) })
+          if (shared.root === undefined) {
+            return engine.context().then(function () {
+              // 问过还是没有仓库：停在这里，不再反复问。
+              if (shared.root === undefined) return
+              return engine.ingest(snap)
+            })
+          }
           shared.turn = snap.turn
           // 会话快照在 agent 流式输出时一秒变很多次，但证据（read/edit/write 及其状态）没变时，
           // 屏幕不会变：不重折轨迹、不重算 /screen、不重画。
@@ -1704,6 +1714,10 @@ __cddLocal.load({
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
           + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
+          if (!Array.isArray(body.nodes)) {
+            note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
+            return
+          }
           var fresh = Object.keys(body.anchors || {}).length
           applyScreen(body)
           shared.screenError = null
@@ -2778,6 +2792,10 @@ __cddLocal.load({
 //   pin = engine.pin（计数器不减）
 // 这里不决定任何节点是否上屏。
 //
+// 画布上用 MemoNode：卡片自己的签名（位置、按钮、状态）没变就不重画——选中别的节点、
+// 高亮一根线时，其它卡片不跟着跑一遍 React。
+// 拖动不经过 React：直接挪这张卡片，线层只改它自己的线，松手才重排一次。
+//
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
@@ -2806,8 +2824,12 @@ __cddLocal.load({
       return Array.isArray(anchor.own_methods) ? anchor.own_methods.length : 0
     }
 
+    function buttonsOf(id) {
+      return (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+    }
+
     function hopButtons(engine, id) {
-      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var counts = buttonsOf(id)
       var out = []
       REL_ORDER.forEach(function (rel) {
         // 上行在左、下行在右，同一关系两个方向挨着，颜色一致；数字是 0 的不画。
@@ -2844,10 +2866,87 @@ __cddLocal.load({
       return opens.filter(function (o) { return o.id === id }).map(function (o) { return o.dir + ':' + o.rel }).sort().join(' ') || 'none'
     }
 
+    function busySlots(engine, id) {
+      return Object.keys(buttonsOf(id)).filter(function (k) {
+        var m = /^(.*)(up|down)$/.exec(k)
+        return m !== null && engine.isBusy(id, m[1], m[2])
+      }).join(' ')
+    }
+
+    function recordSig(r) {
+      if (r === null || r === undefined) return ''
+      var last = (r.events || [])[(r.events || []).length - 1] || {}
+      return [r.state, r.remembered, r.firstTurn, r.firstStep, r.lastTurn, r.lastStep, r.approx, (r.events || []).length, last.agent, last.reason].join(',')
+    }
+
+    /**
+     * 一张卡片画出来取决于什么。签名一样 → 画出来一样 → MemoNode 跳过这张卡片。
+     * GraphNode 读到的每个 shared 字段都必须列在这里，漏一项卡片就会停在旧样子。
+     */
+    function nodeSig(engine, p) {
+      var id = p.id
+      var ui = uiOf(shared.graph, id) || {}
+      // 只有被点亮的卡片自己变；其余变暗靠画布上的 cddl-litmode，不改卡片签名。
+      var lit = shared.lit !== null && shared.lit !== undefined && shared.lit.nodes[id] === true ? 'L' : ''
+      var members = ''
+      if (ui.members && ui.memberList !== undefined) {
+        members = ui.memberList.map(function (m) {
+          return m.id + (shared.selected === m.id ? '*' : '') + recordSig(stateOf(m.id))
+        }).join(';')
+      }
+      return [p.x, p.y, p.w, p.h, p.baseX, p.baseY, p.side ? 1 : 0, p.label, p.flowAxis,
+        shared.selected === id ? 1 : 0, lit, engine.isPinned(id) ? 1 : 0, openSlots(id), busySlots(engine, id),
+        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members].join('|')
+    }
+
+    /** 拖动：卡片用 transform 跟着指针，线层只改这张卡片的线；松手 publish 一次、重排一次。 */
+    function startDrag(event, engine, p, zoomProp) {
+      var shell = event.currentTarget.parentElement
+      var layer = require('dsh-cdd-lens/view/wireLayer')
+      // Drag in the coordinates a position is SAVED in, not the ones it
+      // is drawn at, or the node moves again on the next render.
+      var baseX = p.baseX === undefined ? p.x : p.baseX
+      var baseY = p.baseY === undefined ? p.y : p.baseY
+      var start = { clientX: event.clientX, clientY: event.clientY }
+      var latest = { x: baseX, y: baseY }
+      var moved = false
+      var wires = 0
+      var frames = 0
+      var t0 = Date.now()
+      var move = function (e) {
+        var zoom = shared.zoom || zoomProp || 1
+        var dx = (e.clientX - start.clientX) / zoom
+        var dy = (e.clientY - start.clientY) / zoom
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return
+        moved = true
+        latest = { x: Math.max(4, baseX + dx), y: Math.max(4, baseY + dy) }
+        var ox = latest.x - baseX
+        var oy = latest.y - baseY
+        if (shell) shell.style.transform = 'translate(' + ox + 'px,' + oy + 'px)'
+        wires = layer.dragNode(p.id, ox, oy)
+        frames += 1
+        engine.moveNode(p.id, latest, false)
+      }
+      var up = function () {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        if (!moved) { engine.select(p.id); engine.lightNode(p.id); return }
+        if (shell) {
+          shell.style.transform = ''
+          shell.style.left = (p.x + latest.x - baseX) + 'px'
+          shell.style.top = (p.y + latest.y - baseY) + 'px'
+        }
+        note('btn', '拖动 ' + String(p.id).split('::').pop() + ' → ' + Math.round(latest.x) + ',' + Math.round(latest.y)
+          + ' · ' + frames + ' 帧只改了卡片和它的 ' + wires + ' 根线 · ' + (Date.now() - t0) + 'ms · 松手重排一次')
+        engine.moveNode(p.id, latest, true)
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+    }
+
     function GraphNode(props) {
       var engine = props.engine
       var p = props.p
-      var zoom = props.zoom || 1
       var drag = useRef(null)
       // node 就是 anchor：不用再走 `.anchor` 那一跳。
       var anchor = p.node
@@ -2923,8 +3022,7 @@ __cddLocal.load({
         h('div', {
           key: 'n',
           className: 'cddl-gnode'
-            + (shared.lit === null || shared.lit === undefined ? ''
-              : (shared.lit.nodes[p.id] === true ? ' cddl-lit' : ' cddl-unlit'))
+            + (shared.lit !== null && shared.lit !== undefined && shared.lit.nodes[p.id] === true ? ' cddl-lit' : '')
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
             + (p.side ? ' cddl-island' : '')
@@ -2937,31 +3035,8 @@ __cddLocal.load({
             if (event.target.closest && event.target.closest('button')) return
             event.preventDefault()
             event.stopPropagation()
-            // Drag in the coordinates a position is SAVED in, not the ones it
-            // is drawn at, or the node moves again on the next render.
-            var baseX = p.baseX === undefined ? p.x : p.baseX
-            var baseY = p.baseY === undefined ? p.y : p.baseY
-            var start = { clientX: event.clientX, clientY: event.clientY, x: baseX, y: baseY }
-            var latest = { x: baseX, y: baseY }
-            var moved = false
-            drag.current = start
-            var move = function (e) {
-              var dx = (e.clientX - start.clientX) / zoom
-              var dy = (e.clientY - start.clientY) / zoom
-              if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return
-              moved = true
-              latest = { x: Math.max(4, start.x + dx), y: Math.max(4, start.y + dy) }
-              engine.moveNode(p.id, latest, false)
-            }
-            var up = function () {
-              drag.current = null
-              window.removeEventListener('pointermove', move)
-              window.removeEventListener('pointerup', up)
-              if (moved) engine.moveNode(p.id, latest, true)
-              else { engine.select(p.id); engine.lightNode(p.id) }
-            }
-            window.addEventListener('pointermove', move)
-            window.addEventListener('pointerup', up)
+            drag.current = true
+            startDrag(event, engine, p, props.zoom)
           },
         }, [
           head,
@@ -2976,7 +3051,14 @@ __cddLocal.load({
       ])
     }
 
-    module.exports = { GraphNode }
+    // 画布用这个：签名和 anchor 记录都没变就跳过。stub React（测试）没有 memo 时退回原组件。
+    var MemoNode = typeof React.memo === 'function'
+      ? React.memo(GraphNode, function (prev, next) {
+        return prev.sig === next.sig && prev.engine === next.engine && prev.p.node === next.p.node
+      })
+      : GraphNode
+
+    module.exports = { GraphNode, MemoNode, nodeSig }
     return module.exports
   },
 })
@@ -3220,7 +3302,7 @@ __cddLocal.load({
       '.cddl-wire.cddl-lit{stroke-width:3;opacity:1;filter:drop-shadow(0 0 3px color-mix(in srgb,var(--dsw-alias-state-business-primary) 58%,transparent))}',
       '.cddl-wire.cddl-unlit{opacity:.05}',
       '.cddl-gnode.cddl-lit{border-color:var(--dsw-alias-state-business-primary)}',
-      '.cddl-gnode.cddl-unlit{opacity:.24}',
+      '.cddl-litmode .cddl-gnode:not(.cddl-lit){opacity:.24}',
       '.cddl-arrowhead.cddl-lit{opacity:1}',
       '.cddl-arrowhead.cddl-unlit{opacity:.05}',
       '.cddl-node-shell{position:absolute}',
@@ -3764,6 +3846,26 @@ __cddLocal.load({
       return out
     }
 
+    /** 一根线上几个箭头的位置和朝向（emitWires 和拖动时的线层共用，保证一样）。 */
+    function arrowPoints(pts, every) {
+      var total = geometry.length(pts)
+      var curve = bezierControls(pts)
+      return arrowDistances(total, every).map(function (distance) {
+        return curve !== null
+          ? bezierAt(curve.a, curve.c1, curve.c2, curve.b, Math.min(1, Math.max(0, distance / total)))
+          : geometry.atDistance(pts, distance)
+      })
+    }
+
+    /** 一个箭头三角（本地 M-4.5,-3.2 L4.5,0 L-4.5,3.2 Z）转到画布坐标，好几个能拼进同一条 path。 */
+    function triangleAt(at) {
+      var r = at.angle * Math.PI / 180
+      var c = Math.cos(r)
+      var s = Math.sin(r)
+      var pt = function (x, y) { return (at.x + x * c - y * s).toFixed(1) + ',' + (at.y + x * s + y * c).toFixed(1) }
+      return 'M' + pt(-4.5, -3.2) + ' L' + pt(4.5, 0) + ' L' + pt(-4.5, 3.2) + ' Z'
+    }
+
     function emitWires(route,hops) {
       var wires=[],labels=[],junctions=[],arrows=[]
       route.polylines.forEach(function (line) {
@@ -3796,7 +3898,222 @@ __cddLocal.load({
       })
       return {wires:wires,labels:labels,junctions:junctions,arrows:arrows,unrouted:route.unrouted || []}
     }
-    return {emitWires}
+    return {emitWires, pathFrom, arrowPoints, triangleAt}
+  },
+})
+
+// dsh-cdd-lens — 线层：SVG 只在排版结果换了时建一次（照 visual_map/js/graph-render.js）。
+//
+// 以前每次 publish（选中、高亮、拖动的每一帧）都用 React 重新生成全部线：
+// 532 根线 + 532 根点击线 + 1557 个箭头，React 逐个比对。现在：
+//   排版结果换了 → 清空重建一次：每根线一条线、一条合并的箭头路径（2 或 3 个三角）、一条点击线
+//   高亮 / 聚焦变了 → 只改 class，且只改真的变了的那几根
+//   拖动 → 只改被拖节点自己那几根线的 d，不经过 React、不重排
+//   点线 → svg 上一个监听器，按 data-from / data-to / data-type 认线
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+__cddLocal.load({
+  id: 'dsh-cdd-lens/view/wireLayer',
+  factory: (require) => {
+    var module = { exports: {} }
+    var React = require('react')
+    var h = React.createElement
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
+    var __routing_emit = require('dsh-cdd-lens/routing/emit')
+    var pathFrom = __routing_emit.pathFrom
+    var arrowPoints = __routing_emit.arrowPoints
+    var triangleAt = __routing_emit.triangleAt
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+    var NS = 'http://www.w3.org/2000/svg'
+
+    // 当前画着的线。拖动时 node.js 通过 dragNode 直接改这里的元素。
+    var live = { entries: [], byNode: {}, every: 0, painted: null }
+
+    function wireKey(wire) {
+      return wire.from + '→' + wire.to + ':' + wire.type
+    }
+
+    /** 高亮、聚焦给一根线加的 class（线和它的箭头共用同一套）。 */
+    function stateClass(wire) {
+      var out = ''
+      var lit = shared.lit
+      if (lit !== null && lit !== undefined) {
+        out += lit.wires[wire.id] === true || lit.wires[wireKey(wire)] === true ? ' cddl-lit' : ' cddl-unlit'
+      }
+      if (shared.edgeFocus) out += ' cddl-hot'
+      var focused = shared.focused
+      if (focused !== null && focused !== undefined) {
+        out += wire.from === focused || wire.to === focused ? ' cddl-hot' : ' cddl-cold'
+      }
+      return out
+    }
+
+    function wireClass(wire) {
+      return 'cddl-wire cddl-' + wire.type + (wire.faded ? ' cddl-faded' : '') + stateClass(wire)
+    }
+
+    function arrowClass(wire) {
+      return 'cddl-arrowhead cddl-' + wire.type + (wire.faded ? ' cddl-faded' : '') + stateClass(wire)
+    }
+
+    /** 决定线的 class 的全部输入；没变就不用逐根重算。 */
+    function paintKey() {
+      var lit = shared.lit
+      return (lit === null || lit === undefined ? '' : lit.key) + '|' + (shared.edgeFocus ? 1 : 0) + '|' + (shared.focused || '')
+    }
+
+    function el(tag, attrs) {
+      var node = document.createElementNS(NS, tag)
+      Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]) })
+      return node
+    }
+
+    function arrowD(heads) {
+      return heads.map(triangleAt).join(' ')
+    }
+
+    function remember(byNode, id, entry) {
+      if (byNode[id] === undefined) byNode[id] = []
+      if (byNode[id].indexOf(entry) < 0) byNode[id].push(entry)
+    }
+
+    /** 排版结果 → SVG 元素。只在排版结果换了时调用。@returns 建了多少根线、多少条箭头路径 */
+    function build(svg, model) {
+      var t0 = Date.now()
+      while (svg.firstChild) svg.removeChild(svg.firstChild)
+      var heads = {}
+      ;(model.arrows || []).forEach(function (a) {
+        var k = a.wireId || a.id
+        if (heads[k] === undefined) heads[k] = []
+        heads[k].push(a)
+      })
+      var lines = el('g', {})
+      var hits = el('g', {})
+      var arrows = el('g', {})
+      var dots = el('g', {})
+      var entries = []
+      var byNode = {}
+      model.wires.forEach(function (wire) {
+        var entry = { wire: wire, pts: wire.pts || [], cls: wireClass(wire), acls: arrowClass(wire), arrow: null }
+        entry.line = el('path', { d: wire.d, class: entry.cls, 'data-edge-id': wire.id })
+        entry.hit = el('path', {
+          d: wire.d, class: 'cddl-wire-hit', 'data-edge-focus': wireKey(wire),
+          'data-from': wire.from, 'data-to': wire.to, 'data-type': wire.type,
+        })
+        lines.appendChild(entry.line)
+        hits.appendChild(entry.hit)
+        if (heads[wire.id] !== undefined) {
+          entry.arrow = el('path', { d: arrowD(heads[wire.id]), class: entry.acls })
+          arrows.appendChild(entry.arrow)
+        }
+        entries.push(entry)
+        remember(byNode, wire.from, entry)
+        remember(byNode, wire.to, entry)
+      })
+      ;(model.junctions || []).forEach(function (dot) {
+        dots.appendChild(el('circle', { class: 'cddl-junction', cx: dot.x, cy: dot.y, r: 3.4 }))
+      })
+      svg.appendChild(lines)
+      svg.appendChild(hits)
+      svg.appendChild(arrows)
+      svg.appendChild(dots)
+      var arrowPaths = entries.filter(function (e) { return e.arrow !== null }).length
+      live = { entries: entries, byNode: byNode, every: model.arrowEvery || 0, painted: paintKey() }
+      note('render', '线层重建：线 ' + entries.length + ' · 箭头路径 ' + arrowPaths + '（' + (model.arrows || []).length
+        + ' 个箭头）· 元素 ' + (entries.length * 2 + arrowPaths) + ' · ' + (Date.now() - t0) + 'ms')
+      return { wires: entries.length, arrowPaths: arrowPaths }
+    }
+
+    /** 高亮 / 聚焦变了：只改变了的 class。@returns 改了几根线 */
+    function paint() {
+      var key = paintKey()
+      if (key === live.painted) return 0
+      live.painted = key
+      var changed = 0
+      live.entries.forEach(function (e) {
+        var cls = wireClass(e.wire)
+        if (cls !== e.cls) { e.cls = cls; e.line.setAttribute('class', cls); changed += 1 }
+        if (e.arrow === null) return
+        var acls = arrowClass(e.wire)
+        if (acls !== e.acls) { e.acls = acls; e.arrow.setAttribute('class', acls) }
+      })
+      return changed
+    }
+
+    /**
+     * 拖动中的一帧：被拖节点那一头的端点跟着挪，线和箭头重新算，其它线一根不碰。
+     * @returns 改了几根线
+     */
+    function dragNode(id, dx, dy) {
+      var list = live.byNode[id] || []
+      list.forEach(function (e) {
+        if (e.pts.length < 2) return
+        var pts = e.pts.map(function (pt) { return { x: pt.x, y: pt.y } })
+        if (e.wire.from === id) { pts[0].x += dx; pts[0].y += dy }
+        if (e.wire.to === id) { pts[pts.length - 1].x += dx; pts[pts.length - 1].y += dy }
+        var d = pathFrom(pts)
+        e.line.setAttribute('d', d)
+        e.hit.setAttribute('d', d)
+        if (e.arrow !== null && live.every > 0) e.arrow.setAttribute('d', arrowD(arrowPoints(pts, live.every)))
+      })
+      return list.length
+    }
+
+    function isHit(target) {
+      return target !== null && target !== undefined && typeof target.getAttribute === 'function'
+        && target.getAttribute('class') === 'cddl-wire-hit'
+    }
+
+    /** 点线：高亮这根线前后两个节点，并把起点带进视野。@returns 是不是点在线上 */
+    function clickWire(target, engine) {
+      if (!isHit(target)) return false
+      var from = target.getAttribute('data-from')
+      var to = target.getAttribute('data-to')
+      var type = target.getAttribute('data-type')
+      engine.lightEdge(from, to, type)
+      engine.focusEdge(from, to, type)
+      return true
+    }
+
+    function WireLayer(props) {
+      var ref = React.useRef(null)
+      var engineRef = React.useRef(props.engine)
+      engineRef.current = props.engine
+      var model = props.model
+
+      React.useEffect(function () {
+        var svg = ref.current
+        if (svg === null) return undefined
+        // 点在线上不能开始平移画布。
+        var down = function (event) { if (isHit(event.target)) event.stopPropagation() }
+        var click = function (event) {
+          if (!clickWire(event.target, engineRef.current)) return
+          event.preventDefault()
+          event.stopPropagation()
+        }
+        svg.addEventListener('pointerdown', down)
+        svg.addEventListener('click', click)
+        return function () {
+          svg.removeEventListener('pointerdown', down)
+          svg.removeEventListener('click', click)
+        }
+      }, [])
+      React.useEffect(function () { if (ref.current !== null) build(ref.current, model) }, [model])
+      React.useEffect(function () { paint() })
+
+      return h('svg', {
+        ref: ref, className: 'cddl-wires',
+        width: model.width, height: model.height,
+        viewBox: '0 0 ' + model.width + ' ' + model.height,
+      })
+    }
+
+    module.exports = { WireLayer, build, paint, dragNode, clickWire, wireClass, arrowClass }
+    return module.exports
   },
 })
 
@@ -4902,6 +5219,25 @@ __cddLocal.load({
         return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
       var s = structure(graph, avail)
+      // 选中、高亮、按钮加载中这类 publish 不改画面位置：原样交回上一张，线层和卡片都认得出「没变」。
+      var key = drawKeyOf(avail)
+      if (lastDrawn.structure === s && lastDrawn.key === key) return lastDrawn.value
+      var value = draw(graph, s, avail)
+      lastDrawn = { structure: s, key: key, value: value }
+      return value
+    }
+
+    // ---- 画面缓存：结构和下面这些输入都没变，就是同一张图 ------------------------
+    var lastDrawn = { structure: null, key: null, value: null }
+
+    /** 结构之外还会改变坐标的输入：画布宽、手工拖过的位置、收拢状态、链路聚焦（聚焦时不收拢）。 */
+    function drawKeyOf(avail) {
+      var gather = ''
+      try { gather = JSON.stringify(shared.gather || null) } catch (e) { gather = String(Date.now()) }
+      return [avail || 0, JSON.stringify(shared.nodePositions || {}), gather, shared.edgeFocus ? 1 : 0].join('\n')
+    }
+
+    function draw(graph, s, avail) {
       var metrics = s.metrics
       // 每次画都从缓存的结构拷一份记录出来：拖动、收拢、推开重叠只改这份拷贝。
       var placed = s.laid.placed.concat(s.sidePlaced).map(function (p) { return Object.assign({}, p) })
@@ -4946,6 +5282,7 @@ __cddLocal.load({
         layers: s.laid.layers,
         crossings: s.laid.crossings,
         stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
+        arrowEvery: metrics.ARROW_EVERY,
         width: Math.max(avail || 0, fit.maxX + metrics.PAD),
         height: Math.max(360, fit.maxY + metrics.PAD),
       }
@@ -5915,6 +6252,11 @@ __cddLocal.load({
 
 // dsh-cdd-lens — The canvas half of the spread-out view.
 //
+// 这个函数每次 publish 都会跑，所以这里必须便宜：
+//   线交给线层（view/wireLayer.js）：SVG 只在排版结果换了时建一次，高亮只改 class。
+//   卡片用 MemoNode：卡片自己的签名没变就不重画。
+//   缩放放在 shared.zoom，不进卡片 props，否则一缩放所有卡片全部重画。
+//
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
@@ -5924,11 +6266,6 @@ __cddLocal.load({
     var module = { exports: {} }
     var React = require('react')
     var h = React.createElement
-    var useState = React.useState
-    var useEffect = React.useEffect
-    var useCallback = React.useCallback
-    var useMemo = React.useMemo
-    var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
     var __view_outline = require('dsh-cdd-lens/view/outline')
@@ -5939,26 +6276,10 @@ __cddLocal.load({
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var DebugBar = __runtime_debug.DebugBar
     var __view_node = require('dsh-cdd-lens/view/node')
-    var GraphNode = __view_node.GraphNode
-
-    /**
-     * The drawing itself, or whatever stands in for it.
-     */
-    /**
-     * Whether this wire or node is part of what was last lit, and if not,
-     * whether anything is lit at all.
-     *
-     * Dimming the rest is what makes a highlight readable: a brighter line
-     * among forty identical ones is not brighter enough to find.
-     * @param key - the wire id, or an anchor id.
-     * @returns the class to append, possibly empty.
-     */
-    function litClass(key) {
-      var lit = shared.lit
-      if (lit === null || lit === undefined) return ''
-      if (lit.wires[key] === true || lit.nodes[key] === true) return ' cddl-lit'
-      return ' cddl-unlit'
-    }
+    var MemoNode = __view_node.MemoNode
+    var nodeSig = __view_node.nodeSig
+    var __view_wire_layer = require('dsh-cdd-lens/view/wireLayer')
+    var WireLayer = __view_wire_layer.WireLayer
 
     function renderCanvas(props, view) {
       var context = view.context
@@ -5966,6 +6287,8 @@ __cddLocal.load({
       var model = view.model
       var tab = view.tab
       var zoom = view.zoom
+      // 卡片拖动时换算指针位移用。
+      shared.zoom = zoom[0]
 
       var canvas
       if (context === undefined) canvas = h('div', { className: 'cddl-empty' }, '连接中…')
@@ -5985,73 +6308,15 @@ __cddLocal.load({
             // at once and meet them there. A settled drawing — gathered or
             // not — must never animate, or a drag rubber-bands behind the
             // pointer.
-            + ((shared.gatherAnimUntil || 0) > Date.now() ? ' cddl-gathering' : ''),
+            + ((shared.gatherAnimUntil || 0) > Date.now() ? ' cddl-gathering' : '')
+            // 点亮时其余卡片变暗：一个容器 class 管住，不用逐张卡片改 class。
+            + (shared.lit !== null && shared.lit !== undefined ? ' cddl-litmode' : ''),
           style: {
             width: model.width + 'px', height: model.height + 'px',
             transform: 'scale(' + zoom[0] + ')', transformOrigin: '0 0',
           },
         }, [
-          h('svg', {
-              key: 'w', className: 'cddl-wires',
-              width: model.width, height: model.height,
-              viewBox: '0 0 ' + model.width + ' ' + model.height,
-            }, [
-              h('defs', { key: 'd' }, [
-                h('marker', {
-                  key: 'a', id: 'cddl-arrow', markerWidth: 11, markerHeight: 11, refX: 8, refY: 3.4, orient: 'auto',
-                }, h('path', { d: 'M0,0 L7,3.4 L0,6.8 z' })),
-                h('marker', {
-                  key: 'f', id: 'cddl-arrow-faded', markerWidth: 11, markerHeight: 11, refX: 8, refY: 3.4, orient: 'auto',
-                }, h('path', { d: 'M0,0 L7,3.4 L0,6.8 z' })),
-              ]),
-            ].concat(model.wires.map(function (wire) {
-              return h('path', {
-                key: wire.id, d: wire.d,
-                'data-edge-id': wire.id,
-                className: 'cddl-wire cddl-' + wire.type
-                  + (wire.faded ? ' cddl-faded' : '')
-                  + litClass(wire.id)
-                  + (shared.edgeFocus ? ' cddl-hot' : '')
-                  + (shared.focused === null || shared.focused === undefined ? ''
-                    : (wire.from === shared.focused || wire.to === shared.focused ? ' cddl-hot' : ' cddl-cold')),
-                'data-from-file': wire.fromFile,
-                'data-to-file': wire.toFile,
-              })
-            })).concat(model.wires.map(function (wire) {
-              return h('path', {
-                key: 'hit:' + wire.id,
-                d: wire.d,
-                className: 'cddl-wire-hit',
-                'data-edge-focus': wire.from + '→' + wire.to + ':' + wire.type,
-                onPointerDown: function (event) { event.stopPropagation() },
-                onClick: function (event) {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  engine.lightEdge(wire.from, wire.to, wire.type)
-                  engine.focusEdge(wire.from, wire.to, wire.type)
-                },
-              })
-            })).concat(model.arrows.map(function (arrow) {
-              // Repeated along the run: on a wire with four bends a single
-              // arrowhead at the far end says nothing about the middle.
-              return h('path', {
-                key: 'a' + arrow.id,
-                className: 'cddl-arrowhead cddl-' + arrow.type
-                  + (arrow.faded ? ' cddl-faded' : '')
-                  + litClass(arrow.wireId || arrow.id)
-                  + (shared.edgeFocus ? ' cddl-hot' : '')
-                  + (shared.focused === null || shared.focused === undefined ? ''
-                    : (arrow.from === shared.focused || arrow.to === shared.focused ? ' cddl-hot' : ' cddl-cold')),
-                d: 'M-4.5,-3.2 L4.5,0 L-4.5,3.2 Z',
-                transform: 'translate(' + arrow.x + ',' + arrow.y + ') rotate(' + arrow.angle + ')',
-              })
-            })).concat(model.junctions.map(function (dot) {
-              // Filled dot = these wires actually meet. A hop = they only cross.
-              return h('circle', {
-                key: 'j' + dot.id, className: 'cddl-junction',
-                cx: dot.x, cy: dot.y, r: 3.4,
-              })
-            }))),
+          h(WireLayer, { key: 'w', model: model, engine: engine }),
           h('div', { key: 'f', className: 'cddl-fileboxes' },
             (model.files || []).map(function (box) {
               return h('div', {
@@ -6087,7 +6352,7 @@ __cddLocal.load({
             })),
           h('div', { key: 'n', className: 'cddl-nodes', style: { width: model.width + 'px', height: model.height + 'px' } },
             model.nodes.map(function (p) {
-              return h(GraphNode, { key: p.id, p: p, engine: engine, zoom: zoom[0] })
+              return h(MemoNode, { key: p.id, p: p, engine: engine, sig: nodeSig(engine, p) })
             })),
         ]))
       }

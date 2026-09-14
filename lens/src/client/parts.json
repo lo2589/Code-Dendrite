@@ -26,6 +26,7 @@
     "layout/metrics.js",
     "routing/geometry.js",
     "routing/emit.js",
+    "view/wireLayer.js",
     "layout/gather.js",
     "layout/space.js",
     "layout/sugiyama.js",

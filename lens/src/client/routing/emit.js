@@ -65,6 +65,26 @@ window.__ModuleLoader__.load({
       return out
     }
 
+    /** 一根线上几个箭头的位置和朝向（emitWires 和拖动时的线层共用，保证一样）。 */
+    function arrowPoints(pts, every) {
+      var total = geometry.length(pts)
+      var curve = bezierControls(pts)
+      return arrowDistances(total, every).map(function (distance) {
+        return curve !== null
+          ? bezierAt(curve.a, curve.c1, curve.c2, curve.b, Math.min(1, Math.max(0, distance / total)))
+          : geometry.atDistance(pts, distance)
+      })
+    }
+
+    /** 一个箭头三角（本地 M-4.5,-3.2 L4.5,0 L-4.5,3.2 Z）转到画布坐标，好几个能拼进同一条 path。 */
+    function triangleAt(at) {
+      var r = at.angle * Math.PI / 180
+      var c = Math.cos(r)
+      var s = Math.sin(r)
+      var pt = function (x, y) { return (at.x + x * c - y * s).toFixed(1) + ',' + (at.y + x * s + y * c).toFixed(1) }
+      return 'M' + pt(-4.5, -3.2) + ' L' + pt(4.5, 0) + ' L' + pt(-4.5, 3.2) + ' Z'
+    }
+
     function emitWires(route,hops) {
       var wires=[],labels=[],junctions=[],arrows=[]
       route.polylines.forEach(function (line) {
@@ -97,6 +117,6 @@ window.__ModuleLoader__.load({
       })
       return {wires:wires,labels:labels,junctions:junctions,arrows:arrows,unrouted:route.unrouted || []}
     }
-    return {emitWires}
+    return {emitWires, pathFrom, arrowPoints, triangleAt}
   },
 })

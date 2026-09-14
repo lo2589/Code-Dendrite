@@ -136,18 +136,21 @@ shared.outline = undefined
 // while the graph stayed in the crowded PCB view.
 ;(function wireClickFocusesAndArrowFollowsHighlight() {
   const renderCanvas = require_('dsh-cdd-lens/shell/viewCanvas').renderCanvas
+  const layer = require_('dsh-cdd-lens/view/wireLayer')
   const calls = []
   shared.lit = { key: 'a→b:call', type: 'call', nodes: {}, wires: { 'a→b:call': true } }
   shared.edgeFocus = null
   shared.focused = null
+  const stubEngine = {
+    lightEdge: (from, to, type) => { calls.push(['lightEdge', from, to, type]) },
+    focusEdge: (from, to, type) => { calls.push(['focusEdge', from, to, type]) },
+    isPinned: () => false, isOpen: () => false, isBusy: () => false,
+  }
   const out = renderCanvas({}, {
     context: { indexed: true },
     tab: ['graph'],
     zoom: [1],
-    engine: {
-      lightEdge: (from, to, type) => { calls.push(['lightEdge', from, to, type]) },
-      focusEdge: (from, to, type) => { calls.push(['focusEdge', from, to, type]) },
-    },
+    engine: stubEngine,
     model: {
       width: 200, height: 120, files: [], rows: [], junctions: [],
       nodes: [
@@ -164,19 +167,23 @@ shared.outline = undefined
       arrows: [{ id: 'a→b:call:head0', wireId: 'a→b:call', type: 'call', from: 'a', to: 'b', x: 80, y: 10, angle: 0 }],
     },
   })
-  let hit = null
-  let arrow = null
+  // 线由线层自己建 SVG（不经过 React）：画布里有线层，线层拿到的就是这份排版结果。
+  let wireLayer = null
   ;(function walk(n) {
     if (!n || typeof n !== 'object') return
-    const cls = n.props && n.props.className
-    if (cls === 'cddl-wire-hit') hit = n
-    if (typeof cls === 'string' && cls.includes('cddl-arrowhead')) arrow = n
+    if (n.type === layer.WireLayer) wireLayer = n
     ;(n.kids || []).forEach(walk)
   })(out)
-  assert(hit !== null, 'wire hit path must render')
-  hit.props.onClick({ preventDefault() {}, stopPropagation() {} })
+  assert(wireLayer !== null, 'canvas must mount the wire layer')
+  assert.strictEqual(wireLayer.props.model.wires.length, 1, 'wire layer draws the model it was given')
+  // 点击走 svg 上的一个监听器：按 data-from / data-to / data-type 认线。
+  const attrs = { class: 'cddl-wire-hit', 'data-from': 'a', 'data-to': 'b', 'data-type': 'call' }
+  assert(layer.clickWire({ getAttribute: k => attrs[k] }, stubEngine), 'click on a hit path is a wire click')
+  assert(!layer.clickWire({ getAttribute: () => 'cddl-wire' }, stubEngine), 'click elsewhere is not')
   assert.deepEqual(calls, [['lightEdge', 'a', 'b', 'call'], ['focusEdge', 'a', 'b', 'call']])
-  assert(arrow.props.className.includes('cddl-lit'), 'arrowhead must follow the lit wire')
+  const wire = { id: 'a→b:call', type: 'call', from: 'a', to: 'b' }
+  assert(layer.arrowClass(wire).includes('cddl-lit'), 'arrowhead must follow the lit wire')
+  assert(layer.wireClass({ id: 'x→y:call', type: 'call', from: 'x', to: 'y' }).includes('cddl-unlit'), 'other wires dim')
   shared.lit = null
   console.log('✓ ' + '线点击'.padEnd(10) + '进入链路聚焦，箭头跟随高亮')
 })()

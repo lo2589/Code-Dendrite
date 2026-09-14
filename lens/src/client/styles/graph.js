@@ -153,7 +153,7 @@ window.__ModuleLoader__.load({
       '.cddl-wire.cddl-lit{stroke-width:3;opacity:1;filter:drop-shadow(0 0 3px color-mix(in srgb,var(--dsw-alias-state-business-primary) 58%,transparent))}',
       '.cddl-wire.cddl-unlit{opacity:.05}',
       '.cddl-gnode.cddl-lit{border-color:var(--dsw-alias-state-business-primary)}',
-      '.cddl-gnode.cddl-unlit{opacity:.24}',
+      '.cddl-litmode .cddl-gnode:not(.cddl-lit){opacity:.24}',
       '.cddl-arrowhead.cddl-lit{opacity:1}',
       '.cddl-arrowhead.cddl-unlit{opacity:.05}',
       '.cddl-node-shell{position:absolute}',

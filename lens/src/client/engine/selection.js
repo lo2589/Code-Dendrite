@@ -20,15 +20,6 @@ window.__ModuleLoader__.load({
     var uiOf = __graph_model.uiOf
 
     function selectionMethods(ctx, engine, session, params) {
-      // 拖动中 pointermove 一秒上百次：一帧最多重画一次。
-      var frameQueued = false
-      var publishNextFrame = function () {
-        if (frameQueued) return
-        frameQueued = true
-        var run = function () { frameQueued = false; publish() }
-        if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(run)
-        else setTimeout(run, 16)
-      }
       return {
         reveal: function (id) {
           shared.selected = id
@@ -106,8 +97,9 @@ window.__ModuleLoader__.load({
             if (shared.gather.freed === undefined) shared.gather.freed = {}
             shared.gather.freed[id] = true
           }
-          if (commit) { saveNodePosition(id, point); publish(); return }
-          publishNextFrame()
+          // 拖动中不 publish：卡片和它的线由 view/node.js + view/wireLayer.js 直接挪，
+          // 不经过 React、不重排；松手才 publish 一次，重排一次。
+          if (commit) { saveNodePosition(id, point); publish() }
         },
       }
     }

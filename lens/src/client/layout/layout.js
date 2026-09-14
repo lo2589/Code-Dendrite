@@ -190,6 +190,25 @@ window.__ModuleLoader__.load({
         return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
       var s = structure(graph, avail)
+      // 选中、高亮、按钮加载中这类 publish 不改画面位置：原样交回上一张，线层和卡片都认得出「没变」。
+      var key = drawKeyOf(avail)
+      if (lastDrawn.structure === s && lastDrawn.key === key) return lastDrawn.value
+      var value = draw(graph, s, avail)
+      lastDrawn = { structure: s, key: key, value: value }
+      return value
+    }
+
+    // ---- 画面缓存：结构和下面这些输入都没变，就是同一张图 ------------------------
+    var lastDrawn = { structure: null, key: null, value: null }
+
+    /** 结构之外还会改变坐标的输入：画布宽、手工拖过的位置、收拢状态、链路聚焦（聚焦时不收拢）。 */
+    function drawKeyOf(avail) {
+      var gather = ''
+      try { gather = JSON.stringify(shared.gather || null) } catch (e) { gather = String(Date.now()) }
+      return [avail || 0, JSON.stringify(shared.nodePositions || {}), gather, shared.edgeFocus ? 1 : 0].join('\n')
+    }
+
+    function draw(graph, s, avail) {
       var metrics = s.metrics
       // 每次画都从缓存的结构拷一份记录出来：拖动、收拢、推开重叠只改这份拷贝。
       var placed = s.laid.placed.concat(s.sidePlaced).map(function (p) { return Object.assign({}, p) })
@@ -234,6 +253,7 @@ window.__ModuleLoader__.load({
         layers: s.laid.layers,
         crossings: s.laid.crossings,
         stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
+        arrowEvery: metrics.ARROW_EVERY,
         width: Math.max(avail || 0, fit.maxX + metrics.PAD),
         height: Math.max(360, fit.maxY + metrics.PAD),
       }
