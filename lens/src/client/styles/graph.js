@@ -56,12 +56,13 @@ window.__ModuleLoader__.load({
       '.cddl-arrowhead.cddl-hot{opacity:1}',
       '.cddl-arrowhead.cddl-cold{opacity:.22}',
       '.cddl-filebox{position:absolute;box-sizing:border-box;border:2px dashed var(--dsw-alias-border-l4);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 34%,transparent)}',
-      '.cddl-filebox strong{position:absolute;left:14px;top:10px;max-width:390px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 12px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-primary)}',
+      '.cddl-filebox strong{position:absolute;left:14px;top:10px;max-width:calc(100% - 96px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 12px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-primary)}',
       '.cddl-filebox span{position:absolute;right:14px;top:10px;font:10px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-caption)}',
       // The flow skin's column guide: a hairline and a quiet label, no fill.
       // A frame that reads as a box is the board skin's claim that these
       // anchors belong together; a column says only how deep the chain is, and
       // drawing it as a box is what made the two skins indistinguishable.
+      '.cddl-sidebox{border-style:dotted;background:transparent}',
       '.cddl-flowbox{border-width:1px;border-color:var(--dsw-alias-border-l2);border-radius:9px;background:transparent}',
       '.cddl-flowbox strong{font-weight:500;color:var(--dsw-alias-label-caption)}',
       '.cddl-flowbox span{display:none}',

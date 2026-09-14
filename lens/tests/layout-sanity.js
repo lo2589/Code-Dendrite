@@ -429,12 +429,14 @@ for (const [label, seed, filter, avail] of CASES) {
   })
 
   const second = side.layout(g, undefined, 900)
-  let jump = 0, widthMoved = 0, missing = 0
+  let jump = 0, widthMoved = 0, missing = 0, jumper = ''
   second.nodes.forEach(n => {
     const was = before[n.id]
     if (was === undefined) return
-    const d = Math.abs(n.x - was.x) + Math.abs(n.y - was.y)
-    if (d > jump) jump = d
+    // 旁边的 seed 按规则堆在树的下面：树长高了它只能跟着往下让，只算左右挪动。
+    const d = n.side ? Math.abs(n.x - was.x) : Math.abs(n.x - was.x) + Math.abs(n.y - was.y)
+    if (d > 0) console.log('    位移 ' + n.id + ' ' + d + 'px' + (n.side ? '（旁边）' : '（树里）'))
+    if (d > jump) { jump = d; jumper = n.id }
     if (Math.round(n.w) !== Math.round(was.w)) widthMoved += 1
   })
   fresh.forEach(([id]) => { if (second.nodes.filter(n => n.id === id).length === 0) missing += 1 })
@@ -446,82 +448,7 @@ for (const [label, seed, filter, avail] of CASES) {
   if (!ok) bad += 1
 })()
 
-// Barycenter：列内顺序由布线参与决定。夹具是两列各三个节点、三条边全交错——
-// 旧的 tree+符号序排出 3 个逆序对，扫描后应当归零；几何上的线交叉也要归零。
-;(function barycenterSweep() {
-  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 4, tiered: true, gather: null }
-  side.shared.skin = 'flow'
-  side.shared.wireMode = 'all'
-  const g = build(side, Object.assign({}, base))
-  const pairs = [['u1', 'v3'], ['u2', 'v2'], ['u3', 'v1']]
-  ;['u1', 'u2', 'u3'].forEach((s, i) => {
-    const id = 'x/cross.js::' + s
-    side.addNode(g, { id, symbol: s, file: 'x/cross.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
-    // 不在主链上：pin 住才在 visible 里有根，否则整列被 scope 丢掉，用例空转。
-    mark(side, g, id, { session: true, down: true, up: true, pinned: true })
-    seat(side, g, id, { layer: 4, tree: 9 })
-  })
-  ;['v1', 'v2', 'v3'].forEach((s, i) => {
-    const id = 'x/cross.js::' + s
-    side.addNode(g, { id, symbol: s, file: 'x/cross.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
-    mark(side, g, id, { session: true, down: true, up: true, pinned: true })
-    seat(side, g, id, { layer: 5, tree: 9 })
-  })
-  pairs.forEach(([u, v]) => {
-    side.addEdge(g, 'x/cross.js::' + u, 'x/cross.js::' + v, ['call'])
-    g.edges[g.edges.length - 1].always = true
-  })
-  const m = side.layout(g, undefined, 1400)
-  side.shared.skin = 'auto'
-  side.shared.wireMode = undefined
-
-  const at = id => m.nodes.filter(n => n.id === id)[0]
-  const yOrder = ids => ids.slice().sort((a, b) => at(a).y - at(b).y)
-  const inversions = (leftIds, rightIds, edges) => {
-    const li = {}, ri = {}
-    leftIds.forEach((id, i) => { li[id] = i })
-    rightIds.forEach((id, i) => { ri[id] = i })
-    let n = 0
-    for (let i = 0; i < edges.length; i += 1) for (let j = i + 1; j < edges.length; j += 1) {
-      const a = [li[edges[i][0]], ri[edges[i][1]]]
-      const b = [li[edges[j][0]], ri[edges[j][1]]]
-      if ((a[0] - b[0]) * (a[1] - b[1]) < 0) n += 1
-    }
-    return n
-  }
-  const U = ['x/cross.js::u1', 'x/cross.js::u2', 'x/cross.js::u3']
-  const V = ['x/cross.js::v1', 'x/cross.js::v2', 'x/cross.js::v3']
-  const E = pairs.map(([u, v]) => ['x/cross.js::' + u, 'x/cross.js::' + v])
-  // 重排前 = 旧规则（tree 再符号）给出的顺序：u1,u2,u3 对 v1,v2,v3。
-  const beforeN = inversions(U, V, E)
-  const afterN = inversions(yOrder(U), yOrder(V), E)
-
-  // 几何交叉：三根线两两做线段相交测试（hop 弧的参数先剥掉）。
-  const ptsOf = d => {
-    const pts = []
-    const re = /[ML](-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g
-    let mm
-    while ((mm = re.exec(d)) !== null) pts.push([+mm[1], +mm[2]])
-    return pts
-  }
-  const cross = (p1, p2, p3, p4) => {
-    const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
-    const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4)
-    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
-  }
-  const fan = m.wires.filter(w => w.from.indexOf('x/cross.js::') === 0)
-  let geo = 0
-  fan.forEach((a, i) => fan.slice(i + 1).forEach(b => {
-    const pa = ptsOf(a.d), pb = ptsOf(b.d)
-    for (let s = 1; s < pa.length; s += 1) for (let t = 1; t < pb.length; t += 1) {
-      if (cross(pa[s - 1], pa[s], pb[t - 1], pb[t])) geo += 1
-    }
-  }))
-  const ok = beforeN === 3 && afterN < beforeN && afterN === 0 && geo === 0
-  console.log((ok ? '✓ ' : '✗ ') + '重心重排'.padEnd(12)
-    + ' 交叉: 符号序 ' + beforeN + ' → 重排后 ' + afterN + ' · 线交叉 ' + geo)
-  if (!ok) bad += 1
-})()
+// 重心重排（分层排版里减少同层交叉）随分层排版一起退场：文件框里的节点按行号排，不再重排层内顺序。
 
 // 搜索 / 目录点中一个 anchor = pin 它：只改视图状态，再按 /screen 返回的屏幕画。
 // 用桩 fetch 模拟 /screen：验证发出去的状态里带 pin（记下第几轮），画出来的节点数、

@@ -143,7 +143,12 @@ window.__ModuleLoader__.load({
           if (viewportRequest.mode === 'fit') {
             var readable = Math.max(zoom[0], 1)
             if (zoom[0] !== readable) setZoom(readable)
-            window.requestAnimationFrame(function () { centerOn(viewportRequest.id, readable) })
+            window.requestAnimationFrame(function () {
+              // 没选中任何节点：停在左上角，第一个文件框就在眼前；选中了才居中到它。
+              var el = canvasRef.current
+              if ((shared.selected === null || shared.selected === undefined) && el !== null) { el.scrollLeft = 0; el.scrollTop = 0 }
+              else centerOn(viewportRequest.id, readable)
+            })
           } else if (viewportRequest.mode === 'ensure') {
             if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) centerOn(viewportRequest.id, zoom[0])
           } else centerOn(viewportRequest.id, zoom[0])

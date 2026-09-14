@@ -30,6 +30,7 @@
     "layout/gather.js",
     "layout/space.js",
     "layout/sugiyama.js",
+    "layout/fileGrid.js",
     "layout/layout.js",
     "view/stream.js",
     "shell/chatSeat.js",

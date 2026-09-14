@@ -64,24 +64,25 @@ window.__ModuleLoader__.load({
             transform: 'scale(' + zoom[0] + ')', transformOrigin: '0 0',
           },
         }, [
-          h(WireLayer, { key: 'w', model: model, engine: engine }),
+          // 文件框先画、线后画：线压在框的底色上面，不被框盖住。
           h('div', { key: 'f', className: 'cddl-fileboxes' },
             (model.files || []).map(function (box) {
               return h('div', {
                 key: box.file,
                 // A flow column guide is not a container: it gets the quiet
                 // frame, and the box keeps the loud one for what holds files.
-                className: 'cddl-filebox' + (box.frame === 'flow' ? ' cddl-flowbox' : ''),
+                className: 'cddl-filebox' + (box.frame === 'flow' ? ' cddl-flowbox' : '') + (box.frame === 'side' ? ' cddl-sidebox' : ''),
                 'data-file': box.file,
                 style: {
                   left: box.x + 'px', top: box.y + 'px',
                   width: box.w + 'px', height: box.h + 'px',
                 },
               }, [
-                h('strong', { key: 'name', title: box.file }, box.file),
-                h('span', { key: 'count' }, box.count + ' anchors'),
+                h('strong', { key: 'name', title: box.file }, box.label || box.file),
+                h('span', { key: 'count' }, box.count + ' 个节点'),
               ])
             })),
+          h(WireLayer, { key: 'w', model: model, engine: engine }),
           h('div', { key: 'r', className: 'cddl-rowlabels' },
             model.rows.map(function (row, i) {
               return h('div', {

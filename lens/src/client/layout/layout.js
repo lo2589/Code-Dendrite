@@ -1,12 +1,12 @@
 // dsh-cdd-lens — One screen in, one drawing out.
 //
 // 画什么只认 shared.screen（后端计算单元 src/compute 的结果）：
-//   screen.nodes → 分层布局（layout/sugiyama）
-//   screen.side  → 不在当前树里的 seed，堆到树的下面，排成等宽的列
+//   screen.nodes → 按文件装进文件框，框铺成网格（layout/fileGrid）
+//   screen.side  → 不在当前树里的 seed，同样装框，放在树的下面
 //   screen.edges → 一条不少地出线（一条边一种类型）
 // 这里不做任何筛选：不看按钮状态、不看关系开关、不挑主干。
 //
-// 两段：结构（尺寸、分层、旁边的位置）只在图变了时重算并缓存；
+// 两段：结构（尺寸、文件框、节点位置）只在图变了时重算并缓存；
 // 拖动、选中、高亮这类不改图的更新只重放「坐标 → 接线 → 出线」，不重排。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/layout/layout',
@@ -20,8 +20,8 @@ window.__ModuleLoader__.load({
     var fact = __runtime_debug.fact
     var __layout_metrics = require('dsh-cdd-lens/layout/metrics')
     var boxMetrics = __layout_metrics.boxMetrics
-    var __layout_sugiyama = require('dsh-cdd-lens/layout/sugiyama')
-    var sugiyama = __layout_sugiyama.sugiyama
+    var __layout_file_grid = require('dsh-cdd-lens/layout/fileGrid')
+    var placeFileGrid = __layout_file_grid.placeFileGrid
     var __layout_space = require('dsh-cdd-lens/layout/space')
     var reclaimStrays = __layout_space.reclaimStrays
     var separateOverlaps = __layout_space.separateOverlaps
@@ -77,53 +77,6 @@ window.__ModuleLoader__.load({
       return { included: included, side: side, fileOrder: fileOrder }
     }
 
-    /**
-     * 不在当前树里的 seed：堆到树的下面，排成等宽的列（每列左沿对齐，列间留足角标的净空）。
-     * 画过的位置记住，下次照旧——树长高了旁边的节点也不跳；新来的接在已有的下面。
-     */
-    function placeSide(graph, side, metrics, top, avail) {
-      if (side.length === 0) return []
-      var gapX = metrics.LAYER_GAP_X
-      var gapY = metrics.BOX_GAP_Y
-      var width = side.reduce(function (m, id) { return Math.max(m, metrics.sizeOf(id).w) }, 0)
-      var usable = Math.max(width, (avail || 0) - metrics.PAD * 2)
-      var cols = Math.max(1, Math.floor((usable + gapX) / (width + gapX)))
-      var known = {}
-      var bottom = top - gapY
-      side.forEach(function (id) {
-        var at = placeOf(graph, id)
-        if (at === null || at.side !== true || typeof at.x !== 'number' || typeof at.y !== 'number') return
-        known[id] = at
-        bottom = Math.max(bottom, at.y + at.h)
-      })
-      var col = 0
-      var y = bottom + gapY
-      var rowH = 0
-      return side.map(function (id) {
-        var node = graph.nodes[id]
-        var h = metrics.sizeOf(id).h
-        var rec = {
-          id: id, node: node, anchor: node, w: width, h: h,
-          file: node.file, tree: 0, label: metrics.label[id],
-          flowDir: 'ltr', boxKey: node.file, side: true,
-        }
-        if (known[id] !== undefined) {
-          rec.x = known[id].x
-          rec.y = known[id].y
-          rec.layer = known[id].layer
-        } else {
-          if (col >= cols) { col = 0; y += rowH + gapY; rowH = 0 }
-          rec.x = metrics.PAD + col * (width + gapX)
-          rec.y = y
-          rec.layer = 'side:' + col
-          col += 1
-          if (h > rowH) rowH = h
-        }
-        rec.ports = portsFor(rec)
-        return rec
-      })
-    }
-
     function relationStats(graph, wires) {
       var stats = {}
       graph.edges.forEach(function (e) {
@@ -163,18 +116,11 @@ window.__ModuleLoader__.load({
       var t0 = Date.now()
       var scope = screenScope(graph)
       var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
-      // 树：分层布局；画过的树节点位置冻结（旁边的旧位置不算，进树要重新排）。
-      var laid = sugiyama(graph, scope.included, metrics, function (id) {
-        var known = placeOf(graph, id)
-        if (known === null || known.side === true || typeof known.x !== 'number' || typeof known.y !== 'number') return null
-        return known
-      })
-      var sideTop = laid.placed.length > 0 ? laid.canvasY : metrics.PAD
-      var sidePlaced = placeSide(graph, scope.side, metrics, sideTop, avail)
-      var value = { scope: scope, metrics: metrics, laid: laid, sidePlaced: sidePlaced }
+      var laid = placeFileGrid(graph, scope.included, scope.side, metrics, avail)
+      var value = { scope: scope, metrics: metrics, laid: laid }
       cached = { graph: graph, screen: shared.screen, key: key, value: value }
-      note('layout', '重排结构：树 ' + scope.included.length + ' · 旁边 ' + scope.side.length + ' · 边 ' + graph.edges.length
-        + ' · 层 ' + laid.layers + ' · ' + (Date.now() - t0) + 'ms')
+      note('layout', '文件框网格：树 ' + scope.included.length + ' · 旁边 ' + scope.side.length + ' · 文件框 ' + laid.boxes.length
+        + '（每行 ' + laid.cols + ' 格）· 边 ' + graph.edges.length + ' · 画布高 ' + Math.round(laid.canvasY) + ' · ' + (Date.now() - t0) + 'ms')
       return value
     }
 
@@ -208,12 +154,15 @@ window.__ModuleLoader__.load({
       return [avail || 0, JSON.stringify(shared.nodePositions || {}), gather, shared.edgeFocus ? 1 : 0].join('\n')
     }
 
+    function shifted(list, dx, dy) {
+      return list.map(function (item) { return Object.assign({}, item, { x: item.x + dx, y: item.y + dy }) })
+    }
+
     function draw(graph, s, avail) {
       var metrics = s.metrics
       // 每次画都从缓存的结构拷一份记录出来：拖动、收拢、推开重叠只改这份拷贝。
-      var placed = s.laid.placed.concat(s.sidePlaced).map(function (p) { return Object.assign({}, p) })
-      var sideBottom = s.sidePlaced.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
-      var place = { placed: placed, rows: [], canvasY: Math.max(s.laid.canvasY, sideBottom + metrics.BOX_GAP_Y) }
+      var placed = s.laid.placed.map(function (p) { return Object.assign({}, p) })
+      var place = { placed: placed, rows: [], canvasY: s.laid.canvasY }
 
       // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
       applySavedPositions(place, shared.nodePositions || {})
@@ -232,7 +181,11 @@ window.__ModuleLoader__.load({
 
       // ---- 尺寸：从画出来的东西反推 ----
       var fit = fitExtent(place, drawn, metrics)
+      var dx = 0
+      var dy = 0
       if (fit.dx > 0 || fit.dy > 0) {
+        dx = fit.dx
+        dy = fit.dy
         shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
         syncPorts(place)
         orient.byId = {}
@@ -242,20 +195,24 @@ window.__ModuleLoader__.load({
         fit = fitExtent(place, drawn, metrics)
       }
       rememberPlaces(graph, place)
+      var files = shifted(s.laid.boxes, dx, dy)
+      var rows = shifted(s.laid.rows, dx, dy)
+      var maxX = files.reduce(function (m, b) { return Math.max(m, b.x + b.w) }, fit.maxX)
+      var maxY = files.reduce(function (m, b) { return Math.max(m, b.y + b.h) }, fit.maxY)
 
       var relations = relationStats(graph, drawn.wires)
       shared.wireStats = { drawn: drawn.wires.length, hidden: 0, total: graph.edges.length, relations: relations }
-      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (s.laid.layers || 0) + 'L')
+      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + files.length + 'box')
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
         junctions: drawn.junctions, arrows: drawn.arrows, unrouted: drawn.unrouted,
-        rows: [], files: [],
-        layers: s.laid.layers,
-        crossings: s.laid.crossings,
+        rows: rows, files: files,
+        layers: s.laid.cols,
+        crossings: 0,
         stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
         arrowEvery: metrics.ARROW_EVERY,
-        width: Math.max(avail || 0, fit.maxX + metrics.PAD),
-        height: Math.max(360, fit.maxY + metrics.PAD),
+        width: Math.max(avail || 0, maxX + metrics.PAD),
+        height: Math.max(360, maxY + metrics.PAD),
       }
     }
 
