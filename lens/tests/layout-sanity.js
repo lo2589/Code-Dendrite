@@ -487,6 +487,54 @@ function expandIsFullyLogged() {
   if (!ok) bad += 1
 })()
 
+// 用户按钮比默认信息高：edit tree 里点展开，展开出来的节点不许再被树/过期过滤。
+;(function editTreeKeepsExpandedPeers() {
+  const g = side.emptyGraph()
+  side.addNode(g, { id: 'a/edit.js::root', symbol: 'root', file: 'a/edit.js', kind: 'function',
+    members: 0, line_start: 1, line_end: 9 })
+  side.addNode(g, { id: 'a/edit.js::peer', symbol: 'peer', file: 'a/edit.js', kind: 'function',
+    members: 0, line_start: 11, line_end: 19 })
+  side.addEdge(g, 'a/edit.js::root', 'a/edit.js::peer', ['call'])
+  g.rootId = 'a/edit.js::root'
+  mark(side, g, 'a/edit.js::root', { session: true, open: { 'down:call': true } })
+  mark(side, g, 'a/edit.js::peer', { explored: true })
+  Object.assign(side.shared, {
+    graph: g,
+    trace: {
+      'a/edit.js::root': { id: 'a/edit.js::root', firstTurn: 1, lastTurn: 1, state: 'edited',
+        events: [{ turn: 1, verb: 'edit', onSurface: true }] },
+      'a/edit.js::peer': { id: 'a/edit.js::peer', firstTurn: 1, lastTurn: 1, state: 'viewed',
+        events: [{ turn: 1, verb: 'read', onSurface: true }] },
+    },
+    turn: 8,
+    selected: null,
+    edgeFocus: null,
+    nodePositions: {},
+    pins: {},
+    gather: null,
+    skin: 'auto',
+    wireMode: 'all',
+    treeMode: 'edit',
+  })
+  const visible = side.require_('dsh-cdd-lens/graph/visible').visible
+  const show = () => Object.keys(visible(side.shared.graph)).map(k => k.split('::')[1]).sort().join(',')
+  const editShown = show()
+  const editDrawn = side.layout(g, undefined, 900)
+  side.shared.treeMode = 'all'
+  const allShown = show()
+  const allDrawn = side.layout(g, undefined, 900)
+  const ok = editShown === 'peer,root'
+    && editDrawn.nodes.length === 2 && (editDrawn.wires || []).length === 1
+    && allShown === 'peer,root'
+    && allDrawn.nodes.length === 2 && (allDrawn.wires || []).length === 1
+  console.log((ok ? '✓ ' : '✗ ') + '按钮优先'.padEnd(12)
+    + ' edit[' + editShown + '] 线 ' + (editDrawn.wires || []).length
+    + ' · all[' + allShown + '] 线 ' + (allDrawn.wires || []).length
+    + ' · 展开不被默认过滤')
+  if (!ok) bad += 1
+  side.shared.treeMode = 'all'
+})()
+
 // 展开不许跳变：点开上/下展开时，已经画在屏幕上的节点一个像素都不许动。
 //
 // 这条以前是坏的：每层都按自己的高度垂直居中，新节点一进来就把老层整体推走，

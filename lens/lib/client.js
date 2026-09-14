@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_34_PORT_CENTER_LOCK_001
+// build: V1_35_BUTTONS_OVERRIDE_DEFAULT_001
 // parts: 44
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_34_PORT_CENTER_LOCK_001'
+    var BUILD = 'V1_35_BUTTONS_OVERRIDE_DEFAULT_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -665,6 +665,9 @@ window.__ModuleLoader__.load({
       var ui = uiOf(graph, id)
       if (ui === null) return true
       if (ui.pinned === true) return false
+      if (ui.explored === true) return false
+      if (hasUserOpen(ui)) return false
+      if (id === shared.selected) return false
       // 只有**被查看过**的节点才谈得上变旧。刚展开出来的、会话碰过的、
       // 布局借来的桥，都还没有「看过多久」这回事，不许被滤掉——否则一展开
       // 新节点就当场消失。
@@ -672,6 +675,21 @@ window.__ModuleLoader__.load({
       if (record !== undefined) return shared.turn - record.lastTurn >= STICKY_TURNS
       if (typeof ui.viewedAt === 'number') return shared.turn - ui.viewedAt >= STICKY_TURNS
       return false
+    }
+
+    function hasUserOpen(ui) {
+      var keys = Object.keys(ui.open || {})
+      for (var i = 0; i < keys.length; i += 1) {
+        if (keys[i].indexOf('auto') === 0) continue
+        if (ui.open[keys[i]] === true) return true
+      }
+      return false
+    }
+
+    function userExplicit(graph, id) {
+      var ui = uiOf(graph, id)
+      if (ui === null) return false
+      return ui.pinned === true || ui.explored === true || hasUserOpen(ui) || id === shared.selected
     }
 
 
@@ -742,7 +760,7 @@ window.__ModuleLoader__.load({
         // 会话碰过的 anchor 是根：agent 读过/改过它，它就该在图上，不需要谁先按
         // 一下展开才出现。以前这一步只认 pin / island / 最近碰过，于是刚 ingest
         // 出来的图只剩一个根节点，连线自然一根都没有。
-        if (ui.session || ui.explored || ui.pinned || ui.island || stickyByRecency(id)) roots.push(id)
+        if (ui.session || userExplicit(graph, id) || ui.island || stickyByRecency(id) || editedNode(graph, id)) roots.push(id)
       })
       var treeAllow = treeFilter(graph)
       var seen = {}
@@ -750,7 +768,7 @@ window.__ModuleLoader__.load({
       while (stack.length > 0) {
         var id = stack.pop()
         if (seen[id] || fadedOut(graph, id)) continue
-        if (treeAllow !== null && treeAllow[id] !== true) continue
+        if (treeAllow !== null && treeAllow[id] !== true && !userExplicit(graph, id)) continue
         seen[id] = true
         if (graph.nodes[id] === undefined) continue
         var ui = uiOf(graph, id)
