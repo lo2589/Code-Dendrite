@@ -371,6 +371,21 @@ module.exports = {
       json(res, 200, await ask('walk', q, { direction }))
     })
 
+    /**
+     * 计算单元：这一刻屏幕上有什么，只由 src/compute 算。
+     * body.state = { turn, tree, rels, searched, opens }。会话证据由这里从日志取，
+     * 解析、算树、算展开、算按钮都在 worker 里一次做完。
+     */
+    const { touchesFromEvents } = require('./compute/evidence.js')
+    register('/screen', async (req, res, q) => {
+      if (req.method !== 'POST') { json(res, 405, { error: 'POST only' }); return }
+      const body = await readJson(req)
+      const log = await readLog(q.session)
+      const touches = log === null ? [] : touchesFromEvents(log.events)
+      const screen = await ask('screen', q, { touches, state: body.state ?? {} })
+      json(res, 200, { session: q.session ?? null, reason: log === null ? 'no-session' : null, ...screen })
+    })
+
     // Re-validation takes the whole drawn graph, so the id list rides in a POST
     // body — a query string of three hundred anchor ids is a URL some proxy
     // will silently cut in half.

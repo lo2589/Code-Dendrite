@@ -1,4 +1,4 @@
 {
-  "build": "V1_35_BUTTONS_OVERRIDE_DEFAULT_001",
-  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_35: 用户按钮优先于默认树/过期信息；open/pinned/selected 不会被 edit/anchor/degree 或 recency 过滤掉，折叠后 explored 不再像 pin 一样保留。"
+  "build": "V1_36_SCREEN_COMPUTE_UNIT_001",
+  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_36: 新增后端计算单元 src/compute + /screen：新 anchor=原始记录+relation 补边；1度/2度/edit/anchor 树；不在树里的 seed 堆一边；按钮数=展开数=边数；每棵树报节点数和关系数。前端尚未接入。"
 }

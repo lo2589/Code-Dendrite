@@ -154,6 +154,8 @@ function build(root) {
   }
 
   const rel = JSON.parse(fs.readFileSync(relationsPath, 'utf8'))
+  // 计算单元的上下文（新 anchor = 原始记录 + relation 补边）随索引一起建，不再单独解析一遍。
+  repo.compute = require('./compute/anchors.js').fromIndex(root, raw, rel.edges ?? [])
   const rawOut = new Map()
   for (const e of rel.edges ?? []) {
     // Edges reaching outside the index (builtins like `print`, third-party
@@ -725,6 +727,11 @@ const handlers = {
     return { hit: null, hits: overlapping(repo, q.file, from, to) }
   },
   source: (repo, q) => ({ source: sourceOf(repo, q.id, Number(q.pad) || 0) }),
+  // 计算单元（src/compute）：屏幕上有什么只由它算。repo.compute 在 build() 里随索引一起建。
+  screen: (repo, q) => ({
+    ...require('./compute/screen.js').screenFor(repo.compute, Array.isArray(q.touches) ? q.touches : [], q.state ?? {}),
+    stamp: repo.stamp,
+  }),
   among: (repo, q) => {
     const ids = typeof q.ids === 'string' ? q.ids.split(',').filter(Boolean) : (q.ids ?? [])
     const result = among(repo, ids, q.bridge === '1' || q.bridge === true)

@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_35_BUTTONS_OVERRIDE_DEFAULT_001
+// build: V1_36_SCREEN_COMPUTE_UNIT_001
 // parts: 44
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_35_BUTTONS_OVERRIDE_DEFAULT_001'
+    var BUILD = 'V1_36_SCREEN_COMPUTE_UNIT_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -703,8 +703,8 @@ window.__ModuleLoader__.load({
      *
      * @returns 允许上屏的 id 集合；treeMode 为 all 时返回 null（表示不限制）。
      */
-    function treeFilter(graph) {
-      var mode = shared.treeMode || 'all'
+    function treeFilter(graph, modeOverride) {
+      var mode = modeOverride || shared.treeMode || 'all'
       if (mode === 'all') return null
       var allow = {}
       var edgeTouches = function (id, keep) {
@@ -750,7 +750,7 @@ window.__ModuleLoader__.load({
       return allow
     }
 
-    function visible(graph) {
+    function visibleForMode(graph, modeOverride) {
       var roots = []
       var root = function (id, force) {
         roots.push({ id: id, force: force === true })
@@ -765,7 +765,7 @@ window.__ModuleLoader__.load({
         if (ui.session || ui.island || stickyByRecency(id) || editedNode(graph, id)) root(id, false)
         if (userExplicit(graph, id)) root(id, true)
       })
-      var treeAllow = treeFilter(graph)
+      var treeAllow = treeFilter(graph, modeOverride)
       var seen = {}
       var stack = roots.slice()
       while (stack.length > 0) {
@@ -804,7 +804,11 @@ window.__ModuleLoader__.load({
       return seen
     }
 
-    module.exports = { STICKY_TURNS, stickyByRecency, editedNode, fadedOut, treeFilter, visible }
+    function visible(graph) {
+      return visibleForMode(graph)
+    }
+
+    module.exports = { STICKY_TURNS, stickyByRecency, editedNode, fadedOut, treeFilter, visible, visibleForMode }
     return module.exports
   },
 })
@@ -3651,7 +3655,7 @@ window.__ModuleLoader__.load({
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
     var __graph_visible = require('dsh-cdd-lens/graph/visible')
-    var visible = __graph_visible.visible
+    var visibleForMode = __graph_visible.visibleForMode
     var __layout_camera = require('dsh-cdd-lens/layout/camera')
     var edgeFocusOf = __layout_camera.edgeFocusOf
     var __graph_model = require('dsh-cdd-lens/graph/model')
@@ -3660,9 +3664,9 @@ window.__ModuleLoader__.load({
     /**
      * What is on screen at all, and which file each anchor belongs to.
      */
-    function layoutScope(graph) {
+    function layoutScope(graph, modeOverride) {
 
-      var shown = visible(graph)
+      var shown = visibleForMode(graph, modeOverride)
 
       // A file is the first visual unit. Session-touched anchors are always
       // present; manual +/- exploration may add more anchors and therefore a
@@ -3673,8 +3677,9 @@ window.__ModuleLoader__.load({
         return shown[id] && node !== undefined && ui !== null
           && (ui.session || ui.explored || ui.pinned || id === shared.selected || id === graph.rootId)
       })
-      if (included.length === 0 && graph.nodes[graph.rootId]) included.push(graph.rootId)
-      var activeFocus = edgeFocusOf(graph)
+      var mode = modeOverride || shared.treeMode || 'all'
+      if (included.length === 0 && mode === 'all' && graph.nodes[graph.rootId]) included.push(graph.rootId)
+      var activeFocus = modeOverride === undefined ? edgeFocusOf(graph) : null
       if (activeFocus !== null) {
         included = graph.order.filter(function (id) {
           return activeFocus.ids[id] === true && graph.nodes[id] !== undefined
@@ -4450,9 +4455,10 @@ window.__ModuleLoader__.load({
     /**
      * Which relations get a wire: a trunk by default, the rest on demand.
      */
-    function chooseEdges(graph, scope, orient) {
+    function chooseEdges(graph, scope, orient, relationFilter) {
       var activeFocus = scope.activeFocus
       var byId = orient.byId
+      var REL_ORDER = ['call', 'dataflow', 'inherit', 'impact', 'dispatch']
 
       // ---- which edges get drawn ------------------------------------------
       //
@@ -4479,7 +4485,35 @@ window.__ModuleLoader__.load({
           return ui.open[prefix + ':' + t] === true
         })
       }
-      var drawable = graph.edges.filter(function (e) {
+      var relationAllowed = function (types) {
+        if (relationFilter === undefined || relationFilter === null) return true
+        return types.some(function (t) { return relationFilter[t] !== false })
+      }
+      var relationStats = function (pool, chosenPool) {
+        var stats = {}
+        REL_ORDER.forEach(function (type) { stats[type] = { total: 0, drawn: 0 } })
+        pool.forEach(function (e) {
+          var seen = {}
+          ;(e.types || ['call']).forEach(function (type) {
+            if (seen[type]) return
+            seen[type] = true
+            if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
+            stats[type].total += 1
+          })
+        })
+        chosenPool.forEach(function (e) {
+          var seen = {}
+          ;(e.types || ['call']).forEach(function (type) {
+            if (relationFilter !== undefined && relationFilter !== null && relationFilter[type] === false) return
+            if (seen[type]) return
+            seen[type] = true
+            if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
+            stats[type].drawn += 1
+          })
+        })
+        return stats
+      }
+      var drawableAll = graph.edges.filter(function (e) {
         var fromUI = uiOf(graph, e.from)
         var toUI = uiOf(graph, e.to)
         if (byId[e.from] === undefined || byId[e.to] === undefined) return false
@@ -4487,6 +4521,7 @@ window.__ModuleLoader__.load({
         var types = e.types || ['call']
         return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
       })
+      var drawable = drawableAll.filter(function (e) { return relationAllowed(e.types || ['call']) })
       var explicitlyOpened = function (e) {
         var types = e.types || ['call']
         return opened(uiOf(graph, e.from), 'down', types) || opened(uiOf(graph, e.to), 'up', types)
@@ -4545,9 +4580,14 @@ window.__ModuleLoader__.load({
         chosen = drawable.filter(function (e) { return keep[e.from + '→' + e.to] === true })
         hiddenCount = drawable.length - chosen.length
       }
-      shared.wireStats = { drawn: chosen.length, hidden: hiddenCount, total: drawable.length }
+      shared.wireStats = {
+        drawn: chosen.length,
+        hidden: hiddenCount,
+        total: drawable.length,
+        relations: relationStats(drawableAll, chosen),
+      }
 
-      return { chosen: chosen, hiddenCount: hiddenCount }
+      return { chosen: chosen, hiddenCount: hiddenCount, stats: shared.wireStats }
     }
 
     module.exports = { chooseEdges }
@@ -5636,9 +5676,23 @@ window.__ModuleLoader__.load({
       return polylines.map(function (line) { return bindPolylineEndpoints(line, byId) })
     }
 
-    function finalPolylines(lines, picked, byId) {
+    function allowedTypes(types, relationFilter) {
+      if (relationFilter === undefined || relationFilter === null) return types
+      return types.filter(function (type) { return relationFilter[type] !== false })
+    }
+
+    function finalPolylines(lines, picked, byId, relationFilter) {
       return bindPolylineSet(lines.filter(function (line) {
-        return picked[line.from + '\u0000' + line.to] === true
+        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
+        return types.length > 0
+          && picked[line.from + '\u0000' + line.to] === true
+      }).map(function (line) {
+        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
+        return Object.assign({}, line, {
+          id: line.from + '\u2192' + line.to + ':' + types.join(','),
+          type: types[0],
+          types: types,
+        })
       }), byId)
     }
 
@@ -5704,12 +5758,12 @@ window.__ModuleLoader__.load({
       syncPorts(place)
 
       // ---- 布线：哪条边值得画 ----
-      var edges = chooseEdges(graph, scope, orient)
+      var edges = chooseEdges(graph, scope, orient, relationFilter)
       var picked = {}
       edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
 
       // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
-      var polylines = finalPolylines(laid.polylines, picked, orient.byId)
+      var polylines = finalPolylines(laid.polylines, picked, orient.byId, relationFilter)
       var kept = {}
       polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
       // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
@@ -5750,6 +5804,12 @@ window.__ModuleLoader__.load({
         rows: [], files: [],
         layers: laid.layers,
         crossings: laid.crossings,
+        stats: {
+          nodes: place.placed.length,
+          wires: drawn.wires.length,
+          relations: edges.stats.relations,
+          wireTotal: edges.stats.total,
+        },
         width: Math.max(avail || 0, maxX + metrics.PAD),
         height: Math.max(360, maxY + metrics.PAD),
       }
