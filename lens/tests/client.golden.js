@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_41_ARROWS_2_OR_3_001
+// build: V1_42_RENDER_LOAD_001
 // parts: 41
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_41_ARROWS_2_OR_3_001'
+    var BUILD = 'V1_42_RENDER_LOAD_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1159,6 +1159,15 @@ __cddLocal.load({
     var uiOf = __graph_model.uiOf
 
     function selectionMethods(ctx, engine, session, params) {
+      // 拖动中 pointermove 一秒上百次：一帧最多重画一次。
+      var frameQueued = false
+      var publishNextFrame = function () {
+        if (frameQueued) return
+        frameQueued = true
+        var run = function () { frameQueued = false; publish() }
+        if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(run)
+        else setTimeout(run, 16)
+      }
       return {
         reveal: function (id) {
           shared.selected = id
@@ -1236,8 +1245,8 @@ __cddLocal.load({
             if (shared.gather.freed === undefined) shared.gather.freed = {}
             shared.gather.freed[id] = true
           }
-          if (commit) saveNodePosition(id, point)
-          publish()
+          if (commit) { saveNodePosition(id, point); publish(); return }
+          publishNextFrame()
         },
       }
     }
@@ -1371,6 +1380,14 @@ __cddLocal.load({
           // Resolving before the root is known would ask the wrong repository.
           if (shared.root === undefined) return engine.context().then(function () { return engine.ingest(snap) })
           shared.turn = snap.turn
+          // 会话快照在 agent 流式输出时一秒变很多次，但证据（read/edit/write 及其状态）没变时，
+          // 屏幕不会变：不重折轨迹、不重算 /screen、不重画。
+          var signature = snap.calls
+            .filter(function (call) { return call.touches.length > 0 })
+            .map(function (call) { return call.key + (call.running ? 'r' : 's') + (call.remembered === false ? 'f' : 'k') + call.touches.length })
+            .join('|')
+          if (signature === shared.evidenceSignature) return Promise.resolve()
+          shared.evidenceSignature = signature
           shared.resolved = shared.resolved || {}
           var pending = []
           snap.calls.forEach(function (call) {
@@ -1512,6 +1529,7 @@ __cddLocal.load({
 //   ④ 交给布局
 // 其余（切树、切关系、pin、收起、会话往前走）改视图状态后调 /screen 整屏重算，
 // 后端同样重放这些展开，所以两边给出的节点一致。
+// anchor 记录按 id 缓存在 shared.anchorCache：/screen 只发前端还没有的（一个平均 4.7KB）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -1538,6 +1556,7 @@ __cddLocal.load({
     var NATIVE = { 'call:up': 'callers', 'call:down': 'callees', 'inherit:down': 'parent_classes' }
 
     var shortId = function (id) { return String(id).split('::').pop() }
+    var kb = function (bytes) { return (bytes / 1024).toFixed(0) + 'KB' }
 
     function defaultView() {
       var rels = {}
@@ -1548,6 +1567,11 @@ __cddLocal.load({
     function viewOf() {
       if (shared.view === null || shared.view === undefined) shared.view = defaultView()
       return shared.view
+    }
+
+    function cacheOf() {
+      if (shared.anchorCache === null || shared.anchorCache === undefined) shared.anchorCache = {}
+      return shared.anchorCache
     }
 
     function activePin(id) {
@@ -1567,14 +1591,18 @@ __cddLocal.load({
       return out
     }
 
+    /** POST JSON，返回的 body 上带 __bytes（响应大小，写进 log）。 */
     function postJson(path, query, payload) {
       return fetch(ROUTE + path + '?' + new URLSearchParams(query).toString(), {
         method: 'POST', cache: 'no-store',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       }).then(function (res) {
-        return res.json().then(function (body) {
+        return res.text().then(function (text) {
+          if (text === '') throw new Error('HTTP ' + res.status + ' 空响应')
+          var body = JSON.parse(text)
           if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status))
+          body.__bytes = text.length
           return body
         })
       })
@@ -1587,15 +1615,28 @@ __cddLocal.load({
       publish()
     }
 
+    /** 收下服务端发来的 anchor 记录；索引戳变了先清空缓存。 */
+    function remember(anchors, stamp) {
+      if (stamp !== undefined && shared.anchorCacheStamp !== stamp) {
+        shared.anchorCache = {}
+        shared.anchorCacheStamp = stamp
+      }
+      var cache = cacheOf()
+      Object.keys(anchors || {}).forEach(function (id) { cache[id] = anchors[id] })
+      return cache
+    }
+
     /** 屏幕 → shared.graph。已画过的位置、类成员展开状态原样带过去（展开时节点不跳）。 */
     function applyScreen(body) {
+      var cache = remember(body.anchors, body.stamp)
       var before = shared.graph || emptyGraph()
       var graph = emptyGraph()
       var side = {}
+      var missing = 0
       body.side.forEach(function (id) { side[id] = true })
       body.nodes.concat(body.side).forEach(function (id) {
-        var anchor = body.anchors[id]
-        if (anchor === undefined || anchor === null) return
+        var anchor = cache[id]
+        if (anchor === undefined || anchor === null) { missing += 1; return }
         addNode(graph, anchor)
         var oldUi = before.ui[id]
         if (oldUi !== undefined) {
@@ -1606,6 +1647,7 @@ __cddLocal.load({
         var place = before.layout[id]
         if (place !== undefined && (place.side === true) === (side[id] === true)) graph.layout[id] = place
       })
+      if (missing > 0) note('error', '✗ 屏幕上有 ' + missing + ' 个节点缓存里没有 anchor 记录')
       body.edges.forEach(function (e) { graph.edges.push({ from: e.from, to: e.to, types: [e.type] }) })
       graph.rootId = graph.order.length > 0 ? graph.order[0] : null
       shared.graph = graph
@@ -1658,13 +1700,16 @@ __cddLocal.load({
         again = false
         var view = viewOf()
         var t0 = Date.now()
+        var known = shared.anchorCacheStamp === undefined ? [] : Object.keys(cacheOf())
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
-          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(','))
-        return postJson('/screen', params(), { state: view }).then(function (body) {
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
+        return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
+          var fresh = Object.keys(body.anchors || {}).length
           applyScreen(body)
           shared.screenError = null
           note('screen', '← 节点 ' + body.nodes.length + ' · 旁边 ' + body.side.length + ' · 边 ' + body.edges.length
-            + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length + ' · ' + (Date.now() - t0) + 'ms'
+            + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length
+            + ' · 响应 ' + kb(body.__bytes) + '（新发 anchor ' + fresh + ' 个）· ' + (Date.now() - t0) + 'ms'
             + (body.reason ? ' · ' + body.reason : ''))
           ;(body.expansions || []).forEach(function (x) {
             if (x.skipped) note('screen', '  展开被跳过 ' + shortId(x.id) + ' ' + x.rel + x.dir + '：' + (x.skipped === 'relation-off' ? '这个关系没开' : '节点不在屏幕上'))
@@ -1700,9 +1745,10 @@ __cddLocal.load({
         return postJson('/anchors', params(), { ids: ids }).then(function (body) {
           var got = Object.keys(body.anchors || {})
           var missing = body.missing || []
+          remember(body.anchors, body.stamp)
           note('expand', '② /anchors 拉回 ' + got.length + ' 个 anchor，拿不到 ' + missing.length + ' 个'
-            + (missing.length > 0 ? '（' + missing.slice(0, 4).map(shortId).join(', ') + (missing.length > 4 ? ' …' : '') + '：裸名字或不在索引）' : '')
-            + ' · ' + (Date.now() - t0) + 'ms')
+            + (missing.length > 0 ? '（' + missing.slice(0, 4).map(shortId).join(', ') + (missing.length > 4 ? ' …' : '') + '）' : '')
+            + ' · ' + kb(body.__bytes) + ' · ' + (Date.now() - t0) + 'ms')
           var fresh = 0
           var linked = 0
           var added = []
@@ -1972,6 +2018,9 @@ __cddLocal.load({
           // 视图状态（pin、展开）属于那个会话，换会话一起清掉。
           shared.view = null
           shared.screen = null
+          shared.anchorCache = {}
+          shared.anchorCacheStamp = undefined
+          shared.evidenceSignature = null
           shared.trace = {}
           shared.resolved = {}
           shared.unresolved = []
@@ -4668,6 +4717,9 @@ __cddLocal.load({
 //   screen.side  → 不在当前树里的 seed，堆到树的下面，排成等宽的列
 //   screen.edges → 一条不少地出线（一条边一种类型）
 // 这里不做任何筛选：不看按钮状态、不看关系开关、不挑主干。
+//
+// 两段：结构（尺寸、分层、旁边的位置）只在图变了时重算并缓存；
+// 拖动、选中、高亮这类不改图的更新只重放「坐标 → 接线 → 出线」，不重排。
 __cddLocal.load({
   id: 'dsh-cdd-lens/layout/layout',
   factory: (require) => {
@@ -4804,6 +4856,40 @@ __cddLocal.load({
       })
     }
 
+    // ---- 结构缓存：图没变就不重排 ----------------------------------------------
+    var cached = { graph: null, screen: null, key: null, value: null }
+
+    /** 会改变结构的东西：节点数、边数、画布宽度、类成员展开了多少行。 */
+    function structureKey(graph, avail) {
+      var memberRows = 0
+      graph.order.forEach(function (id) {
+        var ui = graph.ui[id]
+        if (ui && ui.members && ui.memberList) memberRows += ui.memberList.length + 1
+      })
+      return [graph.order.length, graph.edges.length, avail || 0, memberRows].join('|')
+    }
+
+    function structure(graph, avail) {
+      var key = structureKey(graph, avail)
+      if (cached.graph === graph && cached.screen === shared.screen && cached.key === key) return cached.value
+      var t0 = Date.now()
+      var scope = screenScope(graph)
+      var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
+      // 树：分层布局；画过的树节点位置冻结（旁边的旧位置不算，进树要重新排）。
+      var laid = sugiyama(graph, scope.included, metrics, function (id) {
+        var known = placeOf(graph, id)
+        if (known === null || known.side === true || typeof known.x !== 'number' || typeof known.y !== 'number') return null
+        return known
+      })
+      var sideTop = laid.placed.length > 0 ? laid.canvasY : metrics.PAD
+      var sidePlaced = placeSide(graph, scope.side, metrics, sideTop, avail)
+      var value = { scope: scope, metrics: metrics, laid: laid, sidePlaced: sidePlaced }
+      cached = { graph: graph, screen: shared.screen, key: key, value: value }
+      note('layout', '重排结构：树 ' + scope.included.length + ' · 旁边 ' + scope.side.length + ' · 边 ' + graph.edges.length
+        + ' · 层 ' + laid.layers + ' · ' + (Date.now() - t0) + 'ms')
+      return value
+    }
+
     /**
      * Turn one screen into one drawing.
      *
@@ -4813,23 +4899,14 @@ __cddLocal.load({
      */
     function layout(graph, _unused, avail) {
       if (graph.rootId === null) {
-        note('layout', 'rootId=null，屏幕为空（nodes=' + Object.keys(graph.nodes).length + '）')
         return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
-      var scope = screenScope(graph)
-      var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
-
-      // ---- 树：分层布局；画过的树节点位置冻结（旁边的旧位置不算，进树要重新排） ----
-      var laid = sugiyama(graph, scope.included, metrics, function (id) {
-        var known = placeOf(graph, id)
-        if (known === null || known.side === true || typeof known.x !== 'number' || typeof known.y !== 'number') return null
-        return known
-      })
-      // ---- 旁边：堆到树的下面 ----
-      var sideTop = laid.placed.length > 0 ? laid.canvasY : metrics.PAD
-      var sidePlaced = placeSide(graph, scope.side, metrics, sideTop, avail)
-      var sideBottom = sidePlaced.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
-      var place = { placed: laid.placed.concat(sidePlaced), rows: [], canvasY: Math.max(laid.canvasY, sideBottom + metrics.BOX_GAP_Y) }
+      var s = structure(graph, avail)
+      var metrics = s.metrics
+      // 每次画都从缓存的结构拷一份记录出来：拖动、收拢、推开重叠只改这份拷贝。
+      var placed = s.laid.placed.concat(s.sidePlaced).map(function (p) { return Object.assign({}, p) })
+      var sideBottom = s.sidePlaced.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
+      var place = { placed: placed, rows: [], canvasY: Math.max(s.laid.canvasY, sideBottom + metrics.BOX_GAP_Y) }
 
       // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
       applySavedPositions(place, shared.nodePositions || {})
@@ -4842,7 +4919,7 @@ __cddLocal.load({
       syncPorts(place)
 
       // ---- 出线：每条边一根线，一条不少 ----
-      var polylines = bindPolylineSet(laid.polylines, orient.byId)
+      var polylines = bindPolylineSet(s.laid.polylines, orient.byId)
       var hops = { hSegs: new Map(), segments: [] }
       var drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
 
@@ -4861,15 +4938,13 @@ __cddLocal.load({
 
       var relations = relationStats(graph, drawn.wires)
       shared.wireStats = { drawn: drawn.wires.length, hidden: 0, total: graph.edges.length, relations: relations }
-      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (laid.layers || 0) + 'L')
-      note('layout', 'tree=' + scope.included.length + ' side=' + scope.side.length + ' edges=' + graph.edges.length
-        + ' -> placed=' + place.placed.length + ' wires=' + drawn.wires.length + ' layers=' + laid.layers)
+      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (s.laid.layers || 0) + 'L')
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
         junctions: drawn.junctions, arrows: drawn.arrows, unrouted: drawn.unrouted,
         rows: [], files: [],
-        layers: laid.layers,
-        crossings: laid.crossings,
+        layers: s.laid.layers,
+        crossings: s.laid.crossings,
         stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
         width: Math.max(avail || 0, fit.maxX + metrics.PAD),
         height: Math.max(360, fit.maxY + metrics.PAD),
