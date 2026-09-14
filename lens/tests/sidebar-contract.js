@@ -100,7 +100,7 @@ assert(bundle.includes('width:var(--cddl-rail-shut)!important'))
 // One placement, one layout: the layered sugiyama pass decides where every node
 // goes. No skins, so there is no "which placement" branch left to disagree with.
 assert(bundle.includes('function sugiyama'))
-assert(bundle.includes("p.flowDir = 'ltr'"))
+assert(bundle.includes("flowDir: 'ltr'"))
 // 出入口是左右各一个小圈：入在左、出在右，不同口。线两头停在这个圈心上。
 assert(bundle.includes("className: 'cddl-port cddl-port-in'"))
 assert(bundle.includes("className: 'cddl-port cddl-port-out'"))

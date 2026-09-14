@@ -19,6 +19,8 @@ window.__ModuleLoader__.load({
     var ingestMethods = __engine_ingest.ingestMethods
     var __engine_gather = require('dsh-cdd-lens/engine/gather')
     var gatherMethods = __engine_gather.gatherMethods
+    var __engine_screen = require('dsh-cdd-lens/engine/screen')
+    var screenMethods = __engine_screen.screenMethods
 
     function currentSession(ctx) {
       try {
@@ -54,6 +56,7 @@ window.__ModuleLoader__.load({
       Object.assign(engine, selectionMethods(ctx, engine, session, params))
       Object.assign(engine, ingestMethods(ctx, engine, session, params))
       Object.assign(engine, gatherMethods(ctx, engine, session, params))
+      Object.assign(engine, screenMethods(ctx, engine, session, params))
       // Also on the engine, not only handed to the method factories. `Draw`
       // builds its own URL and asks for these, and finding `engine.params`
       // undefined threw on every render of that tab — which is why `cdd draw`

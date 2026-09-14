@@ -1,24 +1,20 @@
-// dsh-cdd-lens — One graph in, one drawing out: the stages in order.
+// dsh-cdd-lens — One screen in, one drawing out.
 //
-// 只有一条路径，没有皮肤。分层由 layout/sugiyama 自己算——不再问服务端要 `/chain`。
-//
-// 这条管线是照 /Users/a1/Workspace/WORKSPACE/visual_map 重写的：
-//   数据(graph) → 分层布局(sugiyama) → 边折线(polylines) → emit 成 SVG 路径
-// visual_map 里布局与布线解耦，靠的是 `edge.bendPoints` 这一个契约；这里也一样，
-// sugiyama 把跨层边的拐点算好放进 pts，emit 只管照着画。
+// 画什么只认 shared.screen（后端计算单元 src/compute 的结果）：
+//   screen.nodes → 分层布局（layout/sugiyama）
+//   screen.side  → 不在当前树里的 seed，堆到树的下面，排成等宽的列
+//   screen.edges → 一条不少地出线（一条边一种类型）
+// 这里不做任何筛选：不看按钮状态、不看关系开关、不挑主干。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/layout/layout',
   factory: (require) => {
     var module = { exports: {} }
     var __graph_model = require('dsh-cdd-lens/graph/model')
-    var uiOf = __graph_model.uiOf
+    var placeOf = __graph_model.placeOf
+    var setPlace = __graph_model.setPlace
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
     var fact = __runtime_debug.fact
-    var placeOf = __graph_model.placeOf
-    var setPlace = __graph_model.setPlace
-    var __layout_prep = require('dsh-cdd-lens/layout/prep')
-    var layoutScope = __layout_prep.layoutScope
     var __layout_metrics = require('dsh-cdd-lens/layout/metrics')
     var boxMetrics = __layout_metrics.boxMetrics
     var __layout_sugiyama = require('dsh-cdd-lens/layout/sugiyama')
@@ -33,8 +29,6 @@ window.__ModuleLoader__.load({
     var freeGatherDragged = __layout_gather.freeGatherDragged
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
-    var __routing_select = require('dsh-cdd-lens/routing/select')
-    var chooseEdges = __routing_select.chooseEdges
     var __routing_emit = require('dsh-cdd-lens/routing/emit')
     var emitWires = __routing_emit.emitWires
     var PORT_OFFSET = 0.5
@@ -51,119 +45,145 @@ window.__ModuleLoader__.load({
     }
 
     function bindPolylineEndpoints(line, byId) {
-        var a = byId[line.from]
-        var b = byId[line.to]
-        if (a === undefined || b === undefined) return line
-        var middle = (line.pts || []).slice(1, -1).map(function (pt) { return { x: pt.x, y: pt.y } })
-        var pts = [a.ports.out].concat(middle).concat([b.ports.in])
-        return Object.assign({}, line, {
-          pts: pts,
-          sourcePort: { side: 'right', point: a.ports.out },
-          targetPort: { side: 'left', point: b.ports.in },
-        })
+      var a = byId[line.from]
+      var b = byId[line.to]
+      if (a === undefined || b === undefined) return line
+      var middle = (line.pts || []).slice(1, -1).map(function (pt) { return { x: pt.x, y: pt.y } })
+      return Object.assign({}, line, {
+        pts: [a.ports.out].concat(middle).concat([b.ports.in]),
+        sourcePort: { side: 'right', point: a.ports.out },
+        targetPort: { side: 'left', point: b.ports.in },
+      })
     }
 
     function bindPolylineSet(polylines, byId) {
       return polylines.map(function (line) { return bindPolylineEndpoints(line, byId) })
     }
 
-    function allowedTypes(types, relationFilter) {
-      if (relationFilter === undefined || relationFilter === null) return types
-      return types.filter(function (type) { return relationFilter[type] !== false })
-    }
-
-    function finalPolylines(lines, picked, byId, relationFilter) {
-      return bindPolylineSet(lines.filter(function (line) {
-        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
-        return types.length > 0
-          && picked[line.from + '\u0000' + line.to] === true
-      }).map(function (line) {
-        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
-        return Object.assign({}, line, {
-          id: line.from + '\u2192' + line.to + ':' + types.join(','),
-          type: types[0],
-          types: types,
-        })
-      }), byId)
+    /** 屏幕上画什么：只认 shared.screen，不筛选。 */
+    function screenScope(graph) {
+      var screen = shared.screen || { nodes: [], side: [] }
+      var has = function (id) { return graph.nodes[id] !== undefined }
+      var included = screen.nodes.filter(has)
+      var side = screen.side.filter(has)
+      var fileOrder = []
+      included.concat(side).forEach(function (id) {
+        var file = graph.nodes[id].file
+        if (fileOrder.indexOf(file) < 0) fileOrder.push(file)
+      })
+      return { included: included, side: side, fileOrder: fileOrder }
     }
 
     /**
-     * Turn one graph into one drawing.
-     *
-     * @param graph - nodes and edges to draw。
-     * @param relationFilter - relation kinds the viewer left switched on。
-     * @param avail - the canvas viewport width in CSS pixels。
-     * @returns nodes, wires, labels, junctions, arrows, file boxes and size。
+     * 不在当前树里的 seed：堆到树的下面，排成等宽的列（每列左沿对齐，列间留足角标的净空）。
+     * 画过的位置记住，下次照旧——树长高了旁边的节点也不跳；新来的接在已有的下面。
      */
-    function layout(graph, relationFilter, avail) {
+    function placeSide(graph, side, metrics, top, avail) {
+      if (side.length === 0) return []
+      var gapX = metrics.LAYER_GAP_X
+      var gapY = metrics.BOX_GAP_Y
+      var width = side.reduce(function (m, id) { return Math.max(m, metrics.sizeOf(id).w) }, 0)
+      var usable = Math.max(width, (avail || 0) - metrics.PAD * 2)
+      var cols = Math.max(1, Math.floor((usable + gapX) / (width + gapX)))
+      var known = {}
+      var bottom = top - gapY
+      side.forEach(function (id) {
+        var at = placeOf(graph, id)
+        if (at === null || at.side !== true || typeof at.x !== 'number' || typeof at.y !== 'number') return
+        known[id] = at
+        bottom = Math.max(bottom, at.y + at.h)
+      })
+      var col = 0
+      var y = bottom + gapY
+      var rowH = 0
+      return side.map(function (id) {
+        var node = graph.nodes[id]
+        var h = metrics.sizeOf(id).h
+        var rec = {
+          id: id, node: node, anchor: node, w: width, h: h,
+          file: node.file, tree: 0, label: metrics.label[id],
+          flowDir: 'ltr', boxKey: node.file, side: true,
+        }
+        if (known[id] !== undefined) {
+          rec.x = known[id].x
+          rec.y = known[id].y
+          rec.layer = known[id].layer
+        } else {
+          if (col >= cols) { col = 0; y += rowH + gapY; rowH = 0 }
+          rec.x = metrics.PAD + col * (width + gapX)
+          rec.y = y
+          rec.layer = 'side:' + col
+          col += 1
+          if (h > rowH) rowH = h
+        }
+        rec.ports = portsFor(rec)
+        return rec
+      })
+    }
+
+    function relationStats(graph, wires) {
+      var stats = {}
+      graph.edges.forEach(function (e) {
+        var type = e.types[0]
+        if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
+        stats[type].total += 1
+      })
+      wires.forEach(function (w) { if (stats[w.type] !== undefined) stats[w.type].drawn += 1 })
+      return stats
+    }
+
+    /** 记住这次画出来的位置：已有同类（树 / 旁边）位置的不改，身份变了的重记。 */
+    function rememberPlaces(graph, place) {
+      place.placed.forEach(function (p) {
+        var known = placeOf(graph, p.id)
+        if (known !== null && (known.side === true) === (p.side === true)) return
+        setPlace(graph, p.id, { x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer, ports: p.ports, side: p.side === true })
+      })
+    }
+
+    /**
+     * Turn one screen into one drawing.
+     *
+     * @param graph - shared.graph，由 /screen 原样生成。
+     * @param _unused - 旧的关系筛选参数，已不再使用（筛选只在计算单元里）。
+     * @param avail - the canvas viewport width in CSS pixels。
+     */
+    function layout(graph, _unused, avail) {
       if (graph.rootId === null) {
-        note('layout', 'rootId=null，没有起点可用（nodes=' + Object.keys(graph.nodes).length + '）')
+        note('layout', 'rootId=null，屏幕为空（nodes=' + Object.keys(graph.nodes).length + '）')
         return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
-      var scope = layoutScope(graph)
-      var metrics = boxMetrics(graph, scope, avail)
+      var scope = screenScope(graph)
+      var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
 
-      // ---- 会话自己的边要画出来，不管有没有人按过按钮 ----
-      //
-      // 这是删掉 /among 之后必须补上的一件事：那条路由以前给 bridge 边打
-      // `always`。没有它，一个刚 ingest 出来的图里每条边两端都没被按过，
-      // select.js 就把它们全部滤掉——画面上就是「一堆卡片，一根线都没有」。
-      //
-      // 判据不是「谁打的标记」，而是这个节点本身有没有被这次会话碰过：
-      // 两个 anchor 都是会话自己的，它们之间的关系就是这次会话要看的答案。
-      graph.edges.forEach(function (e) {
-        if (e.always === true) return
-        var fromUI = uiOf(graph, e.from)
-        var toUI = uiOf(graph, e.to)
-        var fromSession = fromUI !== null && (fromUI.session === true || fromUI.explored === true)
-        var toSession = toUI !== null && (toUI.session === true || toUI.explored === true)
-        if (fromSession && toSession) e.always = true
-      })
-
-      // ---- 分层布局：消环 → 分层 → 排序 → 坐标，一次全出 ----
+      // ---- 树：分层布局；画过的树节点位置冻结（旁边的旧位置不算，进树要重新排） ----
       var laid = sugiyama(graph, scope.included, metrics, function (id) {
         var known = placeOf(graph, id)
-        // 只认已经真正画过的那一次位置。node 上没有位置 = 它还没上过屏幕。
-        if (known === null || typeof known.x !== 'number' || typeof known.y !== 'number') return null
+        if (known === null || known.side === true || typeof known.x !== 'number' || typeof known.y !== 'number') return null
         return known
       })
-      var place = {
-        placed: laid.placed,
-        rows: [],
-        canvasY: laid.canvasY,
-      }
+      // ---- 旁边：堆到树的下面 ----
+      var sideTop = laid.placed.length > 0 ? laid.canvasY : metrics.PAD
+      var sidePlaced = placeSide(graph, scope.side, metrics, sideTop, avail)
+      var sideBottom = sidePlaced.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
+      var place = { placed: laid.placed.concat(sidePlaced), rows: [], canvasY: Math.max(laid.canvasY, sideBottom + metrics.BOX_GAP_Y) }
 
       // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
-      // 注意顺序：先应用保存的位置，再分离重叠——反过来的话保存的位置会被覆盖。
-      applySavedPositions(graph, place, shared.nodePositions || {})
+      applySavedPositions(place, shared.nodePositions || {})
       freeGatherDragged(place)
       reclaimStrays(place, metrics, avail)
-
       var orient = { byId: {} }
       place.placed.forEach(function (p) { orient.byId[p.id] = p })
-
-      // 选中节点的上下游坐到它旁边，收拢之后才推重叠——反过来的话
-      // 收拢列里刚排好的卡片会被分离过程推走。
       applyGather(graph, place, metrics)
       separateOverlaps(place, metrics)
       syncPorts(place)
 
-      // ---- 布线：哪条边值得画 ----
-      var edges = chooseEdges(graph, scope, orient, relationFilter)
-      var picked = {}
-      edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
-
-      // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
-      var polylines = finalPolylines(laid.polylines, picked, orient.byId, relationFilter)
-      var kept = {}
-      polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
-      // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
+      // ---- 出线：每条边一根线，一条不少 ----
+      var polylines = bindPolylineSet(laid.polylines, orient.byId)
       var hops = { hSegs: new Map(), segments: [] }
       var drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
 
       // ---- 尺寸：从画出来的东西反推 ----
-      // 手工坐标可能把某个节点放到负坐标（画布原点左边/上边）。那时整张图
-      // 往右下挪一屏边距，挪完再重新出线——布线不变，只是原点移了位置。
       var fit = fitExtent(place, drawn, metrics)
       if (fit.dx > 0 || fit.dy > 0) {
         shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
@@ -174,20 +194,12 @@ window.__ModuleLoader__.load({
         drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }
-      // 只记录第一次上屏的位置。之后普通布局、选中、高亮、过滤、画布尺寸变化
-      // 都不许改它；只有用户拖动走 shared.nodePositions 才能覆盖。
-      place.placed.forEach(function (p) {
-        if (placeOf(graph, p.id) !== null) return
-        setPlace(graph, p.id, {
-          x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer,
-          ports: p.ports,
-        })
-      })
+      rememberPlaces(graph, place)
 
-      var maxX = fit.maxX, maxY = fit.maxY
-
+      var relations = relationStats(graph, drawn.wires)
+      shared.wireStats = { drawn: drawn.wires.length, hidden: 0, total: graph.edges.length, relations: relations }
       fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (laid.layers || 0) + 'L')
-      note('layout', 'in=' + Object.keys(graph.nodes).length + ' edges=' + graph.edges.length
+      note('layout', 'tree=' + scope.included.length + ' side=' + scope.side.length + ' edges=' + graph.edges.length
         + ' -> placed=' + place.placed.length + ' wires=' + drawn.wires.length + ' layers=' + laid.layers)
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
@@ -195,24 +207,14 @@ window.__ModuleLoader__.load({
         rows: [], files: [],
         layers: laid.layers,
         crossings: laid.crossings,
-        stats: {
-          nodes: place.placed.length,
-          wires: drawn.wires.length,
-          relations: edges.stats.relations,
-          wireTotal: edges.stats.total,
-        },
-        width: Math.max(avail || 0, maxX + metrics.PAD),
-        height: Math.max(360, maxY + metrics.PAD),
+        stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
+        width: Math.max(avail || 0, fit.maxX + metrics.PAD),
+        height: Math.max(360, fit.maxY + metrics.PAD),
       }
     }
 
-    /**
-     * 手工拖过的坐标原样写上。
-     *
-     * 分层布局先给出建议位置，用户拖过的那一个覆盖它——不然每次重画都会把用户
-     * 摆好的东西弹回去。
-     */
-    function applySavedPositions(graph, place, positions) {
+    /** 手工拖过的坐标原样写上，不然每次重画都会把用户摆好的东西弹回去。 */
+    function applySavedPositions(place, positions) {
       if (positions === null || positions === undefined) return
       place.placed.forEach(function (p) {
         var at = positions[p.id]
@@ -220,10 +222,7 @@ window.__ModuleLoader__.load({
         p.x = at.x
         p.y = at.y
         p.manual = true
-        p.ports = {
-          in: { x: p.x, y: p.y + p.h / 2 },
-          out: { x: p.x + p.w, y: p.y + p.h / 2 },
-        }
+        p.ports = portsFor(p)
       })
     }
 

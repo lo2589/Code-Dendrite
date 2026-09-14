@@ -65,7 +65,8 @@ function load(file) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), env.ctx, { filename: file })
   return {
     surface: env.require_('dsh-cdd-lens'),
-    layout: env.require_('dsh-cdd-lens/layout/layout').layout,
+    // layout 只画 shared.screen：先按手搭的图补一份（见 screen-fixture.cjs）。
+    layout: require('./screen-fixture.cjs').withScreen(env.require_('dsh-cdd-lens/layout/layout').layout, env.require_('dsh-cdd-lens/state/store').shared),
     shared: env.require_('dsh-cdd-lens/state/store').shared,
     emptyGraph: env.require_('dsh-cdd-lens/graph/model').emptyGraph,
     addNode: env.require_('dsh-cdd-lens/graph/model').addNode,

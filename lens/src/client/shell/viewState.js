@@ -8,10 +8,8 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     var module = { exports: {} }
     var React = require('react')
-    var h = React.createElement
     var useState = React.useState
     var useEffect = React.useEffect
-    var useCallback = React.useCallback
     var useMemo = React.useMemo
     var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
@@ -30,12 +28,10 @@ window.__ModuleLoader__.load({
      * Every hook and derived value the spread-out view runs on.
      */
     function useViewState(props) {
-
       var ctx = props.ctx
       useShared()
       var engine = useMemo(function () { return makeEngine(ctx) }, [])
       var tab = useState('graph')
-      var relations = useState({ call: true, dataflow: false, inherit: false, impact: false, dispatch: true })
       var zoom = useState(1)
       var layoutRevision = useState(0)
       var canvasRef = useRef(null)
@@ -50,23 +46,13 @@ window.__ModuleLoader__.load({
       }, [wanted])
 
       var context = shared.context
-      // The spread-out view sits in the centre column, but another plugin's
-      // `position: fixed` rail paints over everything at z-index 500 — including
-      // the right end of this toolbar, whose buttons then cannot be clicked at
-      // all (the pointer lands on the neighbour). Reserving its measured width
-      // is the same fix the floating panel already needed; hit-testing does not
-      // care that we are inside a column.
-      var viewRef = useRef(null)
       // Only what is genuinely lying on top of this view, measured against the
-      // view's own box. Reserving the window's right edge here double-counted
-      // the frame's details track — the grid had already taken it out — and
-      // left a dead white strip the drawing could never reach.
+      // view's own box, is reserved on the right.
+      var viewRef = useRef(null)
       var reserve = useOverlapInset(viewRef)
 
-      // The source panel belongs to this view, wherever it is drawn. It rides
-      // in the trajectory rail, which outlives any one tab, so the rail has to
-      // be told when this view is actually on screen — otherwise the source of
-      // an anchor keeps sitting there over Chat, owned by nothing.
+      // The source panel belongs to this view; the trajectory rail has to be
+      // told when this view is actually on screen.
       useEffect(function () {
         shared.viewMounted = (shared.viewMounted || 0) + 1
         publish()
@@ -82,16 +68,12 @@ window.__ModuleLoader__.load({
         return function () { window.removeEventListener('keydown', escape) }
       }, [])
 
-      // Selection is a highlight/source action only. Node coordinates are
-      // stable after first paint unless the user drags them, so selecting a
-      // card must not auto-expand or re-seat its neighbours.
       var selectedNow = shared.selected
       useEffect(function () {
         if (selectedNow === null || selectedNow === undefined) engine.releaseGather()
       }, [selectedNow])
 
-      // Re-measured on every resize: the source column, the neighbour rail and
-      // dsh's own sidebar all change this number while the page is open.
+      // Re-measured on every resize.
       var availWidth = useState(0)
       useEffect(function () {
         var read = function () {
@@ -106,19 +88,15 @@ window.__ModuleLoader__.load({
         return function () { clearInterval(timer); window.removeEventListener('resize', read) }
       }, [])
 
+      // 画什么只由 shared.screen 决定（后端计算单元）；这里只排版。
       var model = useMemo(function () {
-        return layout(shared.graph, relations[0], availWidth[0])
-      }, [shared.revision, relations[0], layoutRevision[0], availWidth[0]])
+        return layout(shared.graph, undefined, availWidth[0])
+      }, [shared.revision, layoutRevision[0], availWidth[0]])
 
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
-      /**
-       * 这个节点现在**看得见吗**（它的框整个落在可滚动视野内，留一点余量）。
-       *
-       * 展开只在这里返回 false 时才动视口：你点开一个就在眼前的节点，
-       * 画面不该动；点开一个滚出视野的节点，才需要把它带回来。
-       */
+      /** 这个节点现在看得见吗：只在看不见时才动视口，免得展开时画面乱跳。 */
       var onScreen = function (el, id, m, scale) {
         if (el === null) return true
         var target = m.nodes.filter(function (p) { return p.id === id })[0]
@@ -149,55 +127,31 @@ window.__ModuleLoader__.load({
           window.requestAnimationFrame(function () { centerOn(id, next) })
         })
       }
-      var toggleRelation = function (name) {
-        relations[1](function (before) {
-          var next = Object.assign({}, before)
-          next[name] = !next[name]
-          return next
-        })
-      }
 
       var viewportRequest = shared.viewportRequest || {
         id: shared.selected || shared.graph.rootId,
         mode: 'fit',
         seq: 0,
       }
-      // 视口只在**真的有人请求**时才动。
-      //
-      // 以前这个 effect 的依赖里有 model.width / model.height，于是图一长大
-      // （展开一层、画布变高）它就重跑，把视口重新居中到选中节点——节点坐标
-      // 一个像素没动，整屏却在跳。用户看到的就是「展开之后乱跳」。
-      //
-      // 现在按请求序号走：同一个 seq 只消费一次，重画多少次视口都不动。
+      // 视口只在真的有人请求时才动：同一个 seq 只消费一次，重画多少次视口都不动。
       var lastSeq = useRef(-1)
       useEffect(function () {
         if (tab[0] !== 'graph' || model.nodes.length === 0) return
         if (viewportRequest.seq === lastSeq.current) return
         lastSeq.current = viewportRequest.seq
         var frame = window.requestAnimationFrame(function () {
-          // Never auto-shrink. Fitting the whole canvas means dividing by its
-          // HEIGHT, and a graph of any size is tall — the solve landed on 68%
-          // every single time, which rendered a 13.5px name at nine pixels.
-          // A drawing too small to read is not an overview of anything, so the
-          // automatic behaviour is: full size, scrolled to the anchor in
-          // question. Shrinking to see everything at once stays available, but
-          // as a deliberate press of 适配.
           if (viewportRequest.mode === 'fit') {
             var readable = Math.max(zoom[0], 1)
             if (zoom[0] !== readable) setZoom(readable)
             window.requestAnimationFrame(function () { centerOn(viewportRequest.id, readable) })
           } else if (viewportRequest.mode === 'ensure') {
-            // 展开用这个：节点已经在视野里就什么都不做。展开一个新节点时视口
-            // 跳一下，看着就是「点了展开树乱跳」——真正跳的是视口不是节点。
-            if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) {
-              centerOn(viewportRequest.id, zoom[0])
-            }
+            if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) centerOn(viewportRequest.id, zoom[0])
           } else centerOn(viewportRequest.id, zoom[0])
         })
         return function () { window.cancelAnimationFrame(frame) }
       }, [tab[0], viewportRequest.seq])
 
-      return { ctx: ctx, engine: engine, tab: tab, relations: relations, zoom: zoom, layoutRevision: layoutRevision, canvasRef: canvasRef, context: context, viewRef: viewRef, reserve: reserve, model: model, setZoom: setZoom, centerOn: centerOn, fit: fit, toggleRelation: toggleRelation }
+      return { ctx: ctx, engine: engine, tab: tab, zoom: zoom, layoutRevision: layoutRevision, canvasRef: canvasRef, context: context, viewRef: viewRef, reserve: reserve, model: model, setZoom: setZoom, centerOn: centerOn, fit: fit }
     }
 
     module.exports = { useViewState }

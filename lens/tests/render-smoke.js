@@ -181,125 +181,74 @@ shared.outline = undefined
   console.log('✓ ' + '线点击'.padEnd(10) + '进入链路聚焦，箭头跟随高亮')
 })()
 
-;(function bridgeNodesDoNotExpand() {
+// 「有几个关系挂几个」：按钮只读 /screen 给的 screen.buttons（就是 len(关系+up/down)），
+// 没有数据的关系一个都不出现——不画箭头、不写 0。卡片和树面板的数字必须一样。
+;(function buttonsComeFromScreen() {
   const { GraphNode } = require_('dsh-cdd-lens/view/node')
   const { TreeRow } = require_('dsh-cdd-lens/view/tree')
   const { makeEngine } = require_('dsh-cdd-lens/engine/engine')
-  const anchor = {
-    id: 'a.py::bridge', symbol: 'bridge', file: 'a.py', kind: 'function',
-    line_start: 2, line_end: 6, members: 3,
-    peerCounts: { call: { up: 4, down: 5 } },
-  }
+  const real = makeEngine({ get: () => undefined })
+  const anchor = { id: 'a.py::f', symbol: 'f', file: 'a.py', symbol_type: 'function', line_start: 1, line_end: 9 }
   shared.graph = model.emptyGraph()
   model.addNode(shared.graph, anchor)
-  const bridgeUI = model.uiOf(shared.graph, anchor.id)
-  bridgeUI.bridge = true
-  bridgeUI.synthetic = true
   shared.graph.rootId = anchor.id
+  shared.view = null
+  shared.screen = {
+    nodes: [anchor.id], side: [], edges: [], pinned: [], treeTotals: {},
+    buttons: { [anchor.id]: { callup: 8, calldown: 2, inheritup: 3, inheritdown: 1 } },
+  }
   shared.selected = null
   shared.trace = {}
   shared.turn = 1
 
-  const buttonActions = []
-  const disabledTreeButtons = []
-  const walk = n => {
-    if (!n || typeof n !== 'object') return
-    if (n.type === 'button' && n.props && n.props['data-action']) buttonActions.push(n.props['data-action'])
-    if (n.type === 'button' && n.props && n.props.disabled === true) disabledTreeButtons.push(textOf(n))
-    ;(n.kids || []).forEach(walk)
-  }
-  walk(GraphNode({
-    engine: {}, zoom: 1,
-    p: { id: anchor.id, x: 0, y: 0, w: 180, h: 80, node: shared.graph.nodes[anchor.id] },
-  }))
-  const treeRow = TreeRow({
-    engine: { select() {}, members() {}, expand() { throw new Error('bridge tree row expanded') }, collapse() {}, pin() {} },
-    row: { id: anchor.id, depth: 0, node: shared.graph.nodes[anchor.id] },
-  })
-  walk(treeRow)
-  assert(!buttonActions.includes('expand-callers') && !buttonActions.includes('expand-callees'),
-    'bridge graph card must not expose expand buttons')
-  assert(disabledTreeButtons.includes('↑4') && disabledTreeButtons.includes('↓5'),
-    'bridge tree row must render disabled hop buttons')
-
-  const engine = makeEngine({ on: () => () => {}, emit: () => {} })
-  engine.expand(anchor.id, 'down', null, 'call')
-  assert.strictEqual(bridgeUI.open['down:call'], undefined,
-    'bridge expand guard must not mark down open')
-  assert.strictEqual(bridgeUI.loading, null, 'bridge expand guard must not enter loading')
-  console.log('✓ ' + '桥接节点'.padEnd(10) + '只解释连接，不再展开上下游')
-})()
-
-// 「有几个关系挂几个」：一个 anchor 有几个关系就挂几个按钮，各带各的数字，
-// 没有数据的关系一个都不出现——不画箭头、不写 0。
-;(function buttonsPerRelation() {
-  const { GraphNode } = require_('dsh-cdd-lens/view/node')
-  const anchor = {
-    id: 'a.py::f', symbol: 'f', file: 'a.py', kind: 'function', line_start: 1, line_end: 9, members: 0,
-    peerCounts: {
-      call: { up: 8, down: 2 },
-      inherit: { up: 3, down: 1 },
-      // dataflow / dispatch / impact 故意不给：它们不许出现
-    },
-  }
-  shared.graph = model.emptyGraph()
-  model.addNode(shared.graph, anchor)
-  shared.graph.rootId = anchor.id
-  shared.selected = null
-  shared.trace = {}
-  shared.turn = 1
-
-  const buttons = []
-  const walk = n => {
-    if (!n || typeof n !== 'object') return
-    if (n.type === 'button' && n.props && n.props['data-relation']) {
-      buttons.push({
-        rel: n.props['data-relation'],
-        count: Number(n.props['data-count']),
-        cls: String(n.props.className || ''),
-      })
+  const collect = (root) => {
+    const out = []
+    const walk = n => {
+      if (!n || typeof n !== 'object') return
+      if (n.type === 'button' && n.props && n.props['data-relation']) {
+        out.push({ rel: n.props['data-relation'], count: Number(n.props['data-count']), cls: String(n.props.className || '') })
+      }
+      ;(n.kids || []).forEach(walk)
     }
-    ;(n.kids || []).forEach(walk)
+    walk(root)
+    return out
   }
-  walk(GraphNode({
-    engine: {}, zoom: 1,
+  const buttons = collect(GraphNode({
+    engine: real, zoom: 1,
     p: { id: anchor.id, x: 0, y: 0, w: 180, h: 80, node: shared.graph.nodes[anchor.id] },
   }))
+  const treeButtons = collect(TreeRow({ engine: real, row: { id: anchor.id, depth: 0, node: shared.graph.nodes[anchor.id] } }))
 
   const rels = buttons.map(b => b.rel)
-  const counts = buttons.map(b => b.count)
-  // call 上下各一个、inherit 上下各一个 = 4 个按钮；dataflow/dispatch/impact 一个都没有。
+  const counts = buttons.map(b => b.count).sort((a, b) => a - b)
   assert.strictEqual(buttons.length, 4, 'one button per relation per direction, absent ones omitted')
   assert(!rels.includes('dataflow') && !rels.includes('dispatch') && !rels.includes('impact'),
     'a relation with no data renders no button and no zero')
-  assert.deepEqual(counts.slice().sort((a, b) => a - b), [1, 2, 3, 8], 'each button carries its own count')
-  // 不同关系不同颜色：类名里带关系名，样式按关系给色。
-  assert(buttons.filter(b => b.rel === 'call').every(b => b.cls.includes('cddl-rel-call')),
-    'call buttons carry the call colour class')
-  assert(buttons.filter(b => b.rel === 'inherit').every(b => b.cls.includes('cddl-rel-inherit')),
-    'inherit buttons carry the inherit colour class')
-  console.log('✓ ' + '按关系挂按钮'.padEnd(10) + 'call ↑8↓2 · inherit ↑3↓1 · 其余不出现')
+  assert.deepEqual(counts, [1, 2, 3, 8], 'each button carries its own count from screen.buttons')
+  assert(buttons.filter(b => b.rel === 'call').every(b => b.cls.includes('cddl-rel-call')), 'call buttons carry the call colour class')
+  assert(buttons.filter(b => b.rel === 'inherit').every(b => b.cls.includes('cddl-rel-inherit')), 'inherit buttons carry the inherit colour class')
+  assert.deepEqual(treeButtons.map(b => b.count).sort((a, b) => a - b), counts, 'tree panel shows the same numbers as the card')
+  console.log('✓ ' + '按钮来自屏幕'.padEnd(10) + 'call ↑8↓2 · inherit ↑3↓1 · 其余不出现 · 树面板同数')
 })()
 
-;(function userClickPromotesAutoExpansion() {
+// 按钮只改视图状态（shared.view），节点和边不在前端增删；pin 记下第几轮 pin、第几轮取消。
+;(function buttonsOnlyChangeViewState() {
   const { makeEngine } = require_('dsh-cdd-lens/engine/engine')
-  const real = makeEngine({ on: () => () => {}, emit: () => {} })
-  const anchor = {
-    id: 'a.py::f', symbol: 'f', file: 'a.py', kind: 'function', line_start: 1, line_end: 9, members: 0,
-    peerCounts: { call: { up: 1, down: 1 } },
-  }
-  shared.graph = model.emptyGraph()
-  model.addNode(shared.graph, anchor)
-  shared.graph.rootId = anchor.id
-  const ui = model.uiOf(shared.graph, anchor.id)
-  ui.open['autodown:call'] = true
-  shared.selected = null
-  shared.trace = {}
-  shared.turn = 1
-  real.expand(anchor.id, 'down', null, 'call')
-  assert.strictEqual(ui.open['down:call'], true, 'user click must take over the real button state')
-  assert.strictEqual(ui.open['autodown:call'], false, 'auto state must stop shadowing the button')
-  console.log('✓ ' + '上下键'.padEnd(10) + '用户点击接管 auto 展开，不再被 SKIP 吞掉')
+  const real = makeEngine({ get: () => undefined })
+  shared.view = null
+  shared.turn = 3
+  const before = Object.keys(shared.graph.nodes).length
+  real.toggleOpen('a.py::f', 'dataflow', 'up')
+  assert(real.isOpen('a.py::f', 'dataflow', 'up'), 'first press records the open')
+  real.toggleOpen('a.py::f', 'dataflow', 'up')
+  assert(!real.isOpen('a.py::f', 'dataflow', 'up'), 'second press collapses')
+  real.pin('a.py::f')
+  assert(real.isPinned('a.py::f') && shared.view.pins[0].at === 3, 'pin records the turn it started')
+  shared.turn = 5
+  real.pin('a.py::f')
+  assert(!real.isPinned('a.py::f') && shared.view.pins[0].until === 5, 'unpin records the turn it stopped')
+  assert.strictEqual(Object.keys(shared.graph.nodes).length, before, 'buttons never add or remove nodes on the client')
+  console.log('✓ ' + '按钮只改状态'.padEnd(10) + '展开/收起/pin/取消 pin 都只写 shared.view')
 })()
 
 // 用真的 engine 渲染，不用手捏的。

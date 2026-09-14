@@ -1,4 +1,7 @@
-// dsh-cdd-lens — Engine methods for selection, edge focus and dragging.
+// dsh-cdd-lens — Engine methods for selection, highlight and dragging.
+//
+// 这里只改「选中谁、高亮谁、卡片放哪」，不增删任何节点或边——屏幕上有什么
+// 只由 /screen 决定（engine/screen.js）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -16,25 +19,12 @@ window.__ModuleLoader__.load({
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
 
-    /**
-     * What is selected, focused, or being dragged.
-     *
-     * @param ctx - the client context the views were mounted with.
-     * @param engine - the engine being assembled; methods call each other
-     *   through it, so it is passed in rather than closed over.
-     * @param session - the current session id, or null.
-     * @param params - query parameters for one request.
-     * @returns the methods this file contributes.
-     */
     function selectionMethods(ctx, engine, session, params) {
       return {
         reveal: function (id) {
           shared.selected = id
           shared.focused = id
-          shared.edgeFocus = null
           shared.lit = null
-          // 记下「这一轮看过它」：看过的节点按轮次变旧、过期撤下；
-          // edit 过的不受影响，一直留着（见 graph/visible.fadedOut）。
           var ui = uiOf(shared.graph, id)
           if (ui !== null) ui.viewedAt = shared.turn
           requestViewport(id, 'center')
@@ -44,12 +34,7 @@ window.__ModuleLoader__.load({
         select: function (id) {
           // Clicking the already-focused node clears the emphasis, so getting
           // the whole picture back does not require hunting for empty canvas.
-          // The gathered neighbours fly home with it.
           if (shared.focused === id) { shared.focused = null; engine.releaseGather(); publish(); return Promise.resolve() }
-          // `focused` is set only by a human click. `selected` also moves on its
-          // own when a trace loads, and dimming everything else off THAT made
-          // 88% of the wires grey the moment the tab opened — an emphasis that
-          // is always on is just a washed-out picture.
           return engine.reveal(id)
         },
         blur: function () {
@@ -58,57 +43,28 @@ window.__ModuleLoader__.load({
           publish()
         },
         /**
-         * Light up what a wire belongs to.
-         *
-         * A dataflow edge is one link in a run: the value came from somewhere
-         * and goes on somewhere, and seeing only the two ends of one hop tells
-         * you almost nothing. So dataflow lights the whole run it belongs to,
-         * following the same relation kind in both directions. A call is not
-         * like that — `a` calls `b` and that is the whole fact — so it lights
-         * its two ends and stops.
-         * @param from - the wire's source anchor id.
-         * @param to - the wire's target anchor id.
-         * @param type - the relation kind the wire is drawing.
+         * 链路聚焦：点一根线，高亮这根线和它前后两个节点。再点一次取消。
+         * 只高亮，不改屏幕上的节点集合。
          */
         lightEdge: function (from, to, type) {
-          var was = shared.lit
-          if (was !== null && was.key === from + '→' + to + ':' + type) {
+          var key = from + '→' + to + ':' + type
+          if (shared.lit !== null && shared.lit !== undefined && shared.lit.key === key) {
             shared.lit = null
             publish()
             return
           }
           var nodes = {}
           var wires = {}
-          var mark = function (f, t) {
-            nodes[f] = true
-            nodes[t] = true
-            wires[f + '→' + t + ':' + type] = true
-          }
-          mark(from, to)
-          if (type === 'dataflow') {
-            // Walk the run, both ways, along this kind only.
-            var seen = {}
-            var queue = [from, to]
-            while (queue.length > 0) {
-              var at = queue.shift()
-              if (seen[at]) continue
-              seen[at] = true
-              shared.graph.edges.forEach(function (e) {
-                if ((e.types || []).indexOf(type) < 0) return
-                if (e.from === at || e.to === at) {
-                  mark(e.from, e.to)
-                  queue.push(e.from === at ? e.to : e.from)
-                }
-              })
-            }
-          }
-          shared.lit = { key: from + '→' + to + ':' + type, type: type, nodes: nodes, wires: wires }
+          nodes[from] = true
+          nodes[to] = true
+          wires[key] = true
+          shared.lit = { key: key, type: type, nodes: nodes, wires: wires }
           publish()
         },
 
         /** Light every wire that touches one anchor, so its own are obvious. */
         lightNode: function (id) {
-          if (shared.lit !== null && shared.lit.key === id) { shared.lit = null; publish(); return }
+          if (shared.lit !== null && shared.lit !== undefined && shared.lit.key === id) { shared.lit = null; publish(); return }
           var nodes = {}
           var wires = {}
           nodes[id] = true
@@ -124,29 +80,19 @@ window.__ModuleLoader__.load({
           publish()
         },
 
-        focusEdge: function (from, to, type) {
-          var before = shared.edgeFocus
-          if (before && before.from === from && before.to === to && before.type === type) {
-            shared.edgeFocus = null
-          } else {
-            shared.edgeFocus = { from: from, to: to, type: type }
-            shared.focused = null
-            requestViewport(from, 'center')
-          }
+        /** 点线时把线的起点带进视野（已在视野里就不动）。 */
+        focusEdge: function (from) {
+          requestViewport(from, 'ensure')
           publish()
         },
         blurEdge: function () {
-          if (shared.edgeFocus === null || shared.edgeFocus === undefined) return
-          shared.edgeFocus = null
+          if (shared.lit === null || shared.lit === undefined) return
           shared.lit = null
           publish()
         },
         moveNode: function (id, point, commit) {
           shared.nodePositions[id] = { x: Math.round(point.x), y: Math.round(point.y) }
-          // A drag during a gather takes the node out of the gathered column:
-          // the overlay re-seats its members on every layout, so without the
-          // mark the next pass would put the card straight back and the drag
-          // would move nothing — the lock the user reported.
+          // A drag during a gather takes the node out of the gathered column.
           if (shared.gather !== null && shared.gather !== undefined) {
             if (shared.gather.freed === undefined) shared.gather.freed = {}
             shared.gather.freed[id] = true

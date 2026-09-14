@@ -35,7 +35,8 @@ function stubEnv() {
 
 const B = stubEnv(); B.ctx.window.location.search = '?cddl-debug=1'; vm.runInContext(fs.readFileSync('lib/client.js', 'utf8'), B.ctx, { filename: 'built.js' })
 const side = {
-  layout: B.require_('dsh-cdd-lens/layout/layout').layout,
+  // layout 只画 shared.screen：先按手搭的图补一份（见 screen-fixture.cjs）。
+  layout: require('./screen-fixture.cjs').withScreen(B.require_('dsh-cdd-lens/layout/layout').layout, B.require_('dsh-cdd-lens/state/store').shared),
   shared: B.require_('dsh-cdd-lens/state/store').shared,
   emptyGraph: B.require_('dsh-cdd-lens/graph/model').emptyGraph,
   addNode: B.require_('dsh-cdd-lens/graph/model').addNode,
@@ -399,141 +400,8 @@ for (const [label, seed, filter, avail] of CASES) {
   if (!ok) bad += 1
 })()
 
-// 展开链路每一步都要有记录：按下 -> 请求 -> 返回 -> 建节点 -> 连边 -> 高亮。
-//
-// 这条是为「按钮点了没反应」写的。没有 log 的时候，四种坏法在屏幕上长得一模一样
-// （请求没发出去 / 返回空 / 建不出节点 / 渲染抛错），只能靠猜。开着 debug 之后
-// 每一层都留下痕迹，一眼看得出断在哪。
-function expandIsFullyLogged() {
-  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 1, gather: null, wireMode: 'all' }
-  const g = side.emptyGraph()
-  side.addNode(g, { id: 'a/m.js::f', symbol: 'f', file: 'a/m.js', kind: 'function', members: 0,
-    line_start: 1, line_end: 9, peerCounts: { call: { up: 0, down: 2 } } })
-  g.rootId = 'a/m.js::f'
-  mark(side, g, 'a/m.js::f', { session: true })
-  Object.assign(side.shared, base, { graph: g, trace: {}, selected: 'a/m.js::f' })
-
-  // 桩：/expand 返回两个下游
-  const peers = [
-    { id: 'a/m.js::g', symbol: 'g', file: 'a/m.js', kind: 'function', members: 0, line_start: 11, line_end: 19, peerCounts: { call: { up: 1, down: 0 } } },
-    { id: 'a/m.js::h', symbol: 'h', file: 'a/m.js', kind: 'function', members: 0, line_start: 21, line_end: 29, peerCounts: { call: { up: 1, down: 0 } } },
-  ]
-  B.ctx.fetch = (url) => {
-    const u = String(url)
-    if (u.indexOf('/expand') >= 0) {
-      const dir = u.indexOf('dir=up') >= 0 ? 'up' : 'down'
-      const rel = (u.match(/rel=([a-z]+)/) || [])[1] || 'call'
-      const hit = dir === 'down' ? peers : []
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ peers: hit, count: hit.length, stamp: 's' }) })
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-  }
-
-  const dbg = side.require_('dsh-cdd-lens/runtime/debug')
-
-  const engine = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined, on: () => () => {}, emit: () => {} })
-  return engine.expand('a/m.js::f', 'down', null, 'call').then(() => {
-    const snap = dbg.snapshot()
-    const kinds = snap.events.map(e => e.kind)
-    const has = (kind, needle) => snap.events.some(e => e.kind === kind && e.text.indexOf(needle) >= 0)
-    const traced = has('expand', 'start') && has('req', '/expand') && has('res', '/expand')
-      && has('expand', '完成') && has('layout', 'placed=')
-    const wired = g.edges.length === 2 && Object.keys(g.nodes).length === 3
-    const highlighted = snap.events.some(e => e.kind === 'expand' && e.text.indexOf('高亮') >= 0)
-    const ok = traced && wired && highlighted
-    console.log((ok ? '✓ ' : '✗ ') + '展开全链路log'.padEnd(12)
-      + ' 事件=' + kinds.length + ' 种=' + [...new Set(kinds)].join('/')
-      + ' 节点=' + Object.keys(g.nodes).length + ' 边=' + g.edges.length
-      + (highlighted ? ' 高亮已记' : ' 高亮缺失'))
-    if (!ok) bad += 1
-  })
-}
-
-// 看过的节点会过期撤下，edit 过的一直留着。
-//
-// 语义：一个节点被查看之后，只在最近 STICKY_TURNS(3) 轮里还算新鲜；会话往前走
-// 一轮它就更旧一点，走够 3 轮就撤下来。**edit 过的例外——一直留着。**
-// 没有这条的话图只进不出，翻过去的东西全赖在屏幕上。
-;(function viewedFadesEditedStays() {
-  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 1, gather: null }
-  const g = side.emptyGraph()
-  const mk = (id, sym) => {
-    side.addNode(g, { id, symbol: sym, file: 'a/m.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
-    mark(side, g, id, { session: true })
-  }
-  mk('a/m.js::edited', 'edited')
-  mk('a/m.js::viewed', 'viewed')
-  mk('a/m.js::pinned', 'pinned')
-  mark(side, g, 'a/m.js::pinned', { pinned: true })
-  g.rootId = 'a/m.js::edited'
-  side.addEdge(g, 'a/m.js::edited', 'a/m.js::viewed', ['call'])
-  Object.assign(side.shared, base, {
-    graph: g,
-    trace: {
-      'a/m.js::edited': { id: 'a/m.js::edited', firstTurn: 1, lastTurn: 1, state: 'edited', events: [{ turn: 1, verb: 'edit', onSurface: true }] },
-      'a/m.js::viewed': { id: 'a/m.js::viewed', firstTurn: 1, lastTurn: 1, state: 'viewed', events: [{ turn: 1, verb: 'read', onSurface: true }] },
-    },
-  })
-  const visible = side.require_('dsh-cdd-lens/graph/visible').visible
-  const show = () => Object.keys(visible(side.shared.graph)).map(k => k.split('::')[1]).sort().join(',')
-  const at1 = show()
-  side.shared.turn = 4
-  const at4 = show()
-
-  const ok = at1 === 'edited,pinned,viewed'
-    && at4 === 'edited,pinned'
-  console.log((ok ? '✓ ' : '✗ ') + '过期与edit'.padEnd(12)
-    + ' 第1轮[' + at1 + '] → 第4轮[' + at4 + '] · edit 一直在 · 看过的撤下 · pinned 一直在')
-  if (!ok) bad += 1
-})()
-
-// 用户按钮比默认信息高：edit tree 里点展开，展开出来的节点不许再被树/过期过滤。
-;(function editTreeKeepsExpandedPeers() {
-  const g = side.emptyGraph()
-  side.addNode(g, { id: 'a/edit.js::root', symbol: 'root', file: 'a/edit.js', kind: 'function',
-    members: 0, line_start: 1, line_end: 9 })
-  side.addNode(g, { id: 'a/edit.js::peer', symbol: 'peer', file: 'a/edit.js', kind: 'function',
-    members: 0, line_start: 11, line_end: 19 })
-  side.addEdge(g, 'a/edit.js::root', 'a/edit.js::peer', ['call'])
-  g.rootId = 'a/edit.js::root'
-  mark(side, g, 'a/edit.js::root', { session: true, open: { 'down:call': true } })
-  mark(side, g, 'a/edit.js::peer', { explored: true })
-  Object.assign(side.shared, {
-    graph: g,
-    trace: {
-      'a/edit.js::root': { id: 'a/edit.js::root', firstTurn: 1, lastTurn: 1, state: 'edited',
-        events: [{ turn: 1, verb: 'edit', onSurface: true }] },
-      'a/edit.js::peer': { id: 'a/edit.js::peer', firstTurn: 1, lastTurn: 1, state: 'viewed',
-        events: [{ turn: 1, verb: 'read', onSurface: true }] },
-    },
-    turn: 8,
-    selected: null,
-    edgeFocus: null,
-    nodePositions: {},
-    pins: {},
-    gather: null,
-    skin: 'auto',
-    wireMode: 'all',
-    treeMode: 'edit',
-  })
-  const visible = side.require_('dsh-cdd-lens/graph/visible').visible
-  const show = () => Object.keys(visible(side.shared.graph)).map(k => k.split('::')[1]).sort().join(',')
-  const editShown = show()
-  const editDrawn = side.layout(g, undefined, 900)
-  side.uiOf(g, 'a/edit.js::root').open['down:call'] = false
-  const closedShown = show()
-  const closedDrawn = side.layout(g, undefined, 900)
-  const ok = editShown === 'peer,root'
-    && editDrawn.nodes.length === 2 && (editDrawn.wires || []).length === 1
-    && closedShown === 'root'
-    && closedDrawn.nodes.length === 1 && (closedDrawn.wires || []).length === 0
-  console.log((ok ? '✓ ' : '✗ ') + '按钮优先'.padEnd(12)
-    + ' edit[' + editShown + '] 线 ' + (editDrawn.wires || []).length
-    + ' · 折叠[' + closedShown + '] 线 ' + (closedDrawn.wires || []).length
-    + ' · 展开不被默认过滤')
-  if (!ok) bad += 1
-  side.shared.treeMode = 'all'
-})()
+// 过期、edit 一直留、pin 不减、按钮只按 /screen 出节点——这些契约由计算单元测试
+// tests/compute-screen.js 覆盖（屏幕上有什么只由后端 src/compute 决定，布局只排版）。
 
 // 展开不许跳变：点开上/下展开时，已经画在屏幕上的节点一个像素都不许动。
 //
@@ -655,178 +523,51 @@ function expandIsFullyLogged() {
   if (!ok) bad += 1
 })()
 
-// focus 建图（搜索/目录入口）过去从不开口要 /chain，图全部无层，flow 只能堆
-// 进尾列。这里用桩 fetch 模拟 /neighbors 与 /chain，验证 focus 之后节点带层、
-// flow 皮肤没有「未入链」列。这个用例是异步的，所以总结等它。
-;(function focusSeatsLayers() {
+// 搜索 / 目录点中一个 anchor = pin 它：只改视图状态，再按 /screen 返回的屏幕画。
+// 用桩 fetch 模拟 /screen：验证发出去的状态里带 pin（记下第几轮），画出来的节点数、
+// 线数就是 screen 给的，旁边的 seed 堆在旁边。这个用例是异步的，所以总结等它。
+;(function focusPinsThenDrawsScreen() {
   const finish = () => {
     process.exitCode = bad === 0 ? 0 : 1
     console.log(bad === 0 ? '\n三条都过' : '\n' + bad + '/' + CASES.length + ' 个用例违规')
   }
-  let expandCalls = 0
-  B.ctx.fetch = url => {
+  const sent = []
+  const anchor = id => ({ id, symbol: id.split('::')[1], file: id.split('::')[0], symbol_type: 'function', line_start: 1, line_end: 9 })
+  B.ctx.fetch = (url, init) => {
     const u = String(url)
-    if (u.indexOf('/expand') >= 0) {
-      expandCalls += 1
-      const peers = u.indexOf('dir=up') >= 0 ? [] : [
-        { id: 'a/m.js::g', symbol: 'g', file: 'a/m.js', kind: 'function', members: 0,
-          line_start: 11, line_end: 19,
-          peerCounts: { call: { up: 1, down: 0 } }, types: ['call'] },
-      ]
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ peers: peers, count: peers.length, stamp: 'x' }) })
+    if (u.indexOf('/screen') < 0) return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    const state = JSON.parse(init.body).state
+    sent.push(state)
+    const body = {
+      turn: 4, turns: [4], tree: state.tree, rels: state.rels, pinned: state.pins.map(p => p.id),
+      seeds: 1, edited: [], counter: {}, faded: 0,
+      nodes: ['a/m.js::f', 'a/m.js::g'], side: ['a/m.js::lonely'],
+      edges: [{ from: 'a/m.js::f', to: 'a/m.js::g', type: 'call' }, { from: 'a/m.js::f', to: 'a/m.js::g', type: 'dataflow' }],
+      buttons: {},
+      anchors: { 'a/m.js::f': anchor('a/m.js::f'), 'a/m.js::g': anchor('a/m.js::g'), 'a/m.js::lonely': anchor('a/m.js::lonely') },
+      expansions: [], trees: {},
+      treeTotals: { degree1: { nodes: 2, edges: 2, side: 1 }, degree2: { nodes: 2, edges: 2, side: 1 }, edit: { nodes: 0, edges: 0, side: 3 } },
+      violations: [], stamp: 's',
     }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
   }
+  Object.assign(side.shared, { view: null, screen: null, trace: {}, turn: 4, selected: null, nodePositions: {}, gather: null })
   const engine = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
-  Object.assign(side.shared, { trace: {}, turn: 4, selected: null, edgeFocus: null,
-    nodePositions: {}, pins: {}, gather: null, skin: 'auto' })
-  engine.focus({ id: 'a/m.js::f', symbol: 'f', file: 'a/m.js', kind: 'function', members: 0, start: 1, end: 9 })
-    .then(() => {
-      const g = side.shared.graph
-      // /chain 已删：层由布局自己算，不再是服务端送下来的。
-      // focus 现在只做一件事——按 call 关系把上下两层拉进图。
-      const m = side.layout(g, undefined, 900)
-      const ok = expandCalls === 2 && m.nodes.length === 2
-      console.log((ok ? '✓ ' : '✗ ') + 'focus 建图'.padEnd(12)
-        + ' expand 调用 ' + expandCalls + ' · 节点 ' + m.nodes.length + '/2')
-      if (!ok) bad += 1
-      return expandIsFullyLogged().then(nodeExpansionContract).then(finish)
-    })
-    .catch(error => {
-      console.log('✗ focus 盖层    抛错: ' + String(error && error.message || error))
-      bad += 1
-      finish()
-    })
-
-  function nodeExpansionContract() {
-    const calls = []
-    B.ctx.fetch = url => {
-      const u = String(url)
-      calls.push(u)
-      // 真实 worker 按 rel 过滤后返回（relPeers）；桩也照做，否则测的不是代码。
-      const PARSE = { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0,
-        line_start: 30, line_end: 44, peerCounts: { call: { up: 1, down: 0 } } }
-      const LOAD = { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0,
-        line_start: 10, line_end: 28, peerCounts: { dataflow: { up: 1, down: 0 } } }
-      const HANDLE = { id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function', members: 0,
-        line_start: 8, line_end: 18, peerCounts: { call: { up: 0, down: 1 } } }
-      const MAIN = { id: 'pkg/cli.js::main', symbol: 'main', file: 'pkg/cli.js', kind: 'function', members: 0,
-        line_start: 50, line_end: 68, peerCounts: { dispatch: { up: 0, down: 1 } } }
-      if (u.indexOf('/expand') >= 0) {
-        const dir = u.indexOf('dir=up') >= 0 ? 'up' : 'down'
-        const rel = (u.match(/rel=([a-z]+)/) || [])[1] || 'call'
-        const table = {
-          'down:call': [PARSE], 'down:dataflow': [LOAD],
-          'up:call': [HANDLE], 'up:dispatch': [MAIN],
-        }
-        const peers = table[dir + ':' + rel] || []
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          id: 'pkg/core.js::root', direction: dir, relation: rel, peers: peers,
-          count: peers.length, stamp: 'expand-contract',
-        }) })
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-    }
-
-    const g = side.emptyGraph()
-    side.addNode(g, {
-      id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function',
-      members: 0, line_start: 1, line_end: 20,
-      peerCounts: { call: { up: 2, down: 2 }, dataflow: { up: 0, down: 1 }, dispatch: { up: 1, down: 0 } },
-    })
-    g.rootId = 'pkg/core.js::root'
-    Object.assign(side.shared, {
-      graph: g, trace: {}, turn: 1, selected: null, edgeFocus: null,
-      nodePositions: {}, pins: {}, gather: null, skin: 'auto', graphStamp: 'expand-contract',
-    })
-    const engine2 = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
-    // 「有几个关系挂几个」：call 的上下、dataflow 的下、dispatch 的上，各按一次。
-    return engine2.expand('pkg/core.js::root', 'down', null, 'call')
-      .then(() => engine2.expand('pkg/core.js::root', 'up', null, 'call'))
-      .then(() => engine2.expand('pkg/core.js::root', 'down', null, 'dataflow'))
-      .then(() => engine2.expand('pkg/core.js::root', 'up', null, 'dispatch'))
-      .then(() => {
-        const ids = Object.keys(side.shared.graph.nodes)
-        const edgeKey = e => e.from + '->' + e.to + ':' + (e.types || []).join(',')
-        const edges = side.shared.graph.edges.map(edgeKey).sort()
-        // 一次展开只走一个关系，所以每条边就是那一条关系自己的类型。
-        // 四个按钮各按一次 → 四个节点、四条边，一根不多一根不少。
-        const expectedEdges = [
-          'pkg/api.js::handle->pkg/core.js::root:call',
-          'pkg/cli.js::main->pkg/core.js::root:dispatch',
-          'pkg/core.js::root->pkg/core.js::parse:call',
-          'pkg/core.js::root->pkg/io.js::load:dataflow',
-        ].sort()
-        const expectedIds = [
-          'pkg/api.js::handle',
-          'pkg/cli.js::main',
-          'pkg/core.js::parse',
-          'pkg/core.js::root',
-          'pkg/io.js::load',
-        ].sort()
-        const root = side.shared.graph.nodes['pkg/core.js::root']
-        const rootUI = side.require_('dsh-cdd-lens/graph/model').uiOf(side.shared.graph, 'pkg/core.js::root')
-        side.shared.wireMode = 'tree'
-        side.shared.selected = null
-        const drawn = side.layout(side.shared.graph, { call: true, dataflow: true, dispatch: true }, 900)
-        const ok = calls.filter(u => u.indexOf('/expand') >= 0).length === 4
-          && root.peerCounts.call.up === 2 && root.peerCounts.call.down === 2
-          && ids.sort().join('|') === expectedIds.join('|')
-          && edges.join('|') === expectedEdges.join('|')
-          && rootUI.open['up:call'] === true && rootUI.open['down:call'] === true
-          && drawn.wires.length === 4
-        console.log((ok ? '✓ ' : '✗ ') + '节点展开'.padEnd(12)
-          + ' 上游 2/2 · 下游 2/2 · 边方向 ' + (edges.join('|') === expectedEdges.join('|') ? '✓' : '✗')
-          + ' · 画线 ' + drawn.wires.length + '/4')
-        if (!ok) bad += 1
-        return nodeExpansionRefreshesShortDirection()
-      })
-  }
-
-  function nodeExpansionRefreshesShortDirection() {
-    const calls = []
-    B.ctx.fetch = url => {
-      const u = String(url)
-      calls.push(u)
-      if (u.indexOf('/expand') >= 0 && u.indexOf('dir=down') >= 0) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, line_start: 1, line_end: 20, up: 1, down: 2 },
-          peers: [
-            { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0, line_start: 30, line_end: 44, peerCounts: { call: { up: 1, down: 0 } }, types: ['call'] },
-            { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0, line_start: 10, line_end: 28, peerCounts: { dataflow: { up: 1, down: 0 } }, types: ['dataflow'] },
-          ],
-          stamp: 'expand-contract',
-        }) })
-      }
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
-    }
-
-    const g = side.emptyGraph()
-    side.addNode(g, {
-      id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function',
-      members: 0, line_start: 1, line_end: 20, peerCounts: { call: { up: 1, down: 2 } },
-    })
-    side.addNode(g, {
-      id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function',
-      members: 0, line_start: 8, line_end: 18, peerCounts: { call: { up: 0, down: 1 } },
-    })
-    side.addEdge(g, 'pkg/api.js::handle', 'pkg/core.js::root', ['call'])
-    g.rootId = 'pkg/core.js::root'
-    side.require_('dsh-cdd-lens/graph/model').uiOf(g, 'pkg/core.js::root').open['down:call'] = true
-    Object.assign(side.shared, {
-      graph: g, trace: {}, turn: 1, selected: null, edgeFocus: null,
-      nodePositions: {}, pins: {}, gather: null, skin: 'auto', graphStamp: 'expand-contract',
-    })
-    const engine3 = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
-    return engine3.expand('pkg/core.js::root', 'down').then(() => {
-      const fetched = calls.filter(u => u.indexOf('/expand') >= 0 && u.indexOf('dir=down') >= 0).length
-      const edges = side.shared.graph.edges
-      const hasDown = edges.some(e => e.from === 'pkg/core.js::root' && e.to === 'pkg/core.js::parse')
-        && edges.some(e => e.from === 'pkg/core.js::root' && e.to === 'pkg/io.js::load')
-      const ok = fetched === 0 && !hasDown
-      console.log((ok ? '✓ ' : '✗ ') + '展开补齐'.padEnd(12)
-        + ' 已展开不再请求 · 反向边不冒充下游 · 请求 ' + fetched + ' · 假下游 ' + (hasDown ? '有' : '无'))
-      if (!ok) bad += 1
-    })
-  }
+  engine.focus(anchor('a/m.js::f')).then(() => {
+    // 屏幕已经由 applyScreen 写好，这里直接调原始 layout，不再补夹具。
+    const m = B.require_('dsh-cdd-lens/layout/layout').layout(side.shared.graph, undefined, 900)
+    const last = sent[sent.length - 1]
+    const pinned = last !== undefined && last.pins.some(p => p.id === 'a/m.js::f' && p.at === 4)
+    const sideRec = m.nodes.find(n => n.id === 'a/m.js::lonely')
+    const ok = pinned && m.nodes.length === 3 && (m.wires || []).length === 2 && sideRec !== undefined && sideRec.side === true
+    console.log((ok ? '✓ ' : '✗ ') + 'focus=pin'.padEnd(12)
+      + ' 发出 pin ' + (pinned ? '✓' : '✗') + ' · 节点 ' + m.nodes.length + '/3 · 线 ' + (m.wires || []).length + '/2'
+      + ' · 旁边 ' + (sideRec && sideRec.side ? '✓' : '✗'))
+    if (!ok) bad += 1
+    finish()
+  }).catch((error) => {
+    console.log('✗ focus=pin     抛错: ' + String(error && error.message || error))
+    bad += 1
+    finish()
+  })
 })()

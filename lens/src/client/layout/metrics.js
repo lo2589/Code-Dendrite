@@ -206,7 +206,7 @@ window.__ModuleLoader__.load({
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.kind === 'class' || node.members > 0 ? 142 : 96
+        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
         var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
         var wrapped = (lines - 1) * CARD.symLine

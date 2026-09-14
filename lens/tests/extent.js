@@ -52,7 +52,8 @@ function stubEnv() {
 
 const B = stubEnv(); vm.runInContext(fs.readFileSync('lib/client.js', 'utf8'), B.ctx, { filename: 'built.js' })
 const side = {
-  layout: B.require_('dsh-cdd-lens/layout/layout').layout,
+  // layout 只画 shared.screen：先按手搭的图补一份（见 screen-fixture.cjs）。
+  layout: require('./screen-fixture.cjs').withScreen(B.require_('dsh-cdd-lens/layout/layout').layout, B.require_('dsh-cdd-lens/state/store').shared),
   shared: B.require_('dsh-cdd-lens/state/store').shared,
   emptyGraph: B.require_('dsh-cdd-lens/graph/model').emptyGraph,
   addNode: B.require_('dsh-cdd-lens/graph/model').addNode,

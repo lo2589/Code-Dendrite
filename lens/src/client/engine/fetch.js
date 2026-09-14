@@ -39,34 +39,11 @@ window.__ModuleLoader__.load({
     function fetchMethods(ctx, engine, session, params) {
       return {
         /**
-         * Re-check every node on the graph against the index as it stands NOW.
-         *
-         * Triggered when any answer carries a stamp different from the one the
-         * graph was seated against: anchors the rebuild dropped are removed
-         * (not hidden — the code they named is gone), survivors get their
-         * counts refreshed, and the graph takes the new stamp. Layers are
-         * recomputed by the layout itself, so nothing here re-seats anything.
+         * 索引在图画出来之后重建过：屏幕整份重算（/screen 用新索引算节点、边、按钮）。
+         * 不在前端逐个删改节点——屏幕上有什么只由计算单元决定。
          */
         revalidate: function () {
-          if (shared.revalidating === true) return Promise.resolve()
-          var ids = shared.graph.order.slice()
-          if (ids.length === 0) return Promise.resolve()
-          shared.revalidating = true
-          return apiPost('/recheck', params({}), { ids: ids }).then(function (body) {
-            body.nodes.forEach(function (n) {
-              if (n.missing === true) { removeNode(shared.graph, n.id); return }
-              var node = shared.graph.nodes[n.id]
-              // node 就是 anchor：整条替换，不留旧字段。
-              if (node !== undefined) shared.graph.nodes[n.id] = n
-            })
-            if (body.stamp !== undefined) shared.graphStamp = body.stamp
-            shared.revalidating = false
-            publish()
-            return body
-          }).catch(function (error) {
-            shared.revalidating = false
-            throw error
-          })
+          return engine.refresh()
         },
 
         context: function () {

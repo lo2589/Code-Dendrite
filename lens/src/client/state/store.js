@@ -29,12 +29,10 @@ window.__ModuleLoader__.load({
       selected: null,
       focused: null,
       edgeFocus: null,
-      // 看哪棵树（规则文档 §1.3）：all 不套树，其余是四棵树之一。
-      // 选择器在工具栏；这个值决定布局把哪些节点放上屏幕。
-      treeMode: 'all',
-      // 画线模式。默认 'all' 画全部关系边——默认走「主干」的话，没选中任何节点时
-      // 画面上可能一根线都没有，看起来就是「图坏了」。工具栏上仍可切回主干。
-      wireMode: 'all',
+      // 视图状态 { tree, rels, pins, opens }：按钮只改它（engine/screen.js）。
+      view: null,
+      // /screen 的结果：屏幕上有什么只由它决定（后端计算单元 src/compute）。
+      screen: null,
       // What a click on a wire lit up: the anchors and the wires that
       // belong to the same run of relations. A highlight, not a layout —
       // nothing moves, so you can see what you clicked in the place you

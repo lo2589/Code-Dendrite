@@ -4,8 +4,8 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_36_SCREEN_COMPUTE_UNIT_001
-// parts: 44
+// build: V1_37_SCREEN_FRONTEND_001
+// parts: 41
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
 //
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_36_SCREEN_COMPUTE_UNIT_001'
+    var BUILD = 'V1_37_SCREEN_FRONTEND_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -351,12 +351,10 @@ window.__ModuleLoader__.load({
       selected: null,
       focused: null,
       edgeFocus: null,
-      // 看哪棵树（规则文档 §1.3）：all 不套树，其余是四棵树之一。
-      // 选择器在工具栏；这个值决定布局把哪些节点放上屏幕。
-      treeMode: 'all',
-      // 画线模式。默认 'all' 画全部关系边——默认走「主干」的话，没选中任何节点时
-      // 画面上可能一根线都没有，看起来就是「图坏了」。工具栏上仍可切回主干。
-      wireMode: 'all',
+      // 视图状态 { tree, rels, pins, opens }：按钮只改它（engine/screen.js）。
+      view: null,
+      // /screen 的结果：屏幕上有什么只由它决定（后端计算单元 src/compute）。
+      screen: null,
       // What a click on a wire lit up: the anchors and the wires that
       // belong to the same run of relations. A highlight, not a layout —
       // nothing moves, so you can see what you clicked in the place you
@@ -606,209 +604,6 @@ window.__ModuleLoader__.load({
      */
 
     module.exports = { shared, publish, requestViewport, useShared, useRightInset, useOverlapInset }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Which anchors stay on screen: pins and recency.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/graph/visible',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-    var __graph_model = require('dsh-cdd-lens/graph/model')
-    var uiOf = __graph_model.uiOf
-
-    var STICKY_TURNS = 3
-
-    function stickyByRecency(id) {
-      var record = shared.trace[id]
-      if (record === undefined) return false
-      return shared.turn - record.lastTurn < STICKY_TURNS
-    }
-
-    /**
-     * 这个节点是 edit 过的吗——edit 的一直留着，永远不消失。
-     *
-     * 两条判据，任一条成立就算：trace 记录说这次会话动过它的代码（state 是
-     * edited / working，或有过 verb='edit' 的事件），或者构图时打过 edited 标记。
-     */
-    function editedNode(graph, id) {
-      var record = shared.trace[id]
-      if (record !== undefined) {
-        if (record.state === 'edited' || record.state === 'working') return true
-        if (Array.isArray(record.events)) {
-          for (var i = 0; i < record.events.length; i += 1) {
-            if (record.events[i].verb === 'edit') return true
-          }
-        }
-      }
-      var ui = graph.ui[id]
-      return ui !== undefined && ui.edited === true
-    }
-
-    /**
-     * 看过的节点什么时候撤下。
-     *
-     * 一个节点被查看之后，只在最近 STICKY_TURNS 轮里还算新鲜；会话往前走一轮它
-     * 就更旧一点，走够 STICKY_TURNS 轮就撤下来。**edit 过的例外——一直留着。**
-     *
-     * 没有这个的话图只进不出：翻过去的东西全赖在屏幕上，越看越满。
-     */
-    function fadedOut(graph, id) {
-      if (editedNode(graph, id)) return false
-      var ui = uiOf(graph, id)
-      if (ui === null) return true
-      if (ui.pinned === true) return false
-      if (hasUserOpen(ui)) return false
-      if (id === shared.selected) return false
-      // 只有**被查看过**的节点才谈得上变旧。刚展开出来的、会话碰过的、
-      // 布局借来的桥，都还没有「看过多久」这回事，不许被滤掉——否则一展开
-      // 新节点就当场消失。
-      var record = shared.trace[id]
-      if (record !== undefined) return shared.turn - record.lastTurn >= STICKY_TURNS
-      if (typeof ui.viewedAt === 'number') return shared.turn - ui.viewedAt >= STICKY_TURNS
-      return false
-    }
-
-    function hasUserOpen(ui) {
-      var keys = Object.keys(ui.open || {})
-      for (var i = 0; i < keys.length; i += 1) {
-        if (keys[i].indexOf('auto') === 0) continue
-        if (ui.open[keys[i]] === true) return true
-      }
-      return false
-    }
-
-    function userExplicit(graph, id) {
-      var ui = uiOf(graph, id)
-      if (ui === null) return false
-      return ui.pinned === true || hasUserOpen(ui) || id === shared.selected
-    }
-
-
-    /**
-     * 当前选的是哪棵树，它只要哪些节点（规则文档 §1.3）。
-     *
-     *   all      不套树，图里现有的全画
-     *   anchor   单个 anchor 周围**直接相连**的邻居，中间不插点
-     *   degree1  1 度树 = 直接树：seed 之间直接有边，中间不插点
-     *   degree2  2 度树：允许一个中间点把两个 seed 接起来
-     *   edit     edit 树：只管这次会话 edit 过的那批 anchor
-     *
-     * @returns 允许上屏的 id 集合；treeMode 为 all 时返回 null（表示不限制）。
-     */
-    function treeFilter(graph, modeOverride) {
-      var mode = modeOverride || shared.treeMode || 'all'
-      if (mode === 'all') return null
-      var allow = {}
-      var edgeTouches = function (id, keep) {
-        allow[id] = true
-        graph.edges.forEach(function (e) {
-          if (e.from !== id && e.to !== id) return
-          allow[e.from] = true
-          allow[e.to] = true
-          if (keep !== undefined) keep[e.from] = true
-        })
-      }
-      if (mode === 'edit') {
-        graph.order.forEach(function (id) {
-          if (editedNode(graph, id)) allow[id] = true
-        })
-        return allow
-      }
-      if (mode === 'anchor') {
-        var focus = shared.focused || shared.selected || graph.rootId
-        if (focus !== null && graph.nodes[focus] !== undefined) edgeTouches(focus)
-        return allow
-      }
-      // degree1 / degree2：先把会话碰过的 anchor 当 seed，再按「中间点」放宽。
-      //   1 度树：seed 之间的直接边，中间不许插点 —— 所以只有 seed 和直接相连的 seed。
-      //   2 度树：再多允许一个中间点（非 seed）把两个 seed 接起来。
-      var seed = {}
-      graph.order.forEach(function (id) {
-        var ui = uiOf(graph, id)
-        if (ui === null) return
-        if (ui.session || ui.explored || editedNode(graph, id)) seed[id] = true
-      })
-      Object.keys(seed).forEach(function (id) { allow[id] = true })
-      graph.edges.forEach(function (e) {
-        var a = seed[e.from] === true, b = seed[e.to] === true
-        if (a && b) { allow[e.from] = true; allow[e.to] = true; return }
-        if (mode !== 'degree2') return
-        // 中间点：一端是 seed，另一端也通向另一个 seed。
-        if (a || b) {
-          allow[e.from] = true
-          allow[e.to] = true
-        }
-      })
-      return allow
-    }
-
-    function visibleForMode(graph, modeOverride) {
-      var roots = []
-      var root = function (id, force) {
-        roots.push({ id: id, force: force === true })
-      }
-      if (graph.rootId !== null && graph.nodes[graph.rootId] !== undefined) root(graph.rootId, userExplicit(graph, graph.rootId))
-      graph.order.forEach(function (id) {
-        var ui = uiOf(graph, id)
-        if (ui === null) return
-        // 会话碰过的 anchor 是根：agent 读过/改过它，它就该在图上，不需要谁先按
-        // 一下展开才出现。以前这一步只认 pin / island / 最近碰过，于是刚 ingest
-        // 出来的图只剩一个根节点，连线自然一根都没有。
-        if (ui.session || ui.island || stickyByRecency(id) || editedNode(graph, id)) root(id, false)
-        if (userExplicit(graph, id)) root(id, true)
-      })
-      var treeAllow = treeFilter(graph, modeOverride)
-      var seen = {}
-      var stack = roots.slice()
-      while (stack.length > 0) {
-        var item = stack.pop()
-        var id = item.id
-        var force = item.force === true
-        if (seen[id]) continue
-        if (!force && fadedOut(graph, id)) continue
-        if (treeAllow !== null && treeAllow[id] !== true && !force && !userExplicit(graph, id)) continue
-        seen[id] = true
-        if (graph.nodes[id] === undefined) continue
-        var ui = uiOf(graph, id)
-        if (ui === null) continue
-        graph.edges.forEach(function (e) {
-          // 一条边算不算「打开」：这条边的关系类型对应的那个按钮开没开。
-          // 展开状态按「方向:关系」存，所以这里要看边自己的类型，不能只看方向——
-          // 点开 call 的 ↓ 不该把 inherit 的 ↓ 也点亮。
-          //
-          // `always` 边连的是会话自己的 anchor，不管有没有人按过都要显示。
-          // `auto` 前缀是 gather 选中时自动拉进来的：要画，但不是按钮的状态。
-          var types = e.types || ['call']
-          if (e.from === id) {
-            if (e.always) { stack.push({ id: e.to, force: false }); return }
-            var userDown = types.some(function (t) { return ui.open['down:' + t] === true })
-            var autoDown = types.some(function (t) { return ui.open['autodown:' + t] === true })
-            if (userDown || autoDown) stack.push({ id: e.to, force: force || userDown })
-          }
-          if (e.to === id) {
-            if (e.always) { stack.push({ id: e.from, force: false }); return }
-            var userUp = types.some(function (t) { return ui.open['up:' + t] === true })
-            var autoUp = types.some(function (t) { return ui.open['autoup:' + t] === true })
-            if (userUp || autoUp) stack.push({ id: e.from, force: force || userUp })
-          }
-        })
-      }
-      return seen
-    }
-
-    function visible(graph) {
-      return visibleForMode(graph)
-    }
-
-    module.exports = { STICKY_TURNS, stickyByRecency, editedNode, fadedOut, treeFilter, visible, visibleForMode }
     return module.exports
   },
 })
@@ -1190,34 +985,11 @@ window.__ModuleLoader__.load({
     function fetchMethods(ctx, engine, session, params) {
       return {
         /**
-         * Re-check every node on the graph against the index as it stands NOW.
-         *
-         * Triggered when any answer carries a stamp different from the one the
-         * graph was seated against: anchors the rebuild dropped are removed
-         * (not hidden — the code they named is gone), survivors get their
-         * counts refreshed, and the graph takes the new stamp. Layers are
-         * recomputed by the layout itself, so nothing here re-seats anything.
+         * 索引在图画出来之后重建过：屏幕整份重算（/screen 用新索引算节点、边、按钮）。
+         * 不在前端逐个删改节点——屏幕上有什么只由计算单元决定。
          */
         revalidate: function () {
-          if (shared.revalidating === true) return Promise.resolve()
-          var ids = shared.graph.order.slice()
-          if (ids.length === 0) return Promise.resolve()
-          shared.revalidating = true
-          return apiPost('/recheck', params({}), { ids: ids }).then(function (body) {
-            body.nodes.forEach(function (n) {
-              if (n.missing === true) { removeNode(shared.graph, n.id); return }
-              var node = shared.graph.nodes[n.id]
-              // node 就是 anchor：整条替换，不留旧字段。
-              if (node !== undefined) shared.graph.nodes[n.id] = n
-            })
-            if (body.stamp !== undefined) shared.graphStamp = body.stamp
-            shared.revalidating = false
-            publish()
-            return body
-          }).catch(function (error) {
-            shared.revalidating = false
-            throw error
-          })
+          return engine.refresh()
         },
 
         context: function () {
@@ -1304,7 +1076,11 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — Engine methods that grow and shrink the graph.
+// dsh-cdd-lens — 类成员展开。
+//
+// 只展开卡片里的成员列表，不增删图上的节点：屏幕上有哪些节点只由 /screen 决定
+// （见 engine/screen.js）。以前这里的 focus / expand / collapse / walk 各自往图里
+// 加节点加边，是「按钮说 N、画出来不是 N」的来源之一，已全部移走。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -1316,217 +1092,20 @@ window.__ModuleLoader__.load({
     var __runtime_api = require('dsh-cdd-lens/runtime/api')
     var api = __runtime_api.api
     var __graph_model = require('dsh-cdd-lens/graph/model')
-    var addEdge = __graph_model.addEdge
-    var addNode = __graph_model.addNode
-    var emptyGraph = __graph_model.emptyGraph
     var uiOf = __graph_model.uiOf
-    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
-    var note = __runtime_debug.note
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
-    var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
 
     /**
-     * Walking the graph: what is on it and how much of it.
-     *
      * @param ctx - the client context the views were mounted with.
-     * @param engine - the engine being assembled; methods call each other
-     *   through it, so it is passed in rather than closed over.
+     * @param engine - the engine being assembled.
      * @param session - the current session id, or null.
      * @param params - query parameters for one request.
      * @returns the methods this file contributes.
      */
     function exploreMethods(ctx, engine, session, params) {
       return {
-        /**
-         * Make an anchor the exploration root, replacing whatever was there.
-         *
-         * Also asks both views to show the graph: picking a function in the
-         * directory is a request to SEE it, and leaving the panel on the
-         * directory tab builds the graph where nobody can see it.
-         */
-        focus: function (anchor) {
-          shared.wantGraph = (shared.wantGraph || 0) + 1
-          shared.dockOpen = true
-          shared.edgeFocus = null
-          var graph = emptyGraph()
-          addNode(graph, anchor)
-          graph.rootId = anchor.id
-          shared.graph = graph
-          shared.selected = anchor.id
-          requestViewport(anchor.id, 'fit')
-          publish()
-          return engine.expand(anchor.id, 'down', null, 'call').then(function () {
-            return engine.expand(anchor.id, 'up', null, 'call')
-          }).then(function () {
-            // 层不再问服务端要了：layout/sugiyama 从图自己算。这里只把视图摆正。
-            requestViewport(anchor.id, 'fit')
-            publish()
-            return engine.source(anchor.id)
-          })
-        },
-        /** Add an anchor beside the current exploration without resetting it. */
-        add: function (anchor) {
-          // 不重新分层：分层是整图的事，每加一个 anchor 就重排会把用户已经摆好
-          // 的图重洗一遍——那正是「加一个却全变了」的来源。下次 focus 或会话
-          // ingest 会一起摆；在那之前按当前图重画即可。
-          addNode(shared.graph, anchor)
-          if (shared.graph.rootId === null) shared.graph.rootId = anchor.id
-          shared.selected = anchor.id
-          publish()
-          return engine.source(anchor.id)
-        },
-        /**
-         * 展开一个关系的一个方向。
-         *
-         * 按钮是**按关系分开**的：一个 anchor 有几个关系就挂几个按钮，各带各的
-         * 数字、各是各的颜色（见规则文档 §2.3）。所以状态也按关系分开存：
-         * `ui.open['down:call']`、`ui.open['up:inherit']`，互不影响——点开 call
-         * 的 ↓ 不会把 inherit 的 ↓ 也点亮。
-         *
-         * `auto` 是 gather 在选中节点时替你把邻居拉进来的那条路。它**不许**写
-         * `ui.open`——那是按钮的状态。以前它写了，于是你点中一个节点，按钮就已经
-         * 是"按下"的样子、标题写着"收起"；你第一次按 ↓ 其实是在把它**收起来**。
-         * 自动拉进来的东西仍然要画出来，所以走独立的 `autoDown`/`autoUp` 标记。
-         *
-         * @param direction - 'up' | 'down'。
-         * @param auto - true 表示这次不是用户按的。
-         * @param relation - 'call' | 'dataflow' | 'inherit' | 'dispatch' | 'impact'。
-         */
-        expand: function (id, direction, auto, relation) {
-          var rel = relation || 'call'
-          var t0 = Date.now()
-          var node = shared.graph.nodes[id]
-          var ui = uiOf(shared.graph, id)
-          note('expand', 'start ' + direction + ':' + rel + ' 节点=' + String(id).split('::').pop()
-            + ' 存在=' + (node !== undefined) + ' ui=' + (ui !== null))
-          if (node === undefined || ui === null) {
-            note('expand', 'ABORT 节点或 ui 不存在 —— 按钮指向了一个已经不在图上的 anchor')
-            return Promise.resolve()
-          }
-          var slot = direction + ':' + rel
-          var autoSlot = 'auto' + direction + ':' + rel
-          if (!auto) {
-            shared.selected = id
-            // 展开锁定：只在被展开的节点已经不在视野里时才挪视口。
-            requestViewport(id, 'ensure')
-          }
-          if (ui.open[slot] === true) {
-            note('expand', 'SKIP 这个方向已经开着（' + slot + '）')
-            return Promise.resolve()
-          }
-          if (ui.open[autoSlot] === true) {
-            if (!auto) {
-              ui.open[slot] = true
-              ui.open[autoSlot] = false
-              lightNeighbourhood(id)
-              publish()
-              note('expand', 'PROMOTE 自动展开状态为用户打开（' + slot + '）')
-              return Promise.resolve()
-            }
-            note('expand', 'SKIP 这个方向已经自动开着（' + autoSlot + '）')
-            return Promise.resolve()
-          }
-          // 桥接点只解释连接，不参与继续展开：它是布局借来的中间点，
-          // 不是 agent 打开过的 anchor，展开它等于替用户往下走。
-          if (ui.synthetic === true || ui.bridge === true) {
-            note('expand', 'SKIP 桥接点不许展开')
-            return Promise.resolve()
-          }
-          ui.loading = slot
-          publish()
-          note('expand', '请求 /expand ' + direction + ':' + rel)
-          return api('/expand', params({ id: id, dir: direction, rel: rel })).then(function (body) {
-            note('expand', '返回 peers=' + ((body.peers || []).length) + ' (' + (Date.now() - t0) + 'ms)')
-            var fresh = 0, wired = 0
-            body.peers.forEach(function (peer) {
-              var known = shared.graph.nodes[peer.id] !== undefined
-              addNode(shared.graph, peer)
-              if (!known) fresh += 1
-              var peerUI = uiOf(shared.graph, peer.id)
-              if (peerUI !== null) peerUI.explored = true
-              var types = [rel]
-              if (direction === 'down') addEdge(shared.graph, id, peer.id, types)
-              else addEdge(shared.graph, peer.id, id, types)
-              wired += 1
-            })
-            ui.open[auto ? autoSlot : slot] = true
-            ui.loading = null
-            // 点亮刚展开的这一团：哪些是刚出来的，一眼能看清。
-            lightNeighbourhood(id)
-            publish()
-            note('expand', '完成 新增节点=' + fresh + ' 建边=' + wired
-              + ' 图上 nodes=' + Object.keys(shared.graph.nodes).length
-              + ' edges=' + shared.graph.edges.length
-              + ' 高亮 nodes=' + Object.keys(shared.lit.nodes).length
-              + ' wires=' + Object.keys(shared.lit.wires).length
-              + ' 共' + (Date.now() - t0) + 'ms')
-            // 索引在图画出来之后动过，就先把每个节点对着新表核一遍。
-            if (body.stamp !== undefined && shared.graphStamp !== undefined && body.stamp !== shared.graphStamp) {
-              return engine.revalidate()
-            }
-          }).catch(function (error) {
-            ui.loading = null
-            ui.error = String(error.message)
-            publish()
-            note('expand', 'FAILED ' + direction + ':' + rel + ' -> ' + String(error && error.message))
-          })
-        },
-        /** 收起一个「方向:关系」，不删缓存的节点和边。 */
-        collapse: function (id, direction, relation) {
-          var rel = relation || 'call'
-          var ui = uiOf(shared.graph, id)
-          if (ui === null) return
-          shared.selected = id
-          ui.open[direction + ':' + rel] = false
-          // 用户亲手收起就是真的收起：gather 自动拉进来的那一批也一起收掉，
-          // 否则 visible() 还认着 auto 标记，节点赖在图上不走。
-          ui.open['auto' + direction + ':' + rel] = false
-          if (shared.lit !== null && shared.lit.key === id) shared.lit = null
-          requestViewport(id, 'ensure')
-          publish()
-        },
-        /**
-         * 链式展开：`a → b → c → d` 一路走，一次请求拿整条链。
-         *
-         * 服务端 BFS 到底（见 worker 的 walk），回来的是节点表 + 边表，直接并进图。
-         * 中间那些层不需要用户再点一次。
-         *
-         * @param depth - 最多走几跳，1..8。
-         */
-        walk: function (id, direction, relation, depth) {
-          var rel = relation || 'call'
-          var ui = uiOf(shared.graph, id)
-          if (shared.graph.nodes[id] === undefined || ui === null) return Promise.resolve()
-          ui.loading = 'walk:' + direction + ':' + rel
-          publish()
-          note('walk', '请求 /walk ' + direction + ':' + rel + ' depth=' + (depth || 4))
-          return api('/walk', params({
-            id: id, dir: direction, rel: rel, depth: String(depth || 4),
-          })).then(function (body) {
-            body.nodes.forEach(function (n) {
-              var known = shared.graph.nodes[n.id] !== undefined
-              addNode(shared.graph, n)
-              if (!known) {
-                var nui = uiOf(shared.graph, n.id)
-                if (nui !== null) nui.explored = true
-              }
-            })
-            body.edges.forEach(function (e) { addEdge(shared.graph, e.from, e.to, e.types || [rel]) })
-            ui.open[direction + ':' + rel] = true
-            ui.loading = null
-            lightNeighbourhood(id)
-            publish()
-            note('walk', '完成 nodes=' + body.nodes.length + ' edges=' + body.edges.length
-              + ' 图上 nodes=' + Object.keys(shared.graph.nodes).length)
-            return body
-          }).catch(function (error) {
-            ui.loading = null
-            ui.error = String(error.message)
-            publish()
-          })
-        },
         members: function (id) {
           var node = shared.graph.nodes[id]
           var ui = uiOf(shared.graph, id)
@@ -1546,34 +1125,7 @@ window.__ModuleLoader__.load({
             publish()
           })
         },
-        pin: function (id) {
-          var ui = uiOf(shared.graph, id)
-          if (ui === null) return
-          ui.pinned = !ui.pinned
-          publish()
-        },
       }
-    }
-
-        /**
-     * 点亮「刚展开的这个节点 + 它的直接邻居」。
-     *
-     * 展开之后图上多了东西，不加高亮就看不清哪一块是刚出来的。这里把这一团
-     * （节点 + 它们之间的边）标成 lit，其余变暗——一眼能看出刚展开的是哪一块。
-     */
-    function lightNeighbourhood(id) {
-      var nodes = {}
-      var wires = {}
-      nodes[id] = true
-      shared.graph.edges.forEach(function (e) {
-        if (e.from !== id && e.to !== id) return
-        nodes[e.from] = true
-        nodes[e.to] = true
-        ;(e.types || ['call']).forEach(function (type) {
-          wires[e.from + '\u2192' + e.to + ':' + type] = true
-        })
-      })
-      shared.lit = { key: id, type: null, nodes: nodes, wires: wires }
     }
 
     module.exports = { exploreMethods }
@@ -1581,7 +1133,10 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — Engine methods for selection, edge focus and dragging.
+// dsh-cdd-lens — Engine methods for selection, highlight and dragging.
+//
+// 这里只改「选中谁、高亮谁、卡片放哪」，不增删任何节点或边——屏幕上有什么
+// 只由 /screen 决定（engine/screen.js）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -1599,25 +1154,12 @@ window.__ModuleLoader__.load({
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
 
-    /**
-     * What is selected, focused, or being dragged.
-     *
-     * @param ctx - the client context the views were mounted with.
-     * @param engine - the engine being assembled; methods call each other
-     *   through it, so it is passed in rather than closed over.
-     * @param session - the current session id, or null.
-     * @param params - query parameters for one request.
-     * @returns the methods this file contributes.
-     */
     function selectionMethods(ctx, engine, session, params) {
       return {
         reveal: function (id) {
           shared.selected = id
           shared.focused = id
-          shared.edgeFocus = null
           shared.lit = null
-          // 记下「这一轮看过它」：看过的节点按轮次变旧、过期撤下；
-          // edit 过的不受影响，一直留着（见 graph/visible.fadedOut）。
           var ui = uiOf(shared.graph, id)
           if (ui !== null) ui.viewedAt = shared.turn
           requestViewport(id, 'center')
@@ -1627,12 +1169,7 @@ window.__ModuleLoader__.load({
         select: function (id) {
           // Clicking the already-focused node clears the emphasis, so getting
           // the whole picture back does not require hunting for empty canvas.
-          // The gathered neighbours fly home with it.
           if (shared.focused === id) { shared.focused = null; engine.releaseGather(); publish(); return Promise.resolve() }
-          // `focused` is set only by a human click. `selected` also moves on its
-          // own when a trace loads, and dimming everything else off THAT made
-          // 88% of the wires grey the moment the tab opened — an emphasis that
-          // is always on is just a washed-out picture.
           return engine.reveal(id)
         },
         blur: function () {
@@ -1641,57 +1178,28 @@ window.__ModuleLoader__.load({
           publish()
         },
         /**
-         * Light up what a wire belongs to.
-         *
-         * A dataflow edge is one link in a run: the value came from somewhere
-         * and goes on somewhere, and seeing only the two ends of one hop tells
-         * you almost nothing. So dataflow lights the whole run it belongs to,
-         * following the same relation kind in both directions. A call is not
-         * like that — `a` calls `b` and that is the whole fact — so it lights
-         * its two ends and stops.
-         * @param from - the wire's source anchor id.
-         * @param to - the wire's target anchor id.
-         * @param type - the relation kind the wire is drawing.
+         * 链路聚焦：点一根线，高亮这根线和它前后两个节点。再点一次取消。
+         * 只高亮，不改屏幕上的节点集合。
          */
         lightEdge: function (from, to, type) {
-          var was = shared.lit
-          if (was !== null && was.key === from + '→' + to + ':' + type) {
+          var key = from + '→' + to + ':' + type
+          if (shared.lit !== null && shared.lit !== undefined && shared.lit.key === key) {
             shared.lit = null
             publish()
             return
           }
           var nodes = {}
           var wires = {}
-          var mark = function (f, t) {
-            nodes[f] = true
-            nodes[t] = true
-            wires[f + '→' + t + ':' + type] = true
-          }
-          mark(from, to)
-          if (type === 'dataflow') {
-            // Walk the run, both ways, along this kind only.
-            var seen = {}
-            var queue = [from, to]
-            while (queue.length > 0) {
-              var at = queue.shift()
-              if (seen[at]) continue
-              seen[at] = true
-              shared.graph.edges.forEach(function (e) {
-                if ((e.types || []).indexOf(type) < 0) return
-                if (e.from === at || e.to === at) {
-                  mark(e.from, e.to)
-                  queue.push(e.from === at ? e.to : e.from)
-                }
-              })
-            }
-          }
-          shared.lit = { key: from + '→' + to + ':' + type, type: type, nodes: nodes, wires: wires }
+          nodes[from] = true
+          nodes[to] = true
+          wires[key] = true
+          shared.lit = { key: key, type: type, nodes: nodes, wires: wires }
           publish()
         },
 
         /** Light every wire that touches one anchor, so its own are obvious. */
         lightNode: function (id) {
-          if (shared.lit !== null && shared.lit.key === id) { shared.lit = null; publish(); return }
+          if (shared.lit !== null && shared.lit !== undefined && shared.lit.key === id) { shared.lit = null; publish(); return }
           var nodes = {}
           var wires = {}
           nodes[id] = true
@@ -1707,29 +1215,19 @@ window.__ModuleLoader__.load({
           publish()
         },
 
-        focusEdge: function (from, to, type) {
-          var before = shared.edgeFocus
-          if (before && before.from === from && before.to === to && before.type === type) {
-            shared.edgeFocus = null
-          } else {
-            shared.edgeFocus = { from: from, to: to, type: type }
-            shared.focused = null
-            requestViewport(from, 'center')
-          }
+        /** 点线时把线的起点带进视野（已在视野里就不动）。 */
+        focusEdge: function (from) {
+          requestViewport(from, 'ensure')
           publish()
         },
         blurEdge: function () {
-          if (shared.edgeFocus === null || shared.edgeFocus === undefined) return
-          shared.edgeFocus = null
+          if (shared.lit === null || shared.lit === undefined) return
           shared.lit = null
           publish()
         },
         moveNode: function (id, point, commit) {
           shared.nodePositions[id] = { x: Math.round(point.x), y: Math.round(point.y) }
-          // A drag during a gather takes the node out of the gathered column:
-          // the overlay re-seats its members on every layout, so without the
-          // mark the next pass would put the card straight back and the drag
-          // would move nothing — the lock the user reported.
+          // A drag during a gather takes the node out of the gathered column.
           if (shared.gather !== null && shared.gather !== undefined) {
             if (shared.gather.freed === undefined) shared.gather.freed = {}
             shared.gather.freed[id] = true
@@ -1745,7 +1243,11 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — Engine method that turns a session snapshot into anchor state.
+// dsh-cdd-lens — 会话快照 → 轨迹标记（看过 / 改过 / 第几轮）。
+//
+// 只给轨迹栏和卡片上的标记用：shared.trace / shared.unresolved / shared.order。
+// 图上有哪些节点、哪些边一概不在这里定——折完一份快照就叫 /screen 重算屏幕
+// （后端自己读会话日志，见 src/compute）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -1756,11 +1258,6 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __runtime_api = require('dsh-cdd-lens/runtime/api')
     var ROUTE = __runtime_api.ROUTE
-    var api = __runtime_api.api
-    var __graph_model = require('dsh-cdd-lens/graph/model')
-    var addEdge = __graph_model.addEdge
-    var addNode = __graph_model.addNode
-    var uiOf = __graph_model.uiOf
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
     var fact = __runtime_debug.fact
@@ -1769,28 +1266,101 @@ window.__ModuleLoader__.load({
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
 
-    /**
-     * Taking one session snapshot and painting it onto the graph.
-     *
-     * @param ctx - the client context the views were mounted with.
-     * @param engine - the engine being assembled; methods call each other
-     *   through it, so it is passed in rather than closed over.
-     * @param session - the current session id, or null.
-     * @param params - query parameters for one request.
-     * @returns the methods this file contributes.
-     */
+    /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
+    function stepsOf(snap) {
+      var stepOf = {}
+      var stepped = {}
+      snap.calls.forEach(function (call) {
+        stepped[call.turn] = (stepped[call.turn] || 0) + 1
+        stepOf[call.key] = stepped[call.turn]
+      })
+      return stepOf
+    }
+
+    function noteUnresolved(unresolved, call, touch, hit, at) {
+      var f = hit.file || touch.path
+      if (unresolved[f] === undefined) unresolved[f] = { file: f, reason: hit.reason, verb: touch.verb, turns: [], steps: [] }
+      if (unresolved[f].turns.indexOf(call.turn) < 0) unresolved[f].turns.push(call.turn)
+      var seenAt = unresolved[f].steps.some(function (x) { return x.turn === at.turn && x.step === at.step })
+      if (!seenAt) unresolved[f].steps.push(at)
+    }
+
+    function noteAnchor(byAnchor, call, anchor, event) {
+      var record = byAnchor[anchor.id]
+      if (record === undefined) {
+        byAnchor[anchor.id] = {
+          id: anchor.id, anchor: anchor, firstTurn: call.turn, lastTurn: call.turn,
+          firstStep: event.step, lastStep: event.step, events: [event],
+        }
+        return
+      }
+      if (call.turn < record.firstTurn || (call.turn === record.firstTurn && event.step < record.firstStep)) {
+        record.firstTurn = call.turn
+        record.firstStep = event.step
+      }
+      if (call.turn > record.lastTurn || (call.turn === record.lastTurn && event.step > record.lastStep)) {
+        record.lastTurn = call.turn
+        record.lastStep = event.step
+      }
+      record.events.push(event)
+    }
+
+    /** 解析结果 → 每个 anchor 一条轨迹记录；落不到 anchor 的文件照实列出，不丢。 */
+    function foldTrace(snap) {
+      var stepOf = stepsOf(snap)
+      var byAnchor = {}
+      var unresolved = {}
+      snap.calls.forEach(function (call) {
+        call.touches.forEach(function (touch, i) {
+          var hit = shared.resolved[call.key + '#' + i]
+          if (hit === undefined) return
+          var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
+          if (hit.anchors.length === 0) { noteUnresolved(unresolved, call, touch, hit, at); return }
+          hit.anchors.forEach(function (anchor) {
+            noteAnchor(byAnchor, call, anchor, {
+              turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
+              approx: touch.approx === true || hit.approx === true,
+              onSurface: call.remembered !== false, working: call.running === true,
+            })
+          })
+        })
+      })
+      Object.keys(byAnchor).forEach(function (id) {
+        var record = byAnchor[id]
+        record.events.sort(function (l, r) { return l.turn - r.turn || l.step - r.step })
+        var working = record.events.some(function (e) { return e.working })
+        var edited = record.events.some(function (e) { return e.verb === 'edit' })
+        record.state = working ? 'working' : edited ? 'edited' : 'viewed'
+        // One surviving verbatim read is enough to say the model still knows it.
+        record.remembered = record.events.some(function (e) { return e.onSurface })
+        record.approx = record.events.every(function (e) { return e.approx })
+      })
+      return { byAnchor: byAnchor, unresolved: Object.keys(unresolved).map(function (k) { return unresolved[k] }) }
+    }
+
+    /** 每个 anchor 第一次被碰到的先后名次（按调用 seq），也就是 agent 实际走的顺序。 */
+    function rankOf(snap) {
+      var firstSeq = {}
+      snap.calls.forEach(function (call) {
+        call.touches.forEach(function (touch, i) {
+          var hit = shared.resolved[call.key + '#' + i]
+          if (hit === undefined) return
+          hit.anchors.forEach(function (anchor) {
+            if (firstSeq[anchor.id] === undefined || call.seq < firstSeq[anchor.id]) firstSeq[anchor.id] = call.seq
+          })
+        })
+      })
+      var order = {}
+      Object.keys(firstSeq).sort(function (l, r) { return firstSeq[l] - firstSeq[r] })
+        .forEach(function (id, i) { order[id] = i + 1 })
+      return order
+    }
+
     function ingestMethods(ctx, engine, session, params) {
       return {
         /**
-         * Fold one conversation-view snapshot into the graph.
-         *
-         * The snapshot arrives from the shell, not from a poll: the same source
-         * the Trajectory tab runs on, so it is live during streaming, correct
-         * after a cold reload, and cannot disagree with the chat beside it.
-         *
-         * Only the file to anchor step needs the host, and only for calls not
-         * seen before. The page cannot look inside the repository, and that is
-         * the whole of what it asks for.
+         * Fold one conversation-view snapshot into the trajectory marks, then
+         * ask /screen for the drawing.
          */
         ingest: function (snap) {
           if (snap === undefined || snap === null) return Promise.resolve()
@@ -1812,226 +1382,47 @@ window.__ModuleLoader__.load({
           })
 
           var after = function () {
-            var byAnchor = {}
-            var unresolved = {}
-            // Which step of its turn a call is. `seq` is global and means nothing
-            // to a reader; "the third tool call of turn 15" is what someone
-            // actually says out loud, so the badge carries t15s3 and the numbering
-            // restarts with every turn.
-            var stepOf = {}
-            var stepped = {}
-            snap.calls.forEach(function (call) {
-              stepped[call.turn] = (stepped[call.turn] || 0) + 1
-              stepOf[call.key] = stepped[call.turn]
-            })
-            snap.calls.forEach(function (call) {
-              call.touches.forEach(function (touch, i) {
-                var hit = shared.resolved[call.key + '#' + i]
-                if (hit === undefined) return
-                if (hit.anchors.length === 0) {
-                  // Kept, not dropped. A session that opened twenty files and
-                  // shows an empty panel reads as a broken plugin; naming the
-                  // file and the reason is the difference between an honest
-                  // empty graph and a silent one.
-                  var f = hit.file || touch.path
-                  if (unresolved[f] === undefined) {
-                    unresolved[f] = {
-                      file: f, reason: hit.reason, verb: touch.verb, turns: [], steps: [],
-                    }
-                  }
-                  if (unresolved[f].turns.indexOf(call.turn) < 0) unresolved[f].turns.push(call.turn)
-                  // Where in the session it happened, same as a resolved touch.
-                  // A file that could not be pinned to an anchor still happened
-                  // at a moment, and leaving it out of the order would make the
-                  // rail quietly skip part of what the agent did.
-                  var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
-                  var seenAt = unresolved[f].steps.some(function (x) {
-                    return x.turn === at.turn && x.step === at.step
-                  })
-                  if (!seenAt) unresolved[f].steps.push(at)
-                  return
-                }
-                hit.anchors.forEach(function (anchor) {
-                  var record = byAnchor[anchor.id]
-                  var event = {
-                    turn: call.turn, step: stepOf[call.key] || 1,
-                    verb: touch.verb, tool: touch.tool,
-                    approx: touch.approx === true || hit.approx === true,
-                    onSurface: call.remembered !== false, working: call.running === true,
-                  }
-                  if (record === undefined) {
-                    byAnchor[anchor.id] = {
-                      id: anchor.id, anchor: anchor,
-                      firstTurn: call.turn, lastTurn: call.turn,
-                      firstStep: event.step, lastStep: event.step, events: [event],
-                    }
-                  } else {
-                    if (call.turn < record.firstTurn
-                        || (call.turn === record.firstTurn && event.step < record.firstStep)) {
-                      record.firstTurn = call.turn
-                      record.firstStep = event.step
-                    }
-                    if (call.turn > record.lastTurn
-                        || (call.turn === record.lastTurn && event.step > record.lastStep)) {
-                      record.lastTurn = call.turn
-                      record.lastStep = event.step
-                    }
-                    record.events.push(event)
-                  }
-                })
-              })
-            })
-            Object.keys(byAnchor).forEach(function (id) {
-              var record = byAnchor[id]
-              record.events.sort(function (l, r) { return l.turn - r.turn || l.step - r.step })
-              var working = record.events.some(function (e) { return e.working })
-              var edited = record.events.some(function (e) { return e.verb === 'edit' })
-              record.state = working ? 'working' : edited ? 'edited' : 'viewed'
-              // One surviving verbatim read is enough to say the model still knows it.
-              record.remembered = record.events.some(function (e) { return e.onSurface })
-              record.approx = record.events.every(function (e) { return e.approx })
-              // 把「这次会话改过它」同时写到节点上：edit 的节点一直留在图上，图那一边
-              // 不必每次去翻 trace。也记下最近一次被碰是哪一轮——看过的节点按轮次
-              // 变旧、过期撤下（见 graph/visible.fadedOut）。
-              var ui = uiOf(shared.graph, record.id)
-              if (ui !== null) {
-                if (edited || working) ui.edited = true
-                ui.viewedAt = record.lastTurn
-              }
-            })
-            shared.trace = byAnchor
-            shared.unresolved = Object.keys(unresolved).map(function (k) { return unresolved[k] })
-            note('graph', 'anchors=' + Object.keys(byAnchor).length
-              + ' unresolved=' + shared.unresolved.length + ' graphNodes=' + Object.keys(shared.graph.nodes).length
-              + ' graphEdges=' + shared.graph.edges.length)
-            fact('trace', Object.keys(byAnchor).length)
+            var folded = foldTrace(snap)
+            shared.trace = folded.byAnchor
+            shared.unresolved = folded.unresolved
+            shared.order = rankOf(snap)
+            var ids = Object.keys(folded.byAnchor)
+            fact('trace', ids.length)
             fact('unresolved', shared.unresolved.length)
-            // Rank by the seq of the first call that reached each anchor: the
-            // order the agent actually walked, which is what the graph is for.
-            var firstSeq = {}
-            snap.calls.forEach(function (call) {
-              call.touches.forEach(function (touch, i) {
-                var hit = shared.resolved[call.key + '#' + i]
-                if (hit === undefined) return
-                hit.anchors.forEach(function (anchor) {
-                  if (firstSeq[anchor.id] === undefined || call.seq < firstSeq[anchor.id]) {
-                    firstSeq[anchor.id] = call.seq
-                  }
-                })
-              })
-            })
-            var ranked = Object.keys(firstSeq).sort(function (l, r) { return firstSeq[l] - firstSeq[r] })
-            shared.order = {}
-            ranked.forEach(function (id, i) { shared.order[id] = i + 1 })
+            note('graph', 'ingest anchors=' + ids.length + ' unresolved=' + shared.unresolved.length)
             if (window.__cddLens !== undefined) {
               var reasons = {}
               shared.unresolved.forEach(function (u) { reasons[u.reason] = (reasons[u.reason] || 0) + 1 })
               window.__cddLens.resolve = {
-                calls: snap.calls.length,
-                anchors: Object.keys(byAnchor).length,
-                unresolved: shared.unresolved.length,
-                reasons: reasons,
-                root: shared.root,
+                calls: snap.calls.length, anchors: ids.length, unresolved: shared.unresolved.length,
+                reasons: reasons, root: shared.root,
               }
             }
-
-            var ids = Object.keys(byAnchor)
-            if (ids.length === 0) { publish(); return }
-            var fresh = []
-            ids.forEach(function (id) {
-              if (shared.graph.nodes[id] === undefined) {
-                addNode(shared.graph, byAnchor[id].anchor)
-                uiOf(shared.graph, id).island = true
-                fresh.push(id)
-              }
-              uiOf(shared.graph, id).session = true
-            })
-            if (shared.graph.rootId === null) {
-              var newest = ids.map(function (id) { return byAnchor[id] })
+            if (shared.selected === null && ids.length > 0) {
+              var newest = ids.map(function (id) { return folded.byAnchor[id] })
                 .sort(function (l, r) { return r.lastTurn - l.lastTurn })[0]
-              shared.graph.rootId = newest.id
-              uiOf(shared.graph, newest.id).island = false
-              if (shared.selected === null) {
-                shared.selected = newest.id
-                requestViewport(newest.id, 'fit')
-                engine.source(newest.id)
-              }
+              shared.selected = newest.id
+              requestViewport(newest.id, 'fit')
+              engine.source(newest.id)
             }
             publish()
-            if (fresh.length === 0) return grow()
-            // Only edges the code actually has, between anchors already on
-            // screen. Nothing new is pulled in, and two anchors touched in
-            // sequence with no edge between them stay apart: that gap is the
-            // finding, not a rendering bug to paper over.
-            // `bridge=1` because direct edges alone are almost always none: an
-            // agent reads a type and a function that uses it, but not the file
-            // between them, so both ends of a real relation are rarely both in
-            // the touched set. One intermediate hop is admitted and comes back
-            // marked, so the connection is visible and it is still obvious which
-            // nodes the agent actually opened.
-            return api('/among', params({
-              ids: Object.keys(shared.graph.nodes).join(','), bridge: '1',
-            })).then(function (link) {
-              (link.bridges || []).forEach(function (anchor) {
-                if (shared.graph.nodes[anchor.id] === undefined) {
-                  addNode(shared.graph, anchor)
-                  uiOf(shared.graph, anchor.id).bridge = true
-                  uiOf(shared.graph, anchor.id).synthetic = true
-                }
-              })
-              link.edges.forEach(function (e) {
-                // Mark the EDGE, never the node's expanded flag. Setting
-                // `node.down = true` here told the ↓ button that the callees
-                // were already on screen when they had never been fetched, so a
-                // press ran the collapse branch, hid nothing, and looked dead.
-                var edge = addEdge(shared.graph, e.from, e.to, [e.type])
-                if (edge !== undefined) edge.always = true
-                if (shared.graph.nodes[e.from] !== undefined) {
-                  uiOf(shared.graph, e.from).island = false
-                }
-                if (shared.graph.nodes[e.to] !== undefined) {
-                  uiOf(shared.graph, e.to).island = false
-                }
-              })
-              publish()
-              return grow()
-            })
-          }
-
-          // What the picture is about is what was changed. The edits are the
-          // seeds; `chain` pushes each of them out and back and reports the
-          // 这里以前调 engine.chain(edits, 1) 让服务端把图分层、把树长出来。
-          //
-          // /chain 已经删了——分层现在由布局自己算（layout/sugiyama 的第 2 步），
-          // 子节点由按关系的展开按钮（/expand、/walk）拉进来。这一次会话 ingest
-          // 只负责把「碰过的 anchor」放上屏幕并连上它们之间的边，够布局画第一版。
-          //
-          // 留着这个调用的话，engine.chain 不存在会当场抛错，整张图建不出来——
-          // 表现就是「面板说还没有起点」，而画布空白。
-          var grow = function () {
-            fact('graphNodes', Object.keys(shared.graph.nodes).length)
-            fact('graphEdges', shared.graph.edges.length)
-            fact('root', shared.graph.rootId === null ? 'null' : String(shared.graph.rootId).split('::').pop())
-            note('graph', '图就绪 nodes=' + Object.keys(shared.graph.nodes).length
-              + ' edges=' + shared.graph.edges.length + ' root=' + shared.graph.rootId)
-            publish()
-            return Promise.resolve()
+            return engine.refresh()
           }
 
           note('graph', 'ingest calls=' + snap.calls.length + ' pending=' + pending.length
             + ' resolved=' + Object.keys(shared.resolved).length)
           if (window.__cddLens !== undefined) window.__cddLens.pending = pending.length
-          if (pending.length === 0) { after(); return Promise.resolve() }
+          if (pending.length === 0) return after()
           return fetch(ROUTE + '/resolve?' + new URLSearchParams(params()).toString(), {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ root: shared.root, touches: pending }),
           }).then(function (res) { return res.json() }).then(function (body) {
             body.results.forEach(function (entry) { shared.resolved[entry.key] = entry })
-            after()
+            return after()
           }).catch(function (error) {
             if (window.__cddLens !== undefined) window.__cddLens.resolveError = String(error && error.message ? error.message : error)
-            after()
+            return after()
           })
         },
       }
@@ -2084,56 +1475,13 @@ window.__ModuleLoader__.load({
 
     /**
      * The state half of the gather overlay. layout/gather reads
-     * shared.gather and moves the nodes; here is only WHEN that flag is set.
+     * shared.gather and moves the nodes; here is only when that flag is cleared.
      *
-     * Selecting a node sets it; the view watches shared.selected and calls in
-     * here, so every path that selects — click, search, directory, a trace
-     * landing — gathers the same way. If the neighbourhood was never fetched,
-     * both directions are pulled in first: animating half the answer would
-     * show a caller column and pretend there were no callees.
+     * 以前这里的 gather() 会替用户自动展开 call 邻居——那是按钮之外往屏幕上加节点，
+     * 而且没有任何调用方，已删除。屏幕上有什么只由 /screen 决定。
      */
     function gatherMethods(ctx, engine, session, params) {
       return {
-        gather: function (id) {
-          var node = shared.graph.nodes[id]
-          var ui = uiOf(shared.graph, id)
-          if (node === undefined || ui === null) return Promise.resolve()
-          if (shared.gather !== null && shared.gather !== undefined && shared.gather.focus === id) {
-            return Promise.resolve()
-          }
-          // freed: ids the user dragged out of the column while it was up.
-          // They stay where they were dropped until the gather itself ends.
-          shared.gather = { focus: id, freed: {} }
-          stampFlight()
-          publish()
-          var loads = []
-          // node 就是 anchor：`up`/`down` 是索引给的计数，直接读。
-          // `auto=true`：拉邻居，但不碰按钮状态。选中一个节点不等于替用户按了
-          // 上下键——以前它直接写 node.up/node.down，于是你点中节点时两个按钮
-          // 已经是"收起"态，你按的第一下其实是在收起来。
-          // 有哪几个关系就自动拉哪几个；只拉 call，避免选中一个节点就把
-          // dataflow / inherit 的邻居全倒进来（那是用户按按钮才该发生的事）。
-          var counts = node.peerCounts || {}
-          var call = counts.call
-          if (call !== undefined) {
-            if (ui.open['up:call'] !== true && ui.open['autoup:call'] !== true && call.up > 0) {
-              loads.push(engine.expand(id, 'up', true, 'call'))
-            }
-            if (ui.open['down:call'] !== true && ui.open['autodown:call'] !== true && call.down > 0) {
-              loads.push(engine.expand(id, 'down', true, 'call'))
-            }
-          }
-          if (loads.length === 0) return Promise.resolve()
-          return Promise.all(loads).then(function () {
-            // The selection may have moved on while the neighbours loaded;
-            // only the focus that asked gets to announce their arrival.
-            if (shared.gather !== null && shared.gather !== undefined && shared.gather.focus === id) {
-              // Late arrivals fly in too.
-              stampFlight()
-              publish()
-            }
-          })
-        },
         releaseGather: function () {
           var active = shared.gather !== null && shared.gather !== undefined
           var animating = (shared.gatherAnimUntil || 0) > Date.now()
@@ -2147,6 +1495,208 @@ window.__ModuleLoader__.load({
     }
 
     module.exports = { gatherMethods }
+    return module.exports
+  },
+})
+
+// dsh-cdd-lens — 前端只做一件事：把状态发给 /screen，按返回的屏幕画。
+//
+// 状态 shared.view = { tree, rels, pins: [{ id, at, until }], opens: [{ id, rel, dir }] }
+//   按钮只改状态，不碰图。
+// 屏幕 shared.screen = 后端计算单元（src/compute）的结果；shared.graph 由它原样生成：
+//   节点 = screen.nodes ∪ screen.side 的 anchor 记录，边 = screen.edges（一条边一种类型）。
+// 前端任何地方都不许再增删节点或边。
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+window.__ModuleLoader__.load({
+  id: 'dsh-cdd-lens/engine/screen',
+  factory: (require) => {
+    var module = { exports: {} }
+    var __runtime_api = require('dsh-cdd-lens/runtime/api')
+    var ROUTE = __runtime_api.ROUTE
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var emptyGraph = __graph_model.emptyGraph
+    var addNode = __graph_model.addNode
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var publish = __state_store.publish
+    var requestViewport = __state_store.requestViewport
+    var shared = __state_store.shared
+
+    var RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+    var TREES = ['degree1', 'degree2', 'edit']
+
+    function defaultView() {
+      var rels = {}
+      RELATIONS.forEach(function (r) { rels[r] = true })
+      return { tree: 'degree2', rels: rels, pins: [], opens: [] }
+    }
+
+    function viewOf() {
+      if (shared.view === null || shared.view === undefined) shared.view = defaultView()
+      return shared.view
+    }
+
+    function activePin(id) {
+      return viewOf().pins.filter(function (p) { return p.id === id && (p.until === null || p.until === undefined) })[0]
+    }
+
+    /** 屏幕 → shared.graph。已画过的位置、类成员的展开状态原样带过去（展开时节点不跳）。 */
+    function applyScreen(body) {
+      var before = shared.graph || emptyGraph()
+      var graph = emptyGraph()
+      var side = {}
+      body.side.forEach(function (id) { side[id] = true })
+      body.nodes.concat(body.side).forEach(function (id) {
+        var anchor = body.anchors[id]
+        if (anchor === undefined || anchor === null) return
+        addNode(graph, anchor)
+        var oldUi = before.ui[id]
+        if (oldUi !== undefined) {
+          graph.ui[id].members = oldUi.members
+          graph.ui[id].memberList = oldUi.memberList
+        }
+        // 位置照旧，但只在「树里 / 旁边」没变时：从旁边进树的节点要按树重新排。
+        var place = before.layout[id]
+        if (place !== undefined && (place.side === true) === (side[id] === true)) graph.layout[id] = place
+      })
+      body.edges.forEach(function (e) { graph.edges.push({ from: e.from, to: e.to, types: [e.type] }) })
+      graph.rootId = graph.order.length > 0 ? graph.order[0] : null
+      shared.graph = graph
+      shared.screen = body
+      if (body.stamp !== undefined) shared.graphStamp = body.stamp
+    }
+
+    /** 高亮一个节点和它在屏幕上的相邻节点（展开后看得出刚出来的是哪一团）。 */
+    function lightAround(id) {
+      var nodes = {}
+      var wires = {}
+      nodes[id] = true
+      shared.graph.edges.forEach(function (e) {
+        if (e.from !== id && e.to !== id) return
+        nodes[e.from] = true
+        nodes[e.to] = true
+        wires[e.from + '→' + e.to + ':' + e.types[0]] = true
+      })
+      shared.lit = { key: id, type: null, nodes: nodes, wires: wires }
+    }
+
+    function screenMethods(ctx, engine, session, params) {
+      var inflight = false
+      var again = false
+      var waiting = []
+
+      var send = function () {
+        inflight = true
+        again = false
+        var url = ROUTE + '/screen?' + new URLSearchParams(params()).toString()
+        return fetch(url, {
+          method: 'POST', cache: 'no-store',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ state: viewOf() }),
+        }).then(function (res) {
+          return res.json().then(function (body) {
+            if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status))
+            return body
+          })
+        }).then(function (body) {
+          applyScreen(body)
+          shared.screenError = null
+          note('screen', 'tree=' + body.tree + ' 节点=' + body.nodes.length + ' 旁边=' + body.side.length
+            + ' 边=' + body.edges.length + ' 违例=' + (body.violations || []).length)
+        }).catch(function (error) {
+          shared.screenError = String(error && error.message ? error.message : error)
+          note('screen', 'FAILED ' + shared.screenError)
+        }).then(function () {
+          inflight = false
+          // 状态在请求途中又变了：再算一次，用最新的状态。回调等最后一次落地才跑。
+          if (again) { publish(); return send() }
+          waiting.splice(0).forEach(function (fn) { fn() })
+          publish()
+        })
+      }
+
+      return {
+        view: viewOf,
+
+        /** 按当前状态重算屏幕。@param then - 屏幕落地后要做的事（可选）。 */
+        refresh: function (then) {
+          if (typeof then === 'function') waiting.push(then)
+          if (inflight) { again = true; return Promise.resolve() }
+          return send()
+        },
+
+        setTree: function (mode) {
+          if (TREES.indexOf(mode) < 0) return Promise.resolve()
+          viewOf().tree = mode
+          return engine.refresh()
+        },
+
+        toggleRelation: function (rel) {
+          if (RELATIONS.indexOf(rel) < 0) return Promise.resolve()
+          var view = viewOf()
+          view.rels[rel] = !view.rels[rel]
+          return engine.refresh()
+        },
+
+        isOpen: function (id, rel, dir) {
+          return viewOf().opens.some(function (o) { return o.id === id && o.rel === rel && o.dir === dir })
+        },
+
+        /** ↑N / ↓N：有这条展开就收起，没有就加上。数字、节点、边都由 /screen 给。 */
+        toggleOpen: function (id, rel, dir) {
+          var view = viewOf()
+          var at = -1
+          view.opens.forEach(function (o, i) { if (o.id === id && o.rel === rel && o.dir === dir) at = i })
+          if (at >= 0) view.opens.splice(at, 1)
+          else view.opens.push({ id: id, rel: rel, dir: dir })
+          shared.selected = id
+          requestViewport(id, 'ensure')
+          note('btn', (at >= 0 ? '收起 ' : '展开 ') + rel + dir + ' ' + String(id).split('::').pop())
+          return engine.refresh(function () { lightAround(id) })
+        },
+
+        isPinned: function (id) {
+          return activePin(id) !== undefined
+        },
+
+        /** pin：人为固定，计数器不减；再点取消 pin，从这一轮起照常减。 */
+        pin: function (id) {
+          var view = viewOf()
+          var turn = typeof shared.turn === 'number' ? shared.turn : 0
+          var active = activePin(id)
+          if (active === undefined) view.pins.push({ id: id, at: turn, until: null })
+          else if (active.at >= turn) view.pins.splice(view.pins.indexOf(active), 1)
+          else active.until = turn
+          return engine.refresh()
+        },
+
+        /** 搜索、目录点中一个 anchor：相当于 pin 它——开什么树加进什么树，有什么边连什么边。 */
+        focus: function (anchor) {
+          if (anchor === null || anchor === undefined) return Promise.resolve()
+          shared.wantGraph = (shared.wantGraph || 0) + 1
+          shared.dockOpen = true
+          shared.selected = anchor.id
+          requestViewport(anchor.id, 'center')
+          var ready = activePin(anchor.id) === undefined ? engine.pin(anchor.id) : engine.refresh()
+          return ready.then(function () { return engine.source(anchor.id) })
+        },
+
+        /** 清空：去掉所有展开和 pin，回到只有树的屏幕。 */
+        resetView: function () {
+          var view = viewOf()
+          view.opens = []
+          view.pins = []
+          shared.lit = null
+          return engine.refresh()
+        },
+      }
+    }
+
+    module.exports = { TREES, RELATIONS, screenMethods }
     return module.exports
   },
 })
@@ -2172,6 +1722,8 @@ window.__ModuleLoader__.load({
     var ingestMethods = __engine_ingest.ingestMethods
     var __engine_gather = require('dsh-cdd-lens/engine/gather')
     var gatherMethods = __engine_gather.gatherMethods
+    var __engine_screen = require('dsh-cdd-lens/engine/screen')
+    var screenMethods = __engine_screen.screenMethods
 
     function currentSession(ctx) {
       try {
@@ -2207,6 +1759,7 @@ window.__ModuleLoader__.load({
       Object.assign(engine, selectionMethods(ctx, engine, session, params))
       Object.assign(engine, ingestMethods(ctx, engine, session, params))
       Object.assign(engine, gatherMethods(ctx, engine, session, params))
+      Object.assign(engine, screenMethods(ctx, engine, session, params))
       // Also on the engine, not only handed to the method factories. `Draw`
       // builds its own URL and asks for these, and finding `engine.params`
       // undefined threw on every render of that tab — which is why `cdd draw`
@@ -2281,6 +1834,9 @@ window.__ModuleLoader__.load({
           // against the previous conversation's repository — every anchor came
           // back "not indexed" while the panel looked perfectly healthy.
           shared.graph = emptyGraph()
+          // 视图状态（pin、展开）属于那个会话，换会话一起清掉。
+          shared.view = null
+          shared.screen = null
           shared.trace = {}
           shared.resolved = {}
           shared.unresolved = []
@@ -2433,7 +1989,10 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — The vertical tree in the floating panel.
+// dsh-cdd-lens — 树面板：屏幕（shared.screen）的文字版。
+//
+// 行 = 屏幕上的节点，按屏幕上的边缩进；不在当前树里的 seed 放在最后一段。
+// 只读 shared.screen 和由它生成的 shared.graph，不筛选、不增删节点。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -2444,99 +2003,80 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var React = require('react')
     var h = React.createElement
-    var useState = React.useState
-    var useEffect = React.useEffect
-    var useCallback = React.useCallback
-    var useMemo = React.useMemo
-    var useRef = React.useRef
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-    var __graph_visible = require('dsh-cdd-lens/graph/visible')
-    var visible = __graph_visible.visible
     var __view_record = require('dsh-cdd-lens/view/record')
     var dotClass = __view_record.dotClass
     var orderOf = __view_record.orderOf
     var short = __view_record.short
     var stateOf = __view_record.stateOf
     var turnLabel = __view_record.turnLabel
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
 
-    // ---- the vertical tree (floating panel) --------------------------------
+    var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
 
-    /**
-     * Depth-first walk of the expanded graph, emitting rows with indents.
-     *
-     * Callers come first (they are "above" in the call direction), then the node
-     * itself, then callees. Islands are emitted after a divider that names them
-     * as unconnected rather than being folded into the tree.
-     */
     function treeRows(graph) {
+      var screen = shared.screen
+      if (screen === null || screen === undefined) return []
       var rows = []
       var seen = {}
-      var shown = visible(graph)
-      // Everything the session touched is shown whether or not an edge reaches
-      // it. An anchor with no relations in the index is still an anchor the
-      // agent opened, and dropping it would hide the very thing being reported.
-      graph.order.forEach(function (id) { shown[id] = true })
-
-      function walk(id, depth, direction) {
-        if (seen[id] || !shown[id]) return
-        seen[id] = true
+      var inTree = {}
+      var children = {}
+      var hasParent = {}
+      screen.nodes.forEach(function (id) { inTree[id] = true })
+      graph.edges.forEach(function (e) {
+        if (!inTree[e.from] || !inTree[e.to] || e.from === e.to) return
+        if (children[e.from] === undefined) children[e.from] = []
+        if (children[e.from].indexOf(e.to) < 0) children[e.from].push(e.to)
+        hasParent[e.to] = true
+      })
+      var push = function (id, depth, extra) {
         var node = graph.nodes[id]
-        var ui = uiOf(graph, id) || {}
         if (node === undefined) return
-        // Callers of an expanded node render ABOVE it at the same depth,
-        // whichever direction the walk arrived from. Gating this on the arrival
-        // direction meant pressing ↑ on anything below the root added the nodes
-        // and drew none of them — the button looked dead.
-        var openUp = Object.keys(ui.open).some(function (k) {
-          return k.indexOf('up:') === 0 && ui.open[k] === true
-        })
-        if (openUp) {
-          graph.edges.forEach(function (e) {
-            if (e.to === id) walk(e.from, depth, 'up')
-          })
-        }
-        rows.push({ id: id, depth: depth, node: node })
+        rows.push(Object.assign({ id: id, depth: depth, node: node }, extra || {}))
+        var ui = uiOf(graph, id) || {}
         if (ui.members && ui.memberList !== undefined) {
           ui.memberList.forEach(function (member) {
             rows.push({ id: member.id, depth: depth + 1, member: true, anchor: member })
           })
         }
-        var openDown = Object.keys(ui.open).some(function (k) {
-          return k.indexOf('down:') === 0 && ui.open[k] === true
-        })
-        if (openDown) {
-          graph.edges.forEach(function (e) {
-            if (e.from === id) walk(e.to, depth + 1, 'down')
-          })
-        }
       }
-
-      if (graph.rootId !== null) walk(graph.rootId, 0, null)
-
-      // Anchors the session touched that the root's subtree does not reach.
-      // Each is walked as its own root, so a pair the code DOES connect nests
-      // instead of being listed side by side as two unrelated things — the
-      // edges are the whole point, and flattening them here threw them away
-      // after the trouble of finding them.
-      var roots = graph.order.filter(function (id) {
-        if (seen[id] || !shown[id]) return false
-        // Only a node nothing else in the graph reaches is a root of its own.
-        return !graph.edges.some(function (e) {
-          return e.to === id && graph.nodes[e.from] !== undefined && shown[e.from]
-        })
-      })
-      if (roots.length > 0) {
-        rows.push({ gap: true })
-        roots.forEach(function (id) {
-          var before = rows.length
-          walk(id, 0, 'down')
-          if (rows.length > before) rows[before].islandRow = true
-        })
+      var walk = function (id, depth) {
+        if (seen[id]) return
+        seen[id] = true
+        push(id, depth)
+        ;(children[id] || []).slice().sort().forEach(function (kid) { walk(kid, depth + 1) })
+      }
+      screen.nodes.filter(function (id) { return !hasParent[id] }).forEach(function (id) { walk(id, 0) })
+      // 环里的节点没有无父的入口，兜底再走一遍，一个都不漏。
+      screen.nodes.forEach(function (id) { walk(id, 0) })
+      if (screen.side.length > 0) {
+        rows.push({ gap: true, count: screen.side.length })
+        screen.side.forEach(function (id) { push(id, 0, { sideRow: true }) })
       }
       return rows
+    }
+
+    function hopButtons(engine, id) {
+      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var out = []
+      REL_ORDER.forEach(function (rel) {
+        ['up', 'down'].forEach(function (dir) {
+          var n = counts[rel + dir]
+          if (!(n > 0)) return
+          var open = engine.isOpen(id, rel, dir)
+          out.push(h('button', {
+            key: dir + ':' + rel,
+            'data-relation': rel,
+            'data-count': n,
+            title: (open ? '收起' : '展开') + (dir === 'up' ? '：谁在用它（' : '：它在用谁（') + n + '） · ' + rel,
+            className: 'cddl-rel-' + rel + (open ? ' on' : ''),
+            onClick: function (e) { e.stopPropagation(); engine.toggleOpen(id, rel, dir) },
+          }, (dir === 'up' ? '↑' : '↓') + n))
+        })
+      })
+      return out
     }
 
     function TreeRow(props) {
@@ -2544,27 +2084,19 @@ window.__ModuleLoader__.load({
       var row = props.row
       if (row.gap) {
         return h('div', { className: 'cddl-gap' }, [
-          h('i', { key: 'l' }), '碰过但代码里没有边 · 不连', h('i', { key: 'r' }),
+          h('i', { key: 'l' }), '不在当前树里的 seed · ' + row.count, h('i', { key: 'r' }),
         ])
       }
       var anchor = row.member ? row.anchor : row.node
       var record = stateOf(row.id)
       var faded = record !== null && record !== undefined && !record.remembered
-      var selected = shared.selected === row.id
-      var ui = row.node !== undefined ? (uiOf(shared.graph, row.id) || {}) : {}
-      var synthetic = row.node !== undefined && (ui.synthetic === true || ui.bridge === true)
-      var cls = 'cddl-node'
-        + (selected ? ' cddl-sel' : '')
-        + (faded ? ' cddl-faded' : '')
-        + (row.node !== undefined && ui.bridge === true ? ' cddl-bridge' : '')
-        + (row.islandRow ? ' cddl-island' : '')
-
-      var kids = [
-        h('span', { key: 'i', className: 'cddl-ind', style: { width: (row.depth * 17) + 'px' } }),
-      ]
-      if (!row.member && !synthetic && (anchor.members > 0)) {
+      var ui = row.member ? {} : (uiOf(shared.graph, row.id) || {})
+      var memberCount = !row.member && Array.isArray(anchor.own_methods) ? anchor.own_methods.length : 0
+      var pinned = !row.member && engine.isPinned(row.id)
+      var kids = [h('span', { key: 'i', className: 'cddl-ind', style: { width: (row.depth * 17) + 'px' } })]
+      if (memberCount > 0) {
         kids.push(h('button', {
-          key: 't', className: 'cddl-twist', title: anchor.members + ' 个成员',
+          key: 't', className: 'cddl-twist', title: memberCount + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(row.id) },
         }, ui.members ? '▾' : '▸'))
       } else {
@@ -2576,61 +2108,20 @@ window.__ModuleLoader__.load({
         : h('span', { key: 'r', className: 'cddl-rank', title: '第 ' + rank + ' 个被碰到' }, rank))
       kids.push(h('span', { key: 'd', className: dotClass(record) }))
       kids.push(h('span', { key: 's', className: 'cddl-sym', title: anchor.id }, anchor.symbol))
-      if (!row.member && !synthetic && anchor.members > 0) {
-        kids.push(h('span', { key: 'k', className: 'cddl-kind' }, '类 ' + anchor.members))
-      }
-      if (row.node !== undefined && ui.bridge === true) {
-        kids.push(h('span', {
-          key: 'br', className: 'cddl-kind cddl-bridgetag',
-          title: 'agent 没打开过它。它出现在这里，是因为代码里它把上下两个碰过的 anchor 连起来了。',
-        }, '桥'))
-      }
+      if (memberCount > 0) kids.push(h('span', { key: 'k', className: 'cddl-kind' }, '类 ' + memberCount))
       var badge = turnLabel(record)
       if (badge !== null) kids.push(React.cloneElement(badge, { key: 'b' }))
       if (faded) kids.push(h('span', { key: 'f', className: 'cddl-kind' }, '压缩'))
-      var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
-      var hop = function (direction, rel, count) {
-        var slot = direction + ':' + rel
-        var open = ui.open[slot] === true
-        // 桥接点不许继续展开：它是布局借来的中间点，不是 agent 打开过的 anchor。
-        var disabled = synthetic
-        return h('button', {
-          key: slot,
-          disabled: disabled,
-          'data-relation': rel,
-          'data-count': count,
-          title: synthetic
-            ? '桥接节点只解释连接，不继续展开'
-            : ((open ? '收起' : '展开') + (direction === 'up' ? '：谁在用它（' : '：它在用谁（') + count + '）'
-              + ' · ' + rel + '\n按住 Shift 点：一路展开到底'),
-          className: 'cddl-rel-' + rel + (open ? ' on' : '') + (disabled ? ' cddl-off' : ''),
-          onClick: function (e) {
-            e.stopPropagation()
-            if (disabled) return
-            if (open) { engine.collapse(row.id, direction, rel); return }
-            if (e.shiftKey) engine.walk(row.id, direction, rel, 4)
-            else engine.expand(row.id, direction, null, rel)
-          },
-        }, (direction === 'up' ? '↑' : '↓') + count)
+      if (!row.member) {
+        kids.push(h('span', { key: 'h', className: 'cddl-hop' }, hopButtons(engine, row.id).concat([
+          h('button', {
+            key: 'p', title: pinned ? '取消固定' : '固定', className: pinned ? 'on' : '',
+            onClick: function (e) { e.stopPropagation(); engine.pin(row.id) },
+          }, pinned ? '●' : '○'),
+        ])))
       }
-      var hopButtons = []
-      REL_ORDER.forEach(function (rel) {
-        var c = (anchor.peerCounts || {})[rel]
-        // 没有数据的关系不出现——不画箭头、不写 0。
-        if (c === undefined) return
-        if (c.up > 0) hopButtons.push(hop('up', rel, c.up))
-        if (c.down > 0) hopButtons.push(hop('down', rel, c.down))
-      })
-      kids.push(h('span', { key: 'h', className: 'cddl-hop' }, hopButtons.concat([
-        h('button', {
-          key: 'p', title: '固定',
-          className: ui.pinned ? 'on' : '',
-          onClick: function (e) { e.stopPropagation(); engine.pin(row.id) },
-        }, ui.pinned ? '●' : '○'),
-      ])))
-
       return h('div', {
-        className: cls,
+        className: 'cddl-node' + (shared.selected === row.id ? ' cddl-sel' : '') + (faded ? ' cddl-faded' : '') + (row.sideRow ? ' cddl-island' : ''),
         onClick: function () { engine.select(row.id) },
       }, kids)
     }
@@ -2639,8 +2130,7 @@ window.__ModuleLoader__.load({
       var engine = props.engine
       var rows = treeRows(shared.graph)
       if (rows.length === 0) {
-        return h('div', { className: 'cddl-empty' },
-          '还没有起点。到「目录」里翻一个函数，或者搜一个名字。')
+        return h('div', { className: 'cddl-empty' }, '还没有起点。到「目录」里翻一个函数，或者搜一个名字。')
       }
       var out = []
       var lastFile = null
@@ -3099,6 +2589,11 @@ window.__ModuleLoader__.load({
 
 // dsh-cdd-lens — One anchor box.
 //
+// 卡片上的一切都来自 anchor 原始记录和 /screen：
+//   ↑N / ↓N 的数字 = screen.buttons[id]（就是 len(关系+up/down)），点击只切换展开状态
+//   pin = engine.pin（计数器不减）
+// 这里不决定任何节点是否上屏。
+//
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
@@ -3108,15 +2603,9 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var React = require('react')
     var h = React.createElement
-    var useState = React.useState
-    var useEffect = React.useEffect
-    var useCallback = React.useCallback
-    var useMemo = React.useMemo
     var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
-    var __graph_visible = require('dsh-cdd-lens/graph/visible')
-    var stickyByRecency = __graph_visible.stickyByRecency
     var __view_record = require('dsh-cdd-lens/view/record')
     var dotClass = __view_record.dotClass
     var stateOf = __view_record.stateOf
@@ -3125,6 +2614,49 @@ window.__ModuleLoader__.load({
     var uiOf = __graph_model.uiOf
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
+
+    var REL_LABEL = { call: '调用', dataflow: '数据流', inherit: '继承', dispatch: '分派', impact: '影响' }
+    var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+
+    function memberCountOf(anchor) {
+      return Array.isArray(anchor.own_methods) ? anchor.own_methods.length : 0
+    }
+
+    function hopButtons(engine, id) {
+      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var out = []
+      REL_ORDER.forEach(function (rel) {
+        // 上行在左、下行在右，同一关系两个方向挨着，颜色一致；数字是 0 的不画。
+        ['up', 'down'].forEach(function (dir) {
+          var n = counts[rel + dir]
+          if (!(n > 0)) return
+          var open = engine.isOpen(id, rel, dir)
+          out.push(h('button', {
+            key: dir + ':' + rel,
+            title: REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
+            className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : ''),
+            'data-action': dir === 'up' ? 'expand-callers' : 'expand-callees',
+            'data-relation': rel,
+            'data-count': n,
+            onClick: function (e) {
+              e.stopPropagation()
+              note('btn', '按下 ' + (dir === 'up' ? '↑' : '↓') + rel + ' count=' + n + (open ? ' [收起]' : '') + ' 节点=' + String(id).split('::').pop())
+              engine.toggleOpen(id, rel, dir)
+            },
+          }, [
+            h('span', { key: 'a', className: 'cddl-rel-arrow' }, dir === 'up' ? '↑' : '↓'),
+            h('span', { key: 'n', className: 'cddl-rel-count' }, n),
+            h('span', { key: 'r', className: 'cddl-rel-name' }, rel),
+          ]))
+        })
+      })
+      return out
+    }
+
+    function openSlots(id) {
+      var opens = (shared.view && shared.view.opens) || []
+      return opens.filter(function (o) { return o.id === id }).map(function (o) { return o.dir + ':' + o.rel }).sort().join(' ') || 'none'
+    }
 
     function GraphNode(props) {
       var engine = props.engine
@@ -3137,101 +2669,36 @@ window.__ModuleLoader__.load({
       var record = stateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
-      var synthetic = ui.synthetic === true || ui.bridge === true || anchor.hidden === true
-      var isClass = !synthetic && (anchor.kind === 'class' || anchor.members > 0)
-      // A class and a function are two different things, and the card has to say
-      // so in colour rather than in a 1.5px border nobody can see. `kind` rides
-      // in on the anchor, so this reads the record instead of guessing.
-      var isFn = !synthetic && !isClass
+      var memberCount = memberCountOf(anchor)
+      var isClass = anchor.symbol_type === 'class' || memberCount > 0
+      var pinned = engine.isPinned(p.id)
 
       var head = h('div', { className: 'cddl-gtop' + (isClass ? ' cddl-class-header' : ''), key: 'top' }, [
         h('span', { key: 'd', className: dotClass(record) }),
         h('span', { key: 's', className: 'cddl-sym', title: anchor.id },
-          p.label || anchor.symbol.split('.').pop() || anchor.symbol),
+          p.label || String(anchor.symbol).split('.').pop() || anchor.symbol),
         turnLabel(record) === null ? null : React.cloneElement(turnLabel(record), { key: 'b' }),
-        isClass ? h('button', {
+        isClass && memberCount > 0 ? h('button', {
           key: 'c', className: 'cddl-count',
-          title: anchor.members + ' 个成员',
+          title: memberCount + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(p.id) },
-        }, (ui.members ? '▾ ' : '▸ ') + anchor.members)
+        }, (ui.members ? '▾ ' : '▸ ') + memberCount)
           : h('span', { key: 'l', className: 'cddl-lines' }, anchor.line_start + '–' + anchor.line_end),
         isClass ? h('span', { key: 'k', className: 'cddl-kind' }, '类') : null,
       ])
 
-      // 展开按钮按关系挂：anchor.peerCounts 是 worker 给的
-      //   { call: {up, down}, inherit: {up, down}, … }
-      // 只列出**有数据**的关系——某个关系是 0 就不在这里出现，不画箭头也不写数字。
-      var REL_LABEL = {
-        call: '调用', dataflow: '数据流', inherit: '继承',
-        dispatch: '分派', impact: '影响',
-      }
-      var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
-      var counts = anchor.peerCounts || {}
-
-      function hopButton(direction, rel) {
-        var n = counts[rel][direction]
-        var slot = direction + ':' + rel
-        var open = ui.open[slot] === true
-        var arrow = direction === 'up' ? '↑' : '↓'
-        var verb = direction === 'up' ? '谁在用它' : '它在用谁'
-        return h('button', {
-          key: slot,
-          title: REL_LABEL[rel] + ' · ' + verb + '（' + n + '）'
-            + '\n点一下：展开/收起一层'
-            + '\n按住 Shift 点：一路展开到底（链式）',
-          className: 'cddl-action-' + direction + ' cddl-rel-' + rel + (open ? ' on' : ''),
-          'data-action': direction === 'up' ? 'expand-callers' : 'expand-callees',
-          'data-relation': rel,
-          'data-count': n,
-          onClick: function (e) {
-            e.stopPropagation()
-            note('btn', '按下 ' + (direction === 'up' ? '↑' : '↓') + rel
-              + ' count=' + n + (open ? ' [收起]' : '')
-              + ' 节点=' + String(p.id).split('::').pop())
-            if (open) { engine.collapse(p.id, direction, rel); return }
-            if (e.shiftKey) engine.walk(p.id, direction, rel, 4)
-            else engine.expand(p.id, direction, null, rel)
-          },
-        }, [
-          h('span', { key: 'a', className: 'cddl-rel-arrow' }, arrow),
-          h('span', { key: 'n', className: 'cddl-rel-count' }, n),
-          h('span', { key: 'r', className: 'cddl-rel-name' }, rel),
-        ])
-      }
-
-      var hopButtons = []
-      REL_ORDER.forEach(function (rel) {
-        var c = counts[rel]
-        if (c === undefined) return
-        // 上行在左、下行在右，同一关系两个方向挨着，颜色一致。
-        if (c.up > 0) hopButtons.push(hopButton('up', rel))
-        if (c.down > 0) hopButtons.push(hopButton('down', rel))
-      })
-
-      var actions = synthetic
-        ? h('div', { key: 'h', className: 'cddl-node-actions cddl-node-actions-bridge' }, [
-          h('span', {
-            key: 'b', className: 'cddl-kind cddl-bridgetag',
-            title: '它只是把两个真实 anchor 连起来的中间点，不参与继续展开。',
-          }, '桥'),
-        ])
-        :
-        h('div', { key: 'h', className: 'cddl-node-actions' }, hopButtons.concat([
-          h('button', {
-            key: 'p',
-            title: ui.pinned
-              ? '取消固定'
-              : (stickyByRecency(p.id)
-                ? '最近碰过，自动保留三轮；点一下改为永久固定'
-                : '固定：折叠上级时也留在图上'),
-            className: 'cddl-action-pin' + (ui.pinned ? ' on' : (stickyByRecency(p.id) ? ' auto' : '')),
-            'data-action': 'pin-anchor',
-            onClick: function (e) { e.stopPropagation(); engine.pin(p.id) },
-          }, 'pin'),
-        ]))
+      var actions = h('div', { key: 'h', className: 'cddl-node-actions' }, hopButtons(engine, p.id).concat([
+        h('button', {
+          key: 'p',
+          title: pinned ? '取消固定（之后计数器照常减）' : '固定：一直显示，计数器不减',
+          className: 'cddl-action-pin' + (pinned ? ' on' : ''),
+          'data-action': 'pin-anchor',
+          onClick: function (e) { e.stopPropagation(); engine.pin(p.id) },
+        }, 'pin'),
+      ]))
 
       var members = null
-      if (!synthetic && ui.members && ui.memberList !== undefined) {
+      if (ui.members && ui.memberList !== undefined) {
         members = h('div', { className: 'cddl-members', key: 'm' },
           ui.memberList.map(function (member) {
             var mrec = stateOf(member.id)
@@ -3243,52 +2710,28 @@ window.__ModuleLoader__.load({
               onClick: function (e) { e.stopPropagation(); engine.select(member.id) },
             }, [
               h('span', { key: 'd', className: dotClass(mrec) }),
-              h('span', { key: 's', className: 'cddl-sym' }, member.symbol.split('.').pop()),
+              h('span', { key: 's', className: 'cddl-sym' }, String(member.symbol).split('.').pop()),
               turnLabel(mrec) === null ? null : React.cloneElement(turnLabel(mrec), { key: 'b' }),
               h('span', { key: 'l', className: 'cddl-lines' }, member.start + '–' + member.end),
             ])
           }).concat([h('div', { key: 'more', className: 'cddl-more' }, '共 ' + ui.memberList.length + ' 个方法')]))
       }
 
-      // 同一张卡片用在两处：画布上定位的，和轨迹栏里顺着流排的。只有位置不同，
-      // 所以只切这一个标记——另写一个组件迟早会和这个跑偏。
+      // 同一张卡片用在两处：画布上定位的，和轨迹栏里顺着流排的。只有位置不同。
       var flow = props.flow === true
-      // 出入口各一个小圈：**入在左、出在右，不同口**。线从左边的小圈进、
-      // 从右边的小圈出，两头都停在圈上——线必须明显连到圈上，不许悬空。
-      //
-      // 以前这里是 24×20 的方块角标，里面写「入」「出」两个字，而且入出可以
-      // 落在同一条边（role='both'）上；那样两个方向挤在一个口，看不出谁进谁出。
       var vertical = p.flowAxis === 'vertical'
+      // 出入口各一个小圈：入在左、出在右，不同口。线两头都停在圈上。
       var portViews = [
-        h('span', {
-          key: 'port-in',
-          className: 'cddl-port cddl-port-in' + (vertical ? ' cddl-port-vtop' : ''),
-          'data-port': 'in',
-          title: '关系进入此 Anchor',
-        }),
-        h('span', {
-          key: 'port-out',
-          className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''),
-          'data-port': 'out',
-          title: '关系离开此 Anchor',
-        }),
+        h('span', { key: 'port-in', className: 'cddl-port cddl-port-in' + (vertical ? ' cddl-port-vtop' : ''), 'data-port': 'in', title: '关系进入此 Anchor' }),
+        h('span', { key: 'port-out', className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''), 'data-port': 'out', title: '关系离开此 Anchor' }),
       ]
       return h('div', {
-        className: 'cddl-node-shell' + (p.island ? ' cddl-shell-island' : '')
-          + (flow ? ' cddl-node-flow' : ''),
-        style: flow
-          ? { width: p.w + 'px' }
-          : { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px' },
+        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : ''),
+        style: flow ? { width: p.w + 'px' } : { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px' },
         'data-node-id': p.id,
-        // What this node believes about itself, readable from the outside. A
-        // button that does not light up after it worked is indistinguishable
-        // from one that did nothing, and guessing which was costing more than
-        // the attribute does.
-        // 有哪些「方向:关系」开着，供外部测试读。以前只报 up/down 两个方向，
-        // 现在每个关系各开各的，所以按 key 全列出来。
-        'data-open': Object.keys(ui.open).filter(function (k) {
-          return ui.open[k] === true && k.indexOf('auto') !== 0
-        }).sort().join(' ') || 'none',
+        'data-side': p.side ? 'true' : 'false',
+        // 有哪些「方向:关系」开着，供外部测试读。
+        'data-open': openSlots(p.id),
       }, [
         portViews,
         h('div', {
@@ -3298,10 +2741,9 @@ window.__ModuleLoader__.load({
               : (shared.lit.nodes[p.id] === true ? ' cddl-lit' : ' cddl-unlit'))
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
-            + (ui.island ? ' cddl-island' : '')
-            + (synthetic ? ' cddl-bridge' : '')
-            + (isClass ? ' cddl-cls cddl-class' : '')
-            + (isFn ? ' cddl-fn' : ''),
+            + (p.side ? ' cddl-island' : '')
+            + (pinned ? ' cddl-pinned' : '')
+            + (isClass ? ' cddl-cls cddl-class' : ' cddl-fn'),
           title: anchor.id,
           'data-anchor-id': anchor.id,
           onPointerDown: function (event) {
@@ -3310,9 +2752,7 @@ window.__ModuleLoader__.load({
             event.preventDefault()
             event.stopPropagation()
             // Drag in the coordinates a position is SAVED in, not the ones it
-            // is drawn at. The drawing may have been moved to make room for
-            // wires; folding that margin into the stored position would move
-            // the node again on the next render, and again after that.
+            // is drawn at, or the node moves again on the next render.
             var baseX = p.baseX === undefined ? p.x : p.baseX
             var baseY = p.baseY === undefined ? p.y : p.baseY
             var start = { clientX: event.clientX, clientY: event.clientY, x: baseX, y: baseY }
@@ -3338,15 +2778,7 @@ window.__ModuleLoader__.load({
             window.addEventListener('pointerup', up)
           },
         }, [
-          // No path line here: the box header already names the file, and
-          // repeating it inside every node was what squeezed the symbol into an
-          // ellipsis. Hover still shows the fully qualified id.
-
           head,
-          // The controls live in the card, on their own line under the name.
-          // Floating them above it meant they overlapped whatever sat there,
-          // and a node's own buttons reading as another node's is worse than
-          // the two pixels of height they cost.
           actions,
           members,
           record && record.state === 'working'
@@ -3357,16 +2789,6 @@ window.__ModuleLoader__.load({
         ]),
       ])
     }
-
-    /**
-     * A horizontal scrollbar of our own, pinned to the bottom of the canvas.
-     *
-     * `scrollbar-gutter` reserves the vertical gutter and has no horizontal
-     * counterpart, and this platform's native horizontal bar is an overlay: it
-     * occupies no layout space and fades out when idle. So a drawing that
-     * genuinely scrolls sideways reads as one that cannot, and the only way to
-     * discover otherwise is to try. Drawn explicitly, the axis is simply there.
-     */
 
     module.exports = { GraphNode }
     return module.exports
@@ -3453,355 +2875,6 @@ window.__ModuleLoader__.load({
     }
 
     module.exports = { HScroll }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Edge kinds, the line-focus camera, and the layout it derives.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/layout/camera',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-
-    // ---- the spread-out graph (conversation.view) ---------------------------
-    //
-    // A layered layout: callers above the selection, callees below, one row per
-    // hop, orthogonal wires. Positions are computed from measured text rather
-    // than a physics simulation — a node must not drift when a sibling expands.
-
-    var CHAR = 6.9
-    var ROW = 126
-    var GAPX = 26
-    var MAX_PER_ROW = 4
-
-    function edgeHasType(edge, type) {
-      return (edge.types || []).indexOf(type) >= 0
-    }
-
-    function dependencyEdge(edge) {
-      return !edgeHasType(edge, 'dataflow')
-        || (edge.types || []).some(function (type) { return type !== 'dataflow' })
-    }
-
-    /** Nodes/edges shown by the temporary line-focus camera. */
-    function edgeFocusOf(graph) {
-      var wanted = shared.edgeFocus
-      if (wanted === null || wanted === undefined) return null
-      var ids = {}
-      var keys = {}
-      ids[wanted.from] = true
-      ids[wanted.to] = true
-      keys[wanted.from + '→' + wanted.to + ':' + wanted.type] = true
-
-      if (wanted.type === 'dataflow') {
-        // A data value is followed end to end. Both directions are visited so
-        // clicking the middle of a producer/consumer chain still reveals its
-        // origin and every eventual consumer.
-        var queue = [wanted.from, wanted.to]
-        while (queue.length > 0) {
-          var current = queue.shift()
-          graph.edges.forEach(function (edge) {
-            if (!edgeHasType(edge, 'dataflow')) return
-            if (edge.from !== current && edge.to !== current) return
-            keys[edge.from + '→' + edge.to + ':dataflow'] = true
-            ;[edge.from, edge.to].forEach(function (id) {
-              if (ids[id]) return
-              ids[id] = true
-              queue.push(id)
-            })
-          })
-        }
-      } else {
-        var walk = function (start, direction) {
-          var frontier = [start]
-          for (var hop = 0; hop < 3; hop += 1) {
-            var next = []
-            frontier.forEach(function (current) {
-              graph.edges.forEach(function (edge) {
-                if (!dependencyEdge(edge)) return
-                var matches = direction === 'up' ? edge.to === current : edge.from === current
-                if (!matches) return
-                var id = direction === 'up' ? edge.from : edge.to
-                ;(edge.types || ['call']).forEach(function (type) {
-                  if (type !== 'dataflow') keys[edge.from + '→' + edge.to + ':' + type] = true
-                })
-                if (!ids[id]) { ids[id] = true; next.push(id) }
-              })
-            })
-            frontier = next
-          }
-        }
-        walk(wanted.from, 'up')
-        walk(wanted.to, 'down')
-      }
-      return { ids: ids, keys: keys, type: wanted.type }
-    }
-
-    /**
-     * @param avail - the canvas viewport's real width in CSS pixels. Everything
-     *   that decides how wide the drawing gets is derived from it. The previous
-     *   version divided a hardcoded 1580 to choose the column count, which is a
-     *   viewport that does not exist here: the canvas actually gets about 977
-     *   (the window minus dsh's sidebar, minus the space reserved for a
-     *   neighbouring plugin's rail, minus this view's own source column). So the
-     *   layout produced a drawing wider than the space it had, and no amount of
-     *   font or routing work could make that readable.
-     */
-    /**
-     * Temporary camera layout: a top-to-bottom relationship chain.
-     *
-     * It never writes shared.nodePositions, so leaving the camera restores
-     * every user coordinate exactly.
-     * @param graph - the graph being drawn.
-     * @param scope - what is on screen.
-     * @param place - the boxes and nodes already positioned.
-     * @param rank - relationship ranking for this graph.
-     * @param metrics - box metrics for this canvas.
-     */
-    function cameraLayout(graph, scope, place, rank, metrics) {
-      var activeFocus = scope.activeFocus
-      var included = scope.included
-      var placed = place.placed
-      var indegree = rank.indegree
-      var NODE_W = metrics.NODE_W
-      var PAD = metrics.PAD
-
-      if (activeFocus === null) {
-        // Auto-layout provides first positions only. Once the user moves an
-        // anchor, that coordinate wins across refresh, expansion and reindex.
-        placed.forEach(function (p) {
-          var point = shared.nodePositions[p.id]
-          if (point === undefined) return
-          p.x = point.x
-          p.y = point.y
-          // Marked, because everything downstream has to tell a coordinate the
-          // user chose from one the layout produced: which box yields when two
-          // collide, and which one may be pulled back when it ends up stranded.
-          p.manual = true
-        })
-      } else {
-        // Temporary camera layout. It derives a top-to-bottom relationship
-        // chain: every caller/callee step flips the node's in/out side.
-        // without touching shared.nodePositions, so exit restores every user
-        // coordinate exactly.
-        var focusedEdges = []
-        graph.edges.forEach(function (edge) {
-          ;(edge.types || ['call']).forEach(function (type) {
-            var key = edge.from + '→' + edge.to + ':' + type
-            if (activeFocus.keys[key]) focusedEdges.push({ from: edge.from, to: edge.to, type: type })
-          })
-        })
-        var indegree = {}
-        included.forEach(function (id) { indegree[id] = 0 })
-        focusedEdges.forEach(function (edge) {
-          if (indegree[edge.to] !== undefined && indegree[edge.from] !== undefined) indegree[edge.to] += 1
-        })
-        var depthById = {}
-        var queue = included.filter(function (id) { return indegree[id] === 0 })
-        if (queue.length === 0 && shared.edgeFocus) queue.push(shared.edgeFocus.from)
-        queue.forEach(function (id) { depthById[id] = 0 })
-        while (queue.length > 0) {
-          var current = queue.shift()
-          focusedEdges.forEach(function (edge) {
-            if (edge.from !== current || depthById[edge.to] !== undefined) return
-            depthById[edge.to] = depthById[current] + 1
-            queue.push(edge.to)
-          })
-        }
-        var nextDepth = 0
-        included.forEach(function (id) {
-          if (depthById[id] === undefined) depthById[id] = nextDepth++
-        })
-        var levels = {}
-        placed.forEach(function (p) {
-          var level = depthById[p.id] || 0
-          ;(levels[level] = levels[level] || []).push(p)
-        })
-        Object.keys(levels).sort(function (l, r) { return Number(l) - Number(r) }).forEach(function (level) {
-          levels[level].forEach(function (p, row) {
-            p.x = PAD + 46 + row * (NODE_W + 76)
-            p.y = PAD + 46 + Number(level) * (Math.max(72, p.h) + 62)
-          })
-        })
-      }
-
-    }
-
-    module.exports = { CHAR, ROW, GAPX, MAX_PER_ROW, edgeHasType, dependencyEdge, edgeFocusOf, cameraLayout }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — What gets drawn, in what order, and which way round.
-//
-// Everything decided before a coordinate exists: which nodes are on screen,
-// which file each column belongs to and in what order, and which side of a
-// node its wires enter and leave by. Three questions, one answer set, and no
-// skin can place anything until all three are settled.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/layout/prep',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-    var __graph_visible = require('dsh-cdd-lens/graph/visible')
-    var visibleForMode = __graph_visible.visibleForMode
-    var __layout_camera = require('dsh-cdd-lens/layout/camera')
-    var edgeFocusOf = __layout_camera.edgeFocusOf
-    var __graph_model = require('dsh-cdd-lens/graph/model')
-    var uiOf = __graph_model.uiOf
-
-    /**
-     * What is on screen at all, and which file each anchor belongs to.
-     */
-    function layoutScope(graph, modeOverride) {
-
-      var shown = visibleForMode(graph, modeOverride)
-
-      // A file is the first visual unit. Session-touched anchors are always
-      // present; manual +/- exploration may add more anchors and therefore a
-      // new file box, while bridge-only implementation details stay hidden.
-      var included = graph.order.filter(function (id) {
-        var node = graph.nodes[id]
-        var ui = uiOf(graph, id)
-        return shown[id] && node !== undefined && ui !== null
-          && (ui.session || ui.explored || ui.pinned || id === shared.selected || id === graph.rootId)
-      })
-      var mode = modeOverride || shared.treeMode || 'all'
-      if (included.length === 0 && mode === 'all' && graph.nodes[graph.rootId]) included.push(graph.rootId)
-      var activeFocus = modeOverride === undefined ? edgeFocusOf(graph) : null
-      if (activeFocus !== null) {
-        included = graph.order.filter(function (id) {
-          return activeFocus.ids[id] === true && graph.nodes[id] !== undefined
-        })
-      }
-      var byFile = {}
-      var fileOrder = []
-      included.forEach(function (id) {
-        var file = graph.nodes[id].file
-        if (byFile[file] === undefined) { byFile[file] = []; fileOrder.push(file) }
-        byFile[file].push(id)
-      })
-      return { shown: shown, included: included, activeFocus: activeFocus, byFile: byFile, fileOrder: fileOrder }
-    }
-
-    /**
-     * Relationship order, not source-line order and not row parity.
-     */
-    function rankFiles(graph, relationFilter, scope) {
-      var included = scope.included
-      var byFile = scope.byFile
-      var fileOrder = scope.fileOrder
-
-      // Relationship order, not source-line order and not row parity. Start at
-      // a visible main (when present), then the session root, then every other
-      // component. Each real caller -> callee edge advances one relationship
-      // step. Cycles are harmless because a node is ranked only once.
-      var includedSet = {}
-      included.forEach(function (id) { includedSet[id] = true })
-      var relationEdges = graph.edges.filter(function (edge) {
-        if (!includedSet[edge.from] || !includedSet[edge.to]) return false
-        return (edge.types || ['call']).some(function (type) {
-          return relationFilter === undefined || relationFilter[type] !== false
-        })
-      })
-      var outgoing = {}
-      var indegree = {}
-      included.forEach(function (id) { outgoing[id] = []; indegree[id] = 0 })
-      relationEdges.forEach(function (edge) {
-        outgoing[edge.from].push(edge.to)
-        indegree[edge.to] += 1
-      })
-      var relationRank = {}
-      var rankQueue = []
-      var nextComponentRank = 0
-      var rankFrom = function (seed) {
-        if (!includedSet[seed] || relationRank[seed] !== undefined) return
-        relationRank[seed] = nextComponentRank
-        rankQueue.push(seed)
-        while (rankQueue.length > 0) {
-          var current = rankQueue.shift()
-          outgoing[current].forEach(function (next) {
-            if (relationRank[next] !== undefined) return
-            relationRank[next] = relationRank[current] + 1
-            rankQueue.push(next)
-          })
-        }
-        nextComponentRank = Math.max.apply(Math, Object.keys(relationRank).map(function (id) { return relationRank[id] })) + 2
-      }
-      included.filter(function (id) {
-        return graph.nodes[id].symbol.split && graph.nodes[id].symbol.split('.').pop() === 'main'
-      }).forEach(rankFrom)
-      rankFrom(graph.rootId)
-      included.filter(function (id) { return indegree[id] === 0 }).forEach(rankFrom)
-      included.forEach(rankFrom)
-
-      // A file box follows the earliest relationship step of the anchors it
-      // contains. The box is a visual boundary only; it no longer invents the
-      // semantic order of nodes inside it.
-      var depth = {}
-      fileOrder.forEach(function (file) {
-        depth[file] = Math.min.apply(Math, byFile[file].map(function (id) { return relationRank[id] }))
-      })
-      var arrival = {}
-      fileOrder.forEach(function (file, i) { arrival[file] = i })
-      fileOrder.sort(function (l, r) { return depth[l] - depth[r] || arrival[l] - arrival[r] })
-
-      fileOrder.forEach(function (file) {
-        byFile[file].sort(function (l, r) {
-          var la = graph.nodes[l]
-          var ra = graph.nodes[r]
-          var lm = la.symbol.split('.').pop() === 'main' ? 0 : 1
-          var rm = ra.symbol.split('.').pop() === 'main' ? 0 : 1
-          return relationRank[l] - relationRank[r] || lm - rm
-            || (la.line_start || 0) - (ra.line_start || 0) || la.symbol.localeCompare(ra.symbol)
-        })
-      })
-
-      return { indegree: indegree, relationRank: relationRank }
-    }
-
-    /**
-     * In/out sides propagated by real relations, not by row number.
-     */
-    function orientFlow(graph, scope, place, metrics, avail) {
-      var included = scope.included
-      var placed = place.placed
-      var fileBoxes = place.fileBoxes
-      var canvasY = place.canvasY
-      var PAD = metrics.PAD
-      var BOX_GAP_Y = metrics.BOX_GAP_Y
-      var canvasWidth = metrics.canvasWidth
-
-      var byId = {}
-      placed.forEach(function (p) { byId[p.id] = p })
-
-      // The alternating in/out sides this used to compute are gone: every box
-      // is laid in the same grid and every port is on a side, so a node that
-      // flipped put its entry where its callers leave from. The walk that
-      // produced them is gone with them — it re-scanned every edge for every
-      // node it reached, which is O(nodes x edges) and was the single most
-      // expensive thing in a layout whose result was then overwritten.
-      placed.forEach(function (p) { p.flowDir = 'ltr' })
-      var boxOf = {}
-      fileBoxes.forEach(function (box) { boxOf[box.file] = box })
-      canvasWidth = Math.max(avail || 0, PAD * 2 + Math.max.apply(Math, placed.map(function (p) { return p.x + p.w })))
-      canvasY = PAD + Math.max.apply(Math, placed.map(function (p) { return p.y + p.h })) + BOX_GAP_Y
-
-      return { byId: byId, boxOf: boxOf, canvasWidth: canvasWidth, canvasY: canvasY }
-    }
-
-    module.exports = { layoutScope, rankFiles, orientFlow }
     return module.exports
   },
 })
@@ -4335,7 +3408,7 @@ window.__ModuleLoader__.load({
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.kind === 'class' || node.members > 0 ? 142 : 96
+        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
         var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
         var wrapped = (lines - 1) * CARD.symLine
@@ -4435,163 +3508,6 @@ window.__ModuleLoader__.load({
       })
     }
     return { compact, sideOf, portAt, length, atDistance, bindPorts }
-  },
-})
-
-// dsh-cdd-lens — Drawing every relation is what makes the web; this picks.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/select',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-    var __graph_model = require('dsh-cdd-lens/graph/model')
-    var uiOf = __graph_model.uiOf
-
-    /**
-     * Which relations get a wire: a trunk by default, the rest on demand.
-     */
-    function chooseEdges(graph, scope, orient, relationFilter) {
-      var activeFocus = scope.activeFocus
-      var byId = orient.byId
-      var REL_ORDER = ['call', 'dataflow', 'inherit', 'impact', 'dispatch']
-
-      // ---- which edges get drawn ------------------------------------------
-      //
-      // Drawing every relation is what makes the web, and no amount of clever
-      // routing fixes it. Measured on this graph — 103 nodes, 227 call/dispatch
-      // edges — the three-segment dogleg router produces 1326 geometric
-      // crossings. Giving each edge its own corridor makes it WORSE (5265):
-      // separate lanes mean more turns, and the turns are what cross.
-      //
-      // Only the edge count moves the number. A spanning tree over the same
-      // nodes is 63 edges and 55 crossings — a 24x drop with identical node
-      // placement. So the trunk is drawn by default and everything else is
-      // reachable: selecting a node lights up all of ITS relations (32 edges,
-      // 30 crossings), and the per-node up/down counts were always the hidden
-      // ones. This is the flyline idea from board layout, where the same
-      // problem has the same answer — except a router must connect every net
-      // and we may simply not draw one.
-      // 一条边算不算「打开」：这条边自己的关系类型对应的那个按钮开没开。
-      // 展开状态按「方向:关系」存（ui.open['down:call']），所以必须看边的类型，
-      // 不能只看方向——点开 call 的 ↓ 不该把 inherit 的边也点亮。
-      var opened = function (ui, prefix, types) {
-        if (ui === null || ui === undefined || ui.open === undefined) return false
-        return types.some(function (t) {
-          return ui.open[prefix + ':' + t] === true
-        })
-      }
-      var relationAllowed = function (types) {
-        if (relationFilter === undefined || relationFilter === null) return true
-        return types.some(function (t) { return relationFilter[t] !== false })
-      }
-      var relationStats = function (pool, chosenPool) {
-        var stats = {}
-        REL_ORDER.forEach(function (type) { stats[type] = { total: 0, drawn: 0 } })
-        pool.forEach(function (e) {
-          var seen = {}
-          ;(e.types || ['call']).forEach(function (type) {
-            if (seen[type]) return
-            seen[type] = true
-            if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
-            stats[type].total += 1
-          })
-        })
-        chosenPool.forEach(function (e) {
-          var seen = {}
-          ;(e.types || ['call']).forEach(function (type) {
-            if (relationFilter !== undefined && relationFilter !== null && relationFilter[type] === false) return
-            if (seen[type]) return
-            seen[type] = true
-            if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
-            stats[type].drawn += 1
-          })
-        })
-        return stats
-      }
-      var drawableAll = graph.edges.filter(function (e) {
-        var fromUI = uiOf(graph, e.from)
-        var toUI = uiOf(graph, e.to)
-        if (byId[e.from] === undefined || byId[e.to] === undefined) return false
-        if (activeFocus !== null || e.always) return true
-        var types = e.types || ['call']
-        return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
-      })
-      var drawable = drawableAll.filter(function (e) { return relationAllowed(e.types || ['call']) })
-      var explicitlyOpened = function (e) {
-        var types = e.types || ['call']
-        return opened(uiOf(graph, e.from), 'down', types) || opened(uiOf(graph, e.to), 'up', types)
-      }
-      var chosen = drawable
-      var hiddenCount = 0
-      if (activeFocus !== null) {
-        chosen = drawable.filter(function (edge) {
-          return (edge.types || ['call']).some(function (type) {
-            return activeFocus.keys[edge.from + '→' + edge.to + ':' + type] === true
-          })
-        })
-        hiddenCount = drawable.length - chosen.length
-      } else if (shared.wireMode !== 'all') {
-        var keep = {}
-        var focus = shared.selected
-        // A pressed ↑/↓ button is a literal request: show every relation that
-        // made that count. The trunk pass below is only for background edges;
-        // it may not compress "2" visible neighbours into one line.
-        drawable.forEach(function (e) {
-          if (explicitlyOpened(e)) keep[e.from + '→' + e.to] = true
-        })
-        // Every relation of the selected node, in both directions.
-        drawable.forEach(function (e) {
-          if (e.from === focus || e.to === focus) keep[e.from + '→' + e.to] = true
-        })
-        // One parent per node — the one the chain data means, not the nearest
-        // placed caller. Geometric distance made the trunk a function of the
-        // skin: move the nodes and a different edge becomes the parent, so the
-        // same graph showed a different skeleton in every drawing. Consistency
-        // across skins beats hugging one layout. The layer comes from the
-        // index (DFS finish order, longest-path relaxed) and rides in on
-        // node.layer, so the caller exactly one layer up is the real parent;
-        // otherwise the smallest layer difference wins, with a forward step
-        // preferred over a backward one of the same size, and nodes without a
-        // layer are decided by the edge's place in graph.edges — stable, and
-        // the same in every skin because it never touches a coordinate.
-        var best = {}
-        drawable.forEach(function (e) {
-          var from = graph.nodes[e.from]
-          var to = graph.nodes[e.to]
-          var la = from === undefined ? undefined : from.layer
-          var lb = to === undefined ? undefined : to.layer
-          var d = typeof la === 'number' && typeof lb === 'number' ? lb - la : null
-          var cost = d === null ? Infinity
-            : d === 1 ? 0
-            : Math.abs(d) + (d < 1 ? 0.5 : 0)
-          // Strictly smaller wins, so a tie keeps the edge that came first —
-          // the deterministic tiebreak, with no geometry involved.
-          if (best[e.to] === undefined || cost < best[e.to].cost) best[e.to] = { e: e, cost: cost }
-        })
-        Object.keys(best).forEach(function (to) {
-          var e = best[to].e
-          keep[e.from + '→' + e.to] = true
-        })
-        chosen = drawable.filter(function (e) { return keep[e.from + '→' + e.to] === true })
-        hiddenCount = drawable.length - chosen.length
-      }
-      shared.wireStats = {
-        drawn: chosen.length,
-        hidden: hiddenCount,
-        total: drawable.length,
-        relations: relationStats(drawableAll, chosen),
-      }
-
-      return { chosen: chosen, hiddenCount: hiddenCount, stats: shared.wireStats }
-    }
-
-    module.exports = { chooseEdges }
-    return module.exports
   },
 })
 
@@ -5607,27 +4523,23 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — One graph in, one drawing out: the stages in order.
+// dsh-cdd-lens — One screen in, one drawing out.
 //
-// 只有一条路径，没有皮肤。分层由 layout/sugiyama 自己算——不再问服务端要 `/chain`。
-//
-// 这条管线是照 /Users/a1/Workspace/WORKSPACE/visual_map 重写的：
-//   数据(graph) → 分层布局(sugiyama) → 边折线(polylines) → emit 成 SVG 路径
-// visual_map 里布局与布线解耦，靠的是 `edge.bendPoints` 这一个契约；这里也一样，
-// sugiyama 把跨层边的拐点算好放进 pts，emit 只管照着画。
+// 画什么只认 shared.screen（后端计算单元 src/compute 的结果）：
+//   screen.nodes → 分层布局（layout/sugiyama）
+//   screen.side  → 不在当前树里的 seed，堆到树的下面，排成等宽的列
+//   screen.edges → 一条不少地出线（一条边一种类型）
+// 这里不做任何筛选：不看按钮状态、不看关系开关、不挑主干。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/layout/layout',
   factory: (require) => {
     var module = { exports: {} }
     var __graph_model = require('dsh-cdd-lens/graph/model')
-    var uiOf = __graph_model.uiOf
+    var placeOf = __graph_model.placeOf
+    var setPlace = __graph_model.setPlace
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
     var fact = __runtime_debug.fact
-    var placeOf = __graph_model.placeOf
-    var setPlace = __graph_model.setPlace
-    var __layout_prep = require('dsh-cdd-lens/layout/prep')
-    var layoutScope = __layout_prep.layoutScope
     var __layout_metrics = require('dsh-cdd-lens/layout/metrics')
     var boxMetrics = __layout_metrics.boxMetrics
     var __layout_sugiyama = require('dsh-cdd-lens/layout/sugiyama')
@@ -5642,8 +4554,6 @@ window.__ModuleLoader__.load({
     var freeGatherDragged = __layout_gather.freeGatherDragged
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
-    var __routing_select = require('dsh-cdd-lens/routing/select')
-    var chooseEdges = __routing_select.chooseEdges
     var __routing_emit = require('dsh-cdd-lens/routing/emit')
     var emitWires = __routing_emit.emitWires
     var PORT_OFFSET = 0.5
@@ -5660,119 +4570,145 @@ window.__ModuleLoader__.load({
     }
 
     function bindPolylineEndpoints(line, byId) {
-        var a = byId[line.from]
-        var b = byId[line.to]
-        if (a === undefined || b === undefined) return line
-        var middle = (line.pts || []).slice(1, -1).map(function (pt) { return { x: pt.x, y: pt.y } })
-        var pts = [a.ports.out].concat(middle).concat([b.ports.in])
-        return Object.assign({}, line, {
-          pts: pts,
-          sourcePort: { side: 'right', point: a.ports.out },
-          targetPort: { side: 'left', point: b.ports.in },
-        })
+      var a = byId[line.from]
+      var b = byId[line.to]
+      if (a === undefined || b === undefined) return line
+      var middle = (line.pts || []).slice(1, -1).map(function (pt) { return { x: pt.x, y: pt.y } })
+      return Object.assign({}, line, {
+        pts: [a.ports.out].concat(middle).concat([b.ports.in]),
+        sourcePort: { side: 'right', point: a.ports.out },
+        targetPort: { side: 'left', point: b.ports.in },
+      })
     }
 
     function bindPolylineSet(polylines, byId) {
       return polylines.map(function (line) { return bindPolylineEndpoints(line, byId) })
     }
 
-    function allowedTypes(types, relationFilter) {
-      if (relationFilter === undefined || relationFilter === null) return types
-      return types.filter(function (type) { return relationFilter[type] !== false })
-    }
-
-    function finalPolylines(lines, picked, byId, relationFilter) {
-      return bindPolylineSet(lines.filter(function (line) {
-        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
-        return types.length > 0
-          && picked[line.from + '\u0000' + line.to] === true
-      }).map(function (line) {
-        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
-        return Object.assign({}, line, {
-          id: line.from + '\u2192' + line.to + ':' + types.join(','),
-          type: types[0],
-          types: types,
-        })
-      }), byId)
+    /** 屏幕上画什么：只认 shared.screen，不筛选。 */
+    function screenScope(graph) {
+      var screen = shared.screen || { nodes: [], side: [] }
+      var has = function (id) { return graph.nodes[id] !== undefined }
+      var included = screen.nodes.filter(has)
+      var side = screen.side.filter(has)
+      var fileOrder = []
+      included.concat(side).forEach(function (id) {
+        var file = graph.nodes[id].file
+        if (fileOrder.indexOf(file) < 0) fileOrder.push(file)
+      })
+      return { included: included, side: side, fileOrder: fileOrder }
     }
 
     /**
-     * Turn one graph into one drawing.
-     *
-     * @param graph - nodes and edges to draw。
-     * @param relationFilter - relation kinds the viewer left switched on。
-     * @param avail - the canvas viewport width in CSS pixels。
-     * @returns nodes, wires, labels, junctions, arrows, file boxes and size。
+     * 不在当前树里的 seed：堆到树的下面，排成等宽的列（每列左沿对齐，列间留足角标的净空）。
+     * 画过的位置记住，下次照旧——树长高了旁边的节点也不跳；新来的接在已有的下面。
      */
-    function layout(graph, relationFilter, avail) {
+    function placeSide(graph, side, metrics, top, avail) {
+      if (side.length === 0) return []
+      var gapX = metrics.LAYER_GAP_X
+      var gapY = metrics.BOX_GAP_Y
+      var width = side.reduce(function (m, id) { return Math.max(m, metrics.sizeOf(id).w) }, 0)
+      var usable = Math.max(width, (avail || 0) - metrics.PAD * 2)
+      var cols = Math.max(1, Math.floor((usable + gapX) / (width + gapX)))
+      var known = {}
+      var bottom = top - gapY
+      side.forEach(function (id) {
+        var at = placeOf(graph, id)
+        if (at === null || at.side !== true || typeof at.x !== 'number' || typeof at.y !== 'number') return
+        known[id] = at
+        bottom = Math.max(bottom, at.y + at.h)
+      })
+      var col = 0
+      var y = bottom + gapY
+      var rowH = 0
+      return side.map(function (id) {
+        var node = graph.nodes[id]
+        var h = metrics.sizeOf(id).h
+        var rec = {
+          id: id, node: node, anchor: node, w: width, h: h,
+          file: node.file, tree: 0, label: metrics.label[id],
+          flowDir: 'ltr', boxKey: node.file, side: true,
+        }
+        if (known[id] !== undefined) {
+          rec.x = known[id].x
+          rec.y = known[id].y
+          rec.layer = known[id].layer
+        } else {
+          if (col >= cols) { col = 0; y += rowH + gapY; rowH = 0 }
+          rec.x = metrics.PAD + col * (width + gapX)
+          rec.y = y
+          rec.layer = 'side:' + col
+          col += 1
+          if (h > rowH) rowH = h
+        }
+        rec.ports = portsFor(rec)
+        return rec
+      })
+    }
+
+    function relationStats(graph, wires) {
+      var stats = {}
+      graph.edges.forEach(function (e) {
+        var type = e.types[0]
+        if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
+        stats[type].total += 1
+      })
+      wires.forEach(function (w) { if (stats[w.type] !== undefined) stats[w.type].drawn += 1 })
+      return stats
+    }
+
+    /** 记住这次画出来的位置：已有同类（树 / 旁边）位置的不改，身份变了的重记。 */
+    function rememberPlaces(graph, place) {
+      place.placed.forEach(function (p) {
+        var known = placeOf(graph, p.id)
+        if (known !== null && (known.side === true) === (p.side === true)) return
+        setPlace(graph, p.id, { x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer, ports: p.ports, side: p.side === true })
+      })
+    }
+
+    /**
+     * Turn one screen into one drawing.
+     *
+     * @param graph - shared.graph，由 /screen 原样生成。
+     * @param _unused - 旧的关系筛选参数，已不再使用（筛选只在计算单元里）。
+     * @param avail - the canvas viewport width in CSS pixels。
+     */
+    function layout(graph, _unused, avail) {
       if (graph.rootId === null) {
-        note('layout', 'rootId=null，没有起点可用（nodes=' + Object.keys(graph.nodes).length + '）')
+        note('layout', 'rootId=null，屏幕为空（nodes=' + Object.keys(graph.nodes).length + '）')
         return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
-      var scope = layoutScope(graph)
-      var metrics = boxMetrics(graph, scope, avail)
+      var scope = screenScope(graph)
+      var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
 
-      // ---- 会话自己的边要画出来，不管有没有人按过按钮 ----
-      //
-      // 这是删掉 /among 之后必须补上的一件事：那条路由以前给 bridge 边打
-      // `always`。没有它，一个刚 ingest 出来的图里每条边两端都没被按过，
-      // select.js 就把它们全部滤掉——画面上就是「一堆卡片，一根线都没有」。
-      //
-      // 判据不是「谁打的标记」，而是这个节点本身有没有被这次会话碰过：
-      // 两个 anchor 都是会话自己的，它们之间的关系就是这次会话要看的答案。
-      graph.edges.forEach(function (e) {
-        if (e.always === true) return
-        var fromUI = uiOf(graph, e.from)
-        var toUI = uiOf(graph, e.to)
-        var fromSession = fromUI !== null && (fromUI.session === true || fromUI.explored === true)
-        var toSession = toUI !== null && (toUI.session === true || toUI.explored === true)
-        if (fromSession && toSession) e.always = true
-      })
-
-      // ---- 分层布局：消环 → 分层 → 排序 → 坐标，一次全出 ----
+      // ---- 树：分层布局；画过的树节点位置冻结（旁边的旧位置不算，进树要重新排） ----
       var laid = sugiyama(graph, scope.included, metrics, function (id) {
         var known = placeOf(graph, id)
-        // 只认已经真正画过的那一次位置。node 上没有位置 = 它还没上过屏幕。
-        if (known === null || typeof known.x !== 'number' || typeof known.y !== 'number') return null
+        if (known === null || known.side === true || typeof known.x !== 'number' || typeof known.y !== 'number') return null
         return known
       })
-      var place = {
-        placed: laid.placed,
-        rows: [],
-        canvasY: laid.canvasY,
-      }
+      // ---- 旁边：堆到树的下面 ----
+      var sideTop = laid.placed.length > 0 ? laid.canvasY : metrics.PAD
+      var sidePlaced = placeSide(graph, scope.side, metrics, sideTop, avail)
+      var sideBottom = sidePlaced.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
+      var place = { placed: laid.placed.concat(sidePlaced), rows: [], canvasY: Math.max(laid.canvasY, sideBottom + metrics.BOX_GAP_Y) }
 
       // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
-      // 注意顺序：先应用保存的位置，再分离重叠——反过来的话保存的位置会被覆盖。
-      applySavedPositions(graph, place, shared.nodePositions || {})
+      applySavedPositions(place, shared.nodePositions || {})
       freeGatherDragged(place)
       reclaimStrays(place, metrics, avail)
-
       var orient = { byId: {} }
       place.placed.forEach(function (p) { orient.byId[p.id] = p })
-
-      // 选中节点的上下游坐到它旁边，收拢之后才推重叠——反过来的话
-      // 收拢列里刚排好的卡片会被分离过程推走。
       applyGather(graph, place, metrics)
       separateOverlaps(place, metrics)
       syncPorts(place)
 
-      // ---- 布线：哪条边值得画 ----
-      var edges = chooseEdges(graph, scope, orient, relationFilter)
-      var picked = {}
-      edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
-
-      // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
-      var polylines = finalPolylines(laid.polylines, picked, orient.byId, relationFilter)
-      var kept = {}
-      polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
-      // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
+      // ---- 出线：每条边一根线，一条不少 ----
+      var polylines = bindPolylineSet(laid.polylines, orient.byId)
       var hops = { hSegs: new Map(), segments: [] }
       var drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
 
       // ---- 尺寸：从画出来的东西反推 ----
-      // 手工坐标可能把某个节点放到负坐标（画布原点左边/上边）。那时整张图
-      // 往右下挪一屏边距，挪完再重新出线——布线不变，只是原点移了位置。
       var fit = fitExtent(place, drawn, metrics)
       if (fit.dx > 0 || fit.dy > 0) {
         shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
@@ -5783,20 +4719,12 @@ window.__ModuleLoader__.load({
         drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }
-      // 只记录第一次上屏的位置。之后普通布局、选中、高亮、过滤、画布尺寸变化
-      // 都不许改它；只有用户拖动走 shared.nodePositions 才能覆盖。
-      place.placed.forEach(function (p) {
-        if (placeOf(graph, p.id) !== null) return
-        setPlace(graph, p.id, {
-          x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer,
-          ports: p.ports,
-        })
-      })
+      rememberPlaces(graph, place)
 
-      var maxX = fit.maxX, maxY = fit.maxY
-
+      var relations = relationStats(graph, drawn.wires)
+      shared.wireStats = { drawn: drawn.wires.length, hidden: 0, total: graph.edges.length, relations: relations }
       fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (laid.layers || 0) + 'L')
-      note('layout', 'in=' + Object.keys(graph.nodes).length + ' edges=' + graph.edges.length
+      note('layout', 'tree=' + scope.included.length + ' side=' + scope.side.length + ' edges=' + graph.edges.length
         + ' -> placed=' + place.placed.length + ' wires=' + drawn.wires.length + ' layers=' + laid.layers)
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
@@ -5804,24 +4732,14 @@ window.__ModuleLoader__.load({
         rows: [], files: [],
         layers: laid.layers,
         crossings: laid.crossings,
-        stats: {
-          nodes: place.placed.length,
-          wires: drawn.wires.length,
-          relations: edges.stats.relations,
-          wireTotal: edges.stats.total,
-        },
-        width: Math.max(avail || 0, maxX + metrics.PAD),
-        height: Math.max(360, maxY + metrics.PAD),
+        stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
+        width: Math.max(avail || 0, fit.maxX + metrics.PAD),
+        height: Math.max(360, fit.maxY + metrics.PAD),
       }
     }
 
-    /**
-     * 手工拖过的坐标原样写上。
-     *
-     * 分层布局先给出建议位置，用户拖过的那一个覆盖它——不然每次重画都会把用户
-     * 摆好的东西弹回去。
-     */
-    function applySavedPositions(graph, place, positions) {
+    /** 手工拖过的坐标原样写上，不然每次重画都会把用户摆好的东西弹回去。 */
+    function applySavedPositions(place, positions) {
       if (positions === null || positions === undefined) return
       place.placed.forEach(function (p) {
         var at = positions[p.id]
@@ -5829,10 +4747,7 @@ window.__ModuleLoader__.load({
         p.x = at.x
         p.y = at.y
         p.manual = true
-        p.ports = {
-          in: { x: p.x, y: p.y + p.h / 2 },
-          out: { x: p.x + p.w, y: p.y + p.h / 2 },
-        }
+        p.ports = portsFor(p)
       })
     }
 
@@ -6634,10 +5549,8 @@ window.__ModuleLoader__.load({
   factory: (require) => {
     var module = { exports: {} }
     var React = require('react')
-    var h = React.createElement
     var useState = React.useState
     var useEffect = React.useEffect
-    var useCallback = React.useCallback
     var useMemo = React.useMemo
     var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
@@ -6656,12 +5569,10 @@ window.__ModuleLoader__.load({
      * Every hook and derived value the spread-out view runs on.
      */
     function useViewState(props) {
-
       var ctx = props.ctx
       useShared()
       var engine = useMemo(function () { return makeEngine(ctx) }, [])
       var tab = useState('graph')
-      var relations = useState({ call: true, dataflow: false, inherit: false, impact: false, dispatch: true })
       var zoom = useState(1)
       var layoutRevision = useState(0)
       var canvasRef = useRef(null)
@@ -6676,23 +5587,13 @@ window.__ModuleLoader__.load({
       }, [wanted])
 
       var context = shared.context
-      // The spread-out view sits in the centre column, but another plugin's
-      // `position: fixed` rail paints over everything at z-index 500 — including
-      // the right end of this toolbar, whose buttons then cannot be clicked at
-      // all (the pointer lands on the neighbour). Reserving its measured width
-      // is the same fix the floating panel already needed; hit-testing does not
-      // care that we are inside a column.
-      var viewRef = useRef(null)
       // Only what is genuinely lying on top of this view, measured against the
-      // view's own box. Reserving the window's right edge here double-counted
-      // the frame's details track — the grid had already taken it out — and
-      // left a dead white strip the drawing could never reach.
+      // view's own box, is reserved on the right.
+      var viewRef = useRef(null)
       var reserve = useOverlapInset(viewRef)
 
-      // The source panel belongs to this view, wherever it is drawn. It rides
-      // in the trajectory rail, which outlives any one tab, so the rail has to
-      // be told when this view is actually on screen — otherwise the source of
-      // an anchor keeps sitting there over Chat, owned by nothing.
+      // The source panel belongs to this view; the trajectory rail has to be
+      // told when this view is actually on screen.
       useEffect(function () {
         shared.viewMounted = (shared.viewMounted || 0) + 1
         publish()
@@ -6708,16 +5609,12 @@ window.__ModuleLoader__.load({
         return function () { window.removeEventListener('keydown', escape) }
       }, [])
 
-      // Selection is a highlight/source action only. Node coordinates are
-      // stable after first paint unless the user drags them, so selecting a
-      // card must not auto-expand or re-seat its neighbours.
       var selectedNow = shared.selected
       useEffect(function () {
         if (selectedNow === null || selectedNow === undefined) engine.releaseGather()
       }, [selectedNow])
 
-      // Re-measured on every resize: the source column, the neighbour rail and
-      // dsh's own sidebar all change this number while the page is open.
+      // Re-measured on every resize.
       var availWidth = useState(0)
       useEffect(function () {
         var read = function () {
@@ -6732,19 +5629,15 @@ window.__ModuleLoader__.load({
         return function () { clearInterval(timer); window.removeEventListener('resize', read) }
       }, [])
 
+      // 画什么只由 shared.screen 决定（后端计算单元）；这里只排版。
       var model = useMemo(function () {
-        return layout(shared.graph, relations[0], availWidth[0])
-      }, [shared.revision, relations[0], layoutRevision[0], availWidth[0]])
+        return layout(shared.graph, undefined, availWidth[0])
+      }, [shared.revision, layoutRevision[0], availWidth[0]])
 
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
-      /**
-       * 这个节点现在**看得见吗**（它的框整个落在可滚动视野内，留一点余量）。
-       *
-       * 展开只在这里返回 false 时才动视口：你点开一个就在眼前的节点，
-       * 画面不该动；点开一个滚出视野的节点，才需要把它带回来。
-       */
+      /** 这个节点现在看得见吗：只在看不见时才动视口，免得展开时画面乱跳。 */
       var onScreen = function (el, id, m, scale) {
         if (el === null) return true
         var target = m.nodes.filter(function (p) { return p.id === id })[0]
@@ -6775,55 +5668,31 @@ window.__ModuleLoader__.load({
           window.requestAnimationFrame(function () { centerOn(id, next) })
         })
       }
-      var toggleRelation = function (name) {
-        relations[1](function (before) {
-          var next = Object.assign({}, before)
-          next[name] = !next[name]
-          return next
-        })
-      }
 
       var viewportRequest = shared.viewportRequest || {
         id: shared.selected || shared.graph.rootId,
         mode: 'fit',
         seq: 0,
       }
-      // 视口只在**真的有人请求**时才动。
-      //
-      // 以前这个 effect 的依赖里有 model.width / model.height，于是图一长大
-      // （展开一层、画布变高）它就重跑，把视口重新居中到选中节点——节点坐标
-      // 一个像素没动，整屏却在跳。用户看到的就是「展开之后乱跳」。
-      //
-      // 现在按请求序号走：同一个 seq 只消费一次，重画多少次视口都不动。
+      // 视口只在真的有人请求时才动：同一个 seq 只消费一次，重画多少次视口都不动。
       var lastSeq = useRef(-1)
       useEffect(function () {
         if (tab[0] !== 'graph' || model.nodes.length === 0) return
         if (viewportRequest.seq === lastSeq.current) return
         lastSeq.current = viewportRequest.seq
         var frame = window.requestAnimationFrame(function () {
-          // Never auto-shrink. Fitting the whole canvas means dividing by its
-          // HEIGHT, and a graph of any size is tall — the solve landed on 68%
-          // every single time, which rendered a 13.5px name at nine pixels.
-          // A drawing too small to read is not an overview of anything, so the
-          // automatic behaviour is: full size, scrolled to the anchor in
-          // question. Shrinking to see everything at once stays available, but
-          // as a deliberate press of 适配.
           if (viewportRequest.mode === 'fit') {
             var readable = Math.max(zoom[0], 1)
             if (zoom[0] !== readable) setZoom(readable)
             window.requestAnimationFrame(function () { centerOn(viewportRequest.id, readable) })
           } else if (viewportRequest.mode === 'ensure') {
-            // 展开用这个：节点已经在视野里就什么都不做。展开一个新节点时视口
-            // 跳一下，看着就是「点了展开树乱跳」——真正跳的是视口不是节点。
-            if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) {
-              centerOn(viewportRequest.id, zoom[0])
-            }
+            if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) centerOn(viewportRequest.id, zoom[0])
           } else centerOn(viewportRequest.id, zoom[0])
         })
         return function () { window.cancelAnimationFrame(frame) }
       }, [tab[0], viewportRequest.seq])
 
-      return { ctx: ctx, engine: engine, tab: tab, relations: relations, zoom: zoom, layoutRevision: layoutRevision, canvasRef: canvasRef, context: context, viewRef: viewRef, reserve: reserve, model: model, setZoom: setZoom, centerOn: centerOn, fit: fit, toggleRelation: toggleRelation }
+      return { ctx: ctx, engine: engine, tab: tab, zoom: zoom, layoutRevision: layoutRevision, canvasRef: canvasRef, context: context, viewRef: viewRef, reserve: reserve, model: model, setZoom: setZoom, centerOn: centerOn, fit: fit }
     }
 
     module.exports = { useViewState }
@@ -7025,6 +5894,9 @@ window.__ModuleLoader__.load({
 
 // dsh-cdd-lens — The toolbar of the spread-out view.
 //
+// 树开关、关系开关只改视图状态（engine/screen.js），屏幕由 /screen 重算；
+// 每棵树按钮上直接写「N节点/M关系」，数字就是选中这棵树时屏幕上的数。
+//
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
@@ -7034,26 +5906,55 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var React = require('react')
     var h = React.createElement
-    var useState = React.useState
-    var useEffect = React.useEffect
-    var useCallback = React.useCallback
-    var useMemo = React.useMemo
-    var useRef = React.useRef
-    var __graph_model = require('dsh-cdd-lens/graph/model')
-    var emptyGraph = __graph_model.emptyGraph
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
     var shared = __state_store.shared
-
-    var SKIN_KEY = 'cdd-lens.skin.v1'
-    // Restored once, before anything draws, so the first frame is already the
-    // drawing this browser last asked for rather than a flash of the other one.
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var clearNodePositions = __state_persist.clearNodePositions
     var __view_panels = require('dsh-cdd-lens/view/panels')
     var Search = __view_panels.Search
     var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
     var openDockBesideChat = __shell_chat_eat.openDockBesideChat
+
+    var TREE_BUTTONS = [
+      ['degree1', '1 度树', 'seed 之间直接有边，中间不插点'],
+      ['degree2', '2 度树', '没连上的 seed 上下游各展开 2 度，剪到头和叶都是 seed'],
+      ['edit', 'edit 树', '同 2 度树，但头和叶只认 edit 过的 seed'],
+    ]
+    var RELATIONS = ['call', 'dataflow', 'inherit', 'impact', 'dispatch']
+
+    function treeSelector(engine) {
+      var view = engine.view()
+      var totals = (shared.screen && shared.screen.treeTotals) || {}
+      return h('div', { key: 'tree', className: 'cddl-seg cddl-tree', 'aria-label': '看哪棵树' },
+        TREE_BUTTONS.map(function (t) {
+          var n = totals[t[0]]
+          var on = view.tree === t[0]
+          return h('button', {
+            key: t[0],
+            className: on ? 'on' : '',
+            'aria-pressed': on ? 'true' : 'false',
+            'data-tree': t[0],
+            'data-nodes': n ? n.nodes : '',
+            'data-edges': n ? n.edges : '',
+            title: t[2] + (n ? '\n旁边另有 ' + n.side + ' 个 seed' : ''),
+            onClick: function () { engine.setTree(t[0]) },
+          }, t[1] + (n ? ' ' + n.nodes + '节点/' + n.edges + '关系' : ''))
+        }))
+    }
+
+    function relationSelector(engine) {
+      var rels = engine.view().rels
+      return h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系开关' },
+        RELATIONS.map(function (name) {
+          return h('button', {
+            key: name,
+            className: rels[name] ? 'on' : '',
+            'aria-pressed': rels[name] ? 'true' : 'false',
+            onClick: function () { engine.toggleRelation(name) },
+          }, name)
+        }))
+    }
 
     /**
      * The control strip above the canvas.
@@ -7064,125 +5965,53 @@ window.__ModuleLoader__.load({
       var engine = view.engine
       var fit = view.fit
       var layoutRevision = view.layoutRevision
-      var model = view.model
-      var relations = view.relations
       var setZoom = view.setZoom
       var tab = view.tab
-      var toggleRelation = view.toggleRelation
       var zoom = view.zoom
 
-      // Kept per browser: which drawing someone prefers is a reading habit, not
-      // a property of the repository.
-
       return h('div', { className: 'cddl-toolbar', key: 't' }, [
-          h('div', { key: 'seg', className: 'cddl-seg' }, [
-            h('button', { key: 'g', className: tab[0] === 'graph' ? 'on' : '', onClick: function () { tab[1]('graph') } }, '逻辑图'),
-            h('button', { key: 'o', className: tab[0] === 'outline' ? 'on' : '', onClick: function () { tab[1]('outline') } }, '目录'),
-            h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: function () { tab[1]('draw') } }, 'cdd draw'),
-          ]),
-          // 树选择器。规则文档 §1.3 定义了四棵树；这里就是选它看哪一棵。
-          //   直接树 = 1 度树：seed 之间直接有边，中间不插点
-          //   anchor 树：单个 anchor 周围直接相连的邻居，也不插点
-          //   2 度树：允许一个中间点把两个 seed 接起来
-          //   edit 树：只管 edit 过的那批 anchor
-          // 「全部」不套任何树，把图里现有的都画出来。
-          tab[0] !== 'graph' ? null
-            : h('div', { key: 'tree', className: 'cddl-seg cddl-tree', 'aria-label': '看哪棵树' },
-              [['all', '全部'], ['anchor', 'anchor 树'], ['degree1', '1 度树'], ['degree2', '2 度树'], ['edit', 'edit 树']]
-                .map(function (pair) {
-                  var value = pair[0]
-                  return h('button', {
-                    key: value,
-                    className: (shared.treeMode || 'all') === value ? 'on' : '',
-                    'aria-pressed': (shared.treeMode || 'all') === value ? 'true' : 'false',
-                    title: value === 'degree1' ? 'seed 之间直接有边的那些，中间不插点'
-                      : value === 'degree2' ? '允许一个中间点把两个 seed 接起来'
-                      : value === 'edit' ? '只看这次会话 edit 过的 anchor'
-                      : value === 'anchor' ? '当前选中 anchor 周围直接相连的邻居'
-                      : '图里现有的全部画出来',
-                    onClick: function () {
-                      shared.treeMode = value
-                      publish()
-                    },
-                  }, pair[1])
-                })),
-          h(Search, { key: 'q', engine: engine }),
-          h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系筛选' },
-            ['call', 'dataflow', 'inherit', 'impact', 'dispatch'].map(function (name) {
-              return h('button', {
-                key: name,
-                className: relations[0][name] ? 'on' : '',
-                'aria-pressed': relations[0][name] ? 'true' : 'false',
-                onClick: function () { toggleRelation(name) },
-              }, name)
-            })),
-          h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },
-            context && context.stats ? (context.stats.anchors + ' anchor · ' + context.stats.edges + ' 边 · ' + context.stats.files + ' 文件') : ''),
-          h('span', { key: 's', className: 'cddl-spacer' }),
-          h('div', { key: 'layout-mode', className: 'cddl-seg cddl-layout-mode', 'aria-label': '布局状态' }, [
-            h('button', {
-              key: 'user', className: shared.edgeFocus ? '' : 'on',
-              onClick: function () { engine.blurEdge() },
-            }, '用户布局'),
-            h('button', {
-              key: 'focus', className: shared.edgeFocus ? 'on' : '',
-              title: shared.edgeFocus
-                ? (shared.edgeFocus.type === 'dataflow' ? '完整数据流链路；再次点线或按 Esc 返回' : '依赖前后各 3 跳；再次点线或按 Esc 返回')
-                : '点击任意连线进入链路聚焦',
-              onClick: function () { if (shared.edgeFocus) engine.blurEdge() },
-            }, shared.edgeFocus
-              ? (shared.edgeFocus.type === 'dataflow' ? '完整数据链' : '依赖 ±3 跳')
-              : '链路聚焦'),
-          ]),
-          h('div', { key: 'z', className: 'cddl-zoom', 'aria-label': '缩放控制' }, [
-            h('button', { key: 'o', className: 'cddl-btn', onClick: function () { setZoom(zoom[0] - .1) } }, '−'),
-            h('button', { key: 'n', className: 'cddl-btn', onClick: function () { setZoom(1) } }, Math.round(zoom[0] * 100) + '%'),
-            h('button', { key: 'i', className: 'cddl-btn', onClick: function () { setZoom(zoom[0] + .1) } }, '＋'),
-          ]),
-          h('button', {
-            key: 'l', className: 'cddl-btn',
-            onClick: function () {
-              clearNodePositions()
-              shared.edgeFocus = null
-              layoutRevision[1](function (n) { return n + 1 })
-              publish()
-            },
-          }, '恢复自动布局'),
-          h('button', {
-            key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
-            onClick: function () { fit(shared.selected || shared.graph.rootId, .35) },
-          }, '适配'),
-          // No "收进浮窗" any more. The floating panel it fed is gone, so the
-          // button did nothing a user could see — and a graph that can pop
-          // itself out over the page is the mess this view is supposed to
-          // replace. Beside Chat is the only place it goes.
-          props.docked ? null : h('button', {
-            key: 'float', className: 'cddl-btn',
-            onClick: function () { openDockBesideChat(ctx) },
-          }, '并排 Chat ⤢'),
-          h('button', {
-            key: 'r', className: 'cddl-btn',
-            onClick: function () { engine.reindex() },
-          }, shared.reindexing ? '建索引…' : '↻ 重建索引'),
-          h('button', {
-            key: 'wire-mode', className: 'cddl-btn' + (shared.wireMode === 'all' ? ' on' : ''),
-            title: shared.wireStats
-              ? (shared.wireMode === 'all'
-                ? '正在画全部 ' + shared.wireStats.total + ' 条关系'
-                : '只画主干；另有 ' + shared.wireStats.hidden + ' 条关系按节点上的 ↑↓ 展开')
-              : '',
-            onClick: function () {
-              shared.wireMode = shared.wireMode === 'all' ? 'tree' : 'all'
-              publish()
-            },
-          }, shared.wireMode === 'all'
-            ? ('全部关系 ' + (shared.wireStats ? shared.wireStats.total : ''))
-            : ('主干 ' + (shared.wireStats ? shared.wireStats.drawn + '/' + shared.wireStats.total : ''))),
-          h('button', {
-            key: 'f', className: 'cddl-btn',
-            onClick: function () { shared.graph = emptyGraph(); publish() },
-          }, '清空'),
-        ])
+        h('div', { key: 'seg', className: 'cddl-seg' }, [
+          h('button', { key: 'g', className: tab[0] === 'graph' ? 'on' : '', onClick: function () { tab[1]('graph') } }, '逻辑图'),
+          h('button', { key: 'o', className: tab[0] === 'outline' ? 'on' : '', onClick: function () { tab[1]('outline') } }, '目录'),
+          h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: function () { tab[1]('draw') } }, 'cdd draw'),
+        ]),
+        tab[0] !== 'graph' ? null : treeSelector(engine),
+        h(Search, { key: 'q', engine: engine }),
+        relationSelector(engine),
+        h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },
+          context && context.stats ? (context.stats.anchors + ' anchor · ' + context.stats.edges + ' 边 · ' + context.stats.files + ' 文件') : ''),
+        shared.screenError ? h('span', { key: 'err', className: 'cddl-meta cddl-error', title: shared.screenError }, '屏幕计算失败') : null,
+        h('span', { key: 's', className: 'cddl-spacer' }),
+        h('div', { key: 'z', className: 'cddl-zoom', 'aria-label': '缩放控制' }, [
+          h('button', { key: 'o', className: 'cddl-btn', onClick: function () { setZoom(zoom[0] - .1) } }, '−'),
+          h('button', { key: 'n', className: 'cddl-btn', onClick: function () { setZoom(1) } }, Math.round(zoom[0] * 100) + '%'),
+          h('button', { key: 'i', className: 'cddl-btn', onClick: function () { setZoom(zoom[0] + .1) } }, '＋'),
+        ]),
+        h('button', {
+          key: 'l', className: 'cddl-btn',
+          onClick: function () {
+            clearNodePositions()
+            layoutRevision[1](function (n) { return n + 1 })
+            publish()
+          },
+        }, '恢复自动布局'),
+        h('button', {
+          key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
+          onClick: function () { fit(shared.selected || shared.graph.rootId, .35) },
+        }, '适配'),
+        props.docked ? null : h('button', {
+          key: 'float', className: 'cddl-btn',
+          onClick: function () { openDockBesideChat(ctx) },
+        }, '并排 Chat ⤢'),
+        h('button', {
+          key: 'r', className: 'cddl-btn',
+          onClick: function () { engine.reindex() },
+        }, shared.reindexing ? '建索引…' : '↻ 重建索引'),
+        h('button', {
+          key: 'f', className: 'cddl-btn', title: '去掉所有展开和 pin',
+          onClick: function () { engine.resetView() },
+        }, '清空'),
+      ])
     }
 
     module.exports = { renderToolbar }

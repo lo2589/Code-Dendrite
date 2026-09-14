@@ -1,4 +1,8 @@
-// dsh-cdd-lens — Engine method that turns a session snapshot into anchor state.
+// dsh-cdd-lens — 会话快照 → 轨迹标记（看过 / 改过 / 第几轮）。
+//
+// 只给轨迹栏和卡片上的标记用：shared.trace / shared.unresolved / shared.order。
+// 图上有哪些节点、哪些边一概不在这里定——折完一份快照就叫 /screen 重算屏幕
+// （后端自己读会话日志，见 src/compute）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -9,11 +13,6 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __runtime_api = require('dsh-cdd-lens/runtime/api')
     var ROUTE = __runtime_api.ROUTE
-    var api = __runtime_api.api
-    var __graph_model = require('dsh-cdd-lens/graph/model')
-    var addEdge = __graph_model.addEdge
-    var addNode = __graph_model.addNode
-    var uiOf = __graph_model.uiOf
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
     var fact = __runtime_debug.fact
@@ -22,28 +21,101 @@ window.__ModuleLoader__.load({
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
 
-    /**
-     * Taking one session snapshot and painting it onto the graph.
-     *
-     * @param ctx - the client context the views were mounted with.
-     * @param engine - the engine being assembled; methods call each other
-     *   through it, so it is passed in rather than closed over.
-     * @param session - the current session id, or null.
-     * @param params - query parameters for one request.
-     * @returns the methods this file contributes.
-     */
+    /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
+    function stepsOf(snap) {
+      var stepOf = {}
+      var stepped = {}
+      snap.calls.forEach(function (call) {
+        stepped[call.turn] = (stepped[call.turn] || 0) + 1
+        stepOf[call.key] = stepped[call.turn]
+      })
+      return stepOf
+    }
+
+    function noteUnresolved(unresolved, call, touch, hit, at) {
+      var f = hit.file || touch.path
+      if (unresolved[f] === undefined) unresolved[f] = { file: f, reason: hit.reason, verb: touch.verb, turns: [], steps: [] }
+      if (unresolved[f].turns.indexOf(call.turn) < 0) unresolved[f].turns.push(call.turn)
+      var seenAt = unresolved[f].steps.some(function (x) { return x.turn === at.turn && x.step === at.step })
+      if (!seenAt) unresolved[f].steps.push(at)
+    }
+
+    function noteAnchor(byAnchor, call, anchor, event) {
+      var record = byAnchor[anchor.id]
+      if (record === undefined) {
+        byAnchor[anchor.id] = {
+          id: anchor.id, anchor: anchor, firstTurn: call.turn, lastTurn: call.turn,
+          firstStep: event.step, lastStep: event.step, events: [event],
+        }
+        return
+      }
+      if (call.turn < record.firstTurn || (call.turn === record.firstTurn && event.step < record.firstStep)) {
+        record.firstTurn = call.turn
+        record.firstStep = event.step
+      }
+      if (call.turn > record.lastTurn || (call.turn === record.lastTurn && event.step > record.lastStep)) {
+        record.lastTurn = call.turn
+        record.lastStep = event.step
+      }
+      record.events.push(event)
+    }
+
+    /** 解析结果 → 每个 anchor 一条轨迹记录；落不到 anchor 的文件照实列出，不丢。 */
+    function foldTrace(snap) {
+      var stepOf = stepsOf(snap)
+      var byAnchor = {}
+      var unresolved = {}
+      snap.calls.forEach(function (call) {
+        call.touches.forEach(function (touch, i) {
+          var hit = shared.resolved[call.key + '#' + i]
+          if (hit === undefined) return
+          var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
+          if (hit.anchors.length === 0) { noteUnresolved(unresolved, call, touch, hit, at); return }
+          hit.anchors.forEach(function (anchor) {
+            noteAnchor(byAnchor, call, anchor, {
+              turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
+              approx: touch.approx === true || hit.approx === true,
+              onSurface: call.remembered !== false, working: call.running === true,
+            })
+          })
+        })
+      })
+      Object.keys(byAnchor).forEach(function (id) {
+        var record = byAnchor[id]
+        record.events.sort(function (l, r) { return l.turn - r.turn || l.step - r.step })
+        var working = record.events.some(function (e) { return e.working })
+        var edited = record.events.some(function (e) { return e.verb === 'edit' })
+        record.state = working ? 'working' : edited ? 'edited' : 'viewed'
+        // One surviving verbatim read is enough to say the model still knows it.
+        record.remembered = record.events.some(function (e) { return e.onSurface })
+        record.approx = record.events.every(function (e) { return e.approx })
+      })
+      return { byAnchor: byAnchor, unresolved: Object.keys(unresolved).map(function (k) { return unresolved[k] }) }
+    }
+
+    /** 每个 anchor 第一次被碰到的先后名次（按调用 seq），也就是 agent 实际走的顺序。 */
+    function rankOf(snap) {
+      var firstSeq = {}
+      snap.calls.forEach(function (call) {
+        call.touches.forEach(function (touch, i) {
+          var hit = shared.resolved[call.key + '#' + i]
+          if (hit === undefined) return
+          hit.anchors.forEach(function (anchor) {
+            if (firstSeq[anchor.id] === undefined || call.seq < firstSeq[anchor.id]) firstSeq[anchor.id] = call.seq
+          })
+        })
+      })
+      var order = {}
+      Object.keys(firstSeq).sort(function (l, r) { return firstSeq[l] - firstSeq[r] })
+        .forEach(function (id, i) { order[id] = i + 1 })
+      return order
+    }
+
     function ingestMethods(ctx, engine, session, params) {
       return {
         /**
-         * Fold one conversation-view snapshot into the graph.
-         *
-         * The snapshot arrives from the shell, not from a poll: the same source
-         * the Trajectory tab runs on, so it is live during streaming, correct
-         * after a cold reload, and cannot disagree with the chat beside it.
-         *
-         * Only the file to anchor step needs the host, and only for calls not
-         * seen before. The page cannot look inside the repository, and that is
-         * the whole of what it asks for.
+         * Fold one conversation-view snapshot into the trajectory marks, then
+         * ask /screen for the drawing.
          */
         ingest: function (snap) {
           if (snap === undefined || snap === null) return Promise.resolve()
@@ -65,226 +137,47 @@ window.__ModuleLoader__.load({
           })
 
           var after = function () {
-            var byAnchor = {}
-            var unresolved = {}
-            // Which step of its turn a call is. `seq` is global and means nothing
-            // to a reader; "the third tool call of turn 15" is what someone
-            // actually says out loud, so the badge carries t15s3 and the numbering
-            // restarts with every turn.
-            var stepOf = {}
-            var stepped = {}
-            snap.calls.forEach(function (call) {
-              stepped[call.turn] = (stepped[call.turn] || 0) + 1
-              stepOf[call.key] = stepped[call.turn]
-            })
-            snap.calls.forEach(function (call) {
-              call.touches.forEach(function (touch, i) {
-                var hit = shared.resolved[call.key + '#' + i]
-                if (hit === undefined) return
-                if (hit.anchors.length === 0) {
-                  // Kept, not dropped. A session that opened twenty files and
-                  // shows an empty panel reads as a broken plugin; naming the
-                  // file and the reason is the difference between an honest
-                  // empty graph and a silent one.
-                  var f = hit.file || touch.path
-                  if (unresolved[f] === undefined) {
-                    unresolved[f] = {
-                      file: f, reason: hit.reason, verb: touch.verb, turns: [], steps: [],
-                    }
-                  }
-                  if (unresolved[f].turns.indexOf(call.turn) < 0) unresolved[f].turns.push(call.turn)
-                  // Where in the session it happened, same as a resolved touch.
-                  // A file that could not be pinned to an anchor still happened
-                  // at a moment, and leaving it out of the order would make the
-                  // rail quietly skip part of what the agent did.
-                  var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
-                  var seenAt = unresolved[f].steps.some(function (x) {
-                    return x.turn === at.turn && x.step === at.step
-                  })
-                  if (!seenAt) unresolved[f].steps.push(at)
-                  return
-                }
-                hit.anchors.forEach(function (anchor) {
-                  var record = byAnchor[anchor.id]
-                  var event = {
-                    turn: call.turn, step: stepOf[call.key] || 1,
-                    verb: touch.verb, tool: touch.tool,
-                    approx: touch.approx === true || hit.approx === true,
-                    onSurface: call.remembered !== false, working: call.running === true,
-                  }
-                  if (record === undefined) {
-                    byAnchor[anchor.id] = {
-                      id: anchor.id, anchor: anchor,
-                      firstTurn: call.turn, lastTurn: call.turn,
-                      firstStep: event.step, lastStep: event.step, events: [event],
-                    }
-                  } else {
-                    if (call.turn < record.firstTurn
-                        || (call.turn === record.firstTurn && event.step < record.firstStep)) {
-                      record.firstTurn = call.turn
-                      record.firstStep = event.step
-                    }
-                    if (call.turn > record.lastTurn
-                        || (call.turn === record.lastTurn && event.step > record.lastStep)) {
-                      record.lastTurn = call.turn
-                      record.lastStep = event.step
-                    }
-                    record.events.push(event)
-                  }
-                })
-              })
-            })
-            Object.keys(byAnchor).forEach(function (id) {
-              var record = byAnchor[id]
-              record.events.sort(function (l, r) { return l.turn - r.turn || l.step - r.step })
-              var working = record.events.some(function (e) { return e.working })
-              var edited = record.events.some(function (e) { return e.verb === 'edit' })
-              record.state = working ? 'working' : edited ? 'edited' : 'viewed'
-              // One surviving verbatim read is enough to say the model still knows it.
-              record.remembered = record.events.some(function (e) { return e.onSurface })
-              record.approx = record.events.every(function (e) { return e.approx })
-              // 把「这次会话改过它」同时写到节点上：edit 的节点一直留在图上，图那一边
-              // 不必每次去翻 trace。也记下最近一次被碰是哪一轮——看过的节点按轮次
-              // 变旧、过期撤下（见 graph/visible.fadedOut）。
-              var ui = uiOf(shared.graph, record.id)
-              if (ui !== null) {
-                if (edited || working) ui.edited = true
-                ui.viewedAt = record.lastTurn
-              }
-            })
-            shared.trace = byAnchor
-            shared.unresolved = Object.keys(unresolved).map(function (k) { return unresolved[k] })
-            note('graph', 'anchors=' + Object.keys(byAnchor).length
-              + ' unresolved=' + shared.unresolved.length + ' graphNodes=' + Object.keys(shared.graph.nodes).length
-              + ' graphEdges=' + shared.graph.edges.length)
-            fact('trace', Object.keys(byAnchor).length)
+            var folded = foldTrace(snap)
+            shared.trace = folded.byAnchor
+            shared.unresolved = folded.unresolved
+            shared.order = rankOf(snap)
+            var ids = Object.keys(folded.byAnchor)
+            fact('trace', ids.length)
             fact('unresolved', shared.unresolved.length)
-            // Rank by the seq of the first call that reached each anchor: the
-            // order the agent actually walked, which is what the graph is for.
-            var firstSeq = {}
-            snap.calls.forEach(function (call) {
-              call.touches.forEach(function (touch, i) {
-                var hit = shared.resolved[call.key + '#' + i]
-                if (hit === undefined) return
-                hit.anchors.forEach(function (anchor) {
-                  if (firstSeq[anchor.id] === undefined || call.seq < firstSeq[anchor.id]) {
-                    firstSeq[anchor.id] = call.seq
-                  }
-                })
-              })
-            })
-            var ranked = Object.keys(firstSeq).sort(function (l, r) { return firstSeq[l] - firstSeq[r] })
-            shared.order = {}
-            ranked.forEach(function (id, i) { shared.order[id] = i + 1 })
+            note('graph', 'ingest anchors=' + ids.length + ' unresolved=' + shared.unresolved.length)
             if (window.__cddLens !== undefined) {
               var reasons = {}
               shared.unresolved.forEach(function (u) { reasons[u.reason] = (reasons[u.reason] || 0) + 1 })
               window.__cddLens.resolve = {
-                calls: snap.calls.length,
-                anchors: Object.keys(byAnchor).length,
-                unresolved: shared.unresolved.length,
-                reasons: reasons,
-                root: shared.root,
+                calls: snap.calls.length, anchors: ids.length, unresolved: shared.unresolved.length,
+                reasons: reasons, root: shared.root,
               }
             }
-
-            var ids = Object.keys(byAnchor)
-            if (ids.length === 0) { publish(); return }
-            var fresh = []
-            ids.forEach(function (id) {
-              if (shared.graph.nodes[id] === undefined) {
-                addNode(shared.graph, byAnchor[id].anchor)
-                uiOf(shared.graph, id).island = true
-                fresh.push(id)
-              }
-              uiOf(shared.graph, id).session = true
-            })
-            if (shared.graph.rootId === null) {
-              var newest = ids.map(function (id) { return byAnchor[id] })
+            if (shared.selected === null && ids.length > 0) {
+              var newest = ids.map(function (id) { return folded.byAnchor[id] })
                 .sort(function (l, r) { return r.lastTurn - l.lastTurn })[0]
-              shared.graph.rootId = newest.id
-              uiOf(shared.graph, newest.id).island = false
-              if (shared.selected === null) {
-                shared.selected = newest.id
-                requestViewport(newest.id, 'fit')
-                engine.source(newest.id)
-              }
+              shared.selected = newest.id
+              requestViewport(newest.id, 'fit')
+              engine.source(newest.id)
             }
             publish()
-            if (fresh.length === 0) return grow()
-            // Only edges the code actually has, between anchors already on
-            // screen. Nothing new is pulled in, and two anchors touched in
-            // sequence with no edge between them stay apart: that gap is the
-            // finding, not a rendering bug to paper over.
-            // `bridge=1` because direct edges alone are almost always none: an
-            // agent reads a type and a function that uses it, but not the file
-            // between them, so both ends of a real relation are rarely both in
-            // the touched set. One intermediate hop is admitted and comes back
-            // marked, so the connection is visible and it is still obvious which
-            // nodes the agent actually opened.
-            return api('/among', params({
-              ids: Object.keys(shared.graph.nodes).join(','), bridge: '1',
-            })).then(function (link) {
-              (link.bridges || []).forEach(function (anchor) {
-                if (shared.graph.nodes[anchor.id] === undefined) {
-                  addNode(shared.graph, anchor)
-                  uiOf(shared.graph, anchor.id).bridge = true
-                  uiOf(shared.graph, anchor.id).synthetic = true
-                }
-              })
-              link.edges.forEach(function (e) {
-                // Mark the EDGE, never the node's expanded flag. Setting
-                // `node.down = true` here told the ↓ button that the callees
-                // were already on screen when they had never been fetched, so a
-                // press ran the collapse branch, hid nothing, and looked dead.
-                var edge = addEdge(shared.graph, e.from, e.to, [e.type])
-                if (edge !== undefined) edge.always = true
-                if (shared.graph.nodes[e.from] !== undefined) {
-                  uiOf(shared.graph, e.from).island = false
-                }
-                if (shared.graph.nodes[e.to] !== undefined) {
-                  uiOf(shared.graph, e.to).island = false
-                }
-              })
-              publish()
-              return grow()
-            })
-          }
-
-          // What the picture is about is what was changed. The edits are the
-          // seeds; `chain` pushes each of them out and back and reports the
-          // 这里以前调 engine.chain(edits, 1) 让服务端把图分层、把树长出来。
-          //
-          // /chain 已经删了——分层现在由布局自己算（layout/sugiyama 的第 2 步），
-          // 子节点由按关系的展开按钮（/expand、/walk）拉进来。这一次会话 ingest
-          // 只负责把「碰过的 anchor」放上屏幕并连上它们之间的边，够布局画第一版。
-          //
-          // 留着这个调用的话，engine.chain 不存在会当场抛错，整张图建不出来——
-          // 表现就是「面板说还没有起点」，而画布空白。
-          var grow = function () {
-            fact('graphNodes', Object.keys(shared.graph.nodes).length)
-            fact('graphEdges', shared.graph.edges.length)
-            fact('root', shared.graph.rootId === null ? 'null' : String(shared.graph.rootId).split('::').pop())
-            note('graph', '图就绪 nodes=' + Object.keys(shared.graph.nodes).length
-              + ' edges=' + shared.graph.edges.length + ' root=' + shared.graph.rootId)
-            publish()
-            return Promise.resolve()
+            return engine.refresh()
           }
 
           note('graph', 'ingest calls=' + snap.calls.length + ' pending=' + pending.length
             + ' resolved=' + Object.keys(shared.resolved).length)
           if (window.__cddLens !== undefined) window.__cddLens.pending = pending.length
-          if (pending.length === 0) { after(); return Promise.resolve() }
+          if (pending.length === 0) return after()
           return fetch(ROUTE + '/resolve?' + new URLSearchParams(params()).toString(), {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ root: shared.root, touches: pending }),
           }).then(function (res) { return res.json() }).then(function (body) {
             body.results.forEach(function (entry) { shared.resolved[entry.key] = entry })
-            after()
+            return after()
           }).catch(function (error) {
             if (window.__cddLens !== undefined) window.__cddLens.resolveError = String(error && error.message ? error.message : error)
-            after()
+            return after()
           })
         },
       }
