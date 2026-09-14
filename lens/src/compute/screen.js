@@ -1,6 +1,7 @@
 // dsh-cdd-lens — 计算单元 4：状态 → 屏幕。界面上有什么只由这里决定，其他地方不许再过滤。
 //
-// state = { turn, tree, rels: {call:bool,…}, pins: [{ id, at, until }], opens: [{ id, rel, dir }] }
+// state = { turn, tree, rels: {call:bool,…}, pins: [{ id, at, until }], opens: [{ id, rel, dir }], editKeep }
+//   editKeep：edit 一次加几轮（默认 7，界面上可设），每个节点自己计时，见 evidence.seedsAt
 //   pins ：人为固定（含搜索），优先级最高。pin 期间计数器不减、取消 pin 后再减（见 evidence.seedsAt）；
 //          开什么树加进什么树，和屏幕上的节点有什么边连什么边。兼容 pinned: [id]（从一开始就 pin 着）。
 // 顺序（固定）：选中的树 → 加 pin → 展开 → pin 连边 → 旁边（不在树里的 seed，堆到树下面）
@@ -9,7 +10,7 @@
 'use strict'
 
 const { RELATIONS, peers } = require('./anchors.js')
-const { seedsAt } = require('./evidence.js')
+const { seedsAt, normalizeEditKeep } = require('./evidence.js')
 const { resolveAll } = require('./resolve.js')
 const { TREES, edgeKey, addEdge, treeFor } = require('./trees.js')
 
@@ -30,7 +31,7 @@ function normalizeState(ctx, state, events) {
     && typeof o.id === 'string' && RELATIONS.includes(o.rel) && (o.dir === 'up' || o.dir === 'down'))
   const pins = normalizePins(ctx, state)
   const pinned = [...new Set(pins.filter(p => p.at <= turn && (p.until === null || turn < p.until)).map(p => p.id))].sort()
-  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens }
+  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens, editKeep: normalizeEditKeep(state.editKeep) }
 }
 
 /** 一棵树在所有选中关系上的并集。 */
@@ -120,7 +121,7 @@ function buttonsFor(ctx, ids, rels) {
 function computeScreen(ctx, events, state, known) {
   const st = normalizeState(ctx, state || {}, events)
   const have = new Set(Array.isArray(known) ? known : [])
-  const seedState = seedsAt(events, st.turn, st.pins)
+  const seedState = seedsAt(events, st.turn, st.pins, { editKeep: st.editKeep })
   const rels = RELATIONS.filter(r => st.rels[r])
   const { layer, expansions, side } = screenLayer(ctx, st, st.tree, seedState)
   const nodes = [...layer.nodes].sort()
@@ -132,7 +133,8 @@ function computeScreen(ctx, events, state, known) {
   }
   const screen = {
     turn: st.turn, turns: st.turns, tree: st.tree, rels: st.rels, pinned: st.pinned,
-    seeds: seedState.seeds.size, edited: [...seedState.edited].sort(),
+    seeds: seedState.seeds.size, edited: [...seedState.edited].sort(), editKeep: st.editKeep,
+    editTimer: Object.fromEntries(seedState.editTimer),
     counter: Object.fromEntries(seedState.counter), faded: seedState.faded.length,
     nodes, side, edges: layer.edges,
     buttons: buttonsFor(ctx, shown, rels),

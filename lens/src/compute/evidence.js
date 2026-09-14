@@ -5,7 +5,10 @@
 //   edit ：没有行号，带上改后 / 改前文本里第一行 ≥12 字符的内容作为定位键
 //   grep、glob、bash 等：不是证据
 // 轮次：只有发生了 read/edit/write 的 turn 才算一轮（没有就是状态没变）。
-// 计数器（#032）：查看过的节点初始 3，再看一次 +1，过一轮 -1，到 0 不显示；edit 一直留。
+// 计数器（#032）：查看过的节点初始 3，再看 +1，过一轮 -1，到 0 不显示。
+// edit 计时器：每个节点自己的，edit 一次 +editKeep 轮（界面上可设，默认 7），过一轮 -1，到 0 不再算 edit 过。
+//   用户：「edit树，每隔7轮删，还是带个计时器吧」「+7」「算了搞个可以设置的数字吧」「只管节点啊，自己管自己」
+// 两个计数自己管自己：edit 计时到 0 时「看过」计数器还 > 0，照旧是普通 seed。if pin，两个都不减。
 'use strict'
 
 const VERBS = { read: 'read', read_image: 'read', edit: 'edit', write: 'edit', str_replace_editor: 'edit' }
@@ -82,37 +85,54 @@ function touchesFromEvents(events) {
   return callsFromEvents(Array.isArray(events) ? events : []).flatMap(touchesOf)
 }
 
+const EDIT_KEEP_DEFAULT = 7
+
+/** edit 一次加几轮：1–99 的整数，别的一律回到默认 7。 */
+function normalizeEditKeep(value) {
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 1 && n <= 99 ? n : EDIT_KEEP_DEFAULT
+}
+
+/** 过一轮：每个节点自己减自己的，pin 着的不减，到 0 的删掉并记进 faded。 */
+function tick(map, pinned, faded) {
+  for (const [id, n] of map) {
+    if (pinned.has(id)) continue
+    if (n - 1 <= 0) { map.delete(id); faded.add(id) } else map.set(id, n - 1)
+  }
+}
+
 /**
  * 截止到 turn 的 seed。
  * @param events - resolve 之后的证据：[{ turn, verb, anchors }]。
  * @param pins - [{ id, at, until }]：if pin，不减（取消 pin 之后的轮次照常减）。
- * @returns seeds（edit ∪ 计数器 > 0）、edited、counter、rounds、faded。
+ * @param options - { editKeep }：edit 一次加几轮（默认 7）。
+ * @returns seeds（edit 计时 > 0 ∪ 计数器 > 0）、edited、editTimer、counter、editKeep、rounds、faded。
  */
-function seedsAt(events, turn, pins = []) {
+function seedsAt(events, turn, pins = [], options = {}) {
+  const editKeep = normalizeEditKeep(options.editKeep)
   const rounds = [...new Set(events.map(e => e.turn))].filter(t => t <= turn).sort((a, b) => a - b)
   const counter = new Map()
-  const edited = new Set()
+  const editTimer = new Map()
   const faded = new Set()
   const pinnedAt = t => new Set(pins.filter(p => p.at <= t && (p.until === null || t < p.until)).map(p => p.id))
   rounds.forEach((t, i) => {
     if (i > 0) {
       const pinned = pinnedAt(t)
-      for (const [id, n] of counter) {
-        if (pinned.has(id)) continue
-        if (n - 1 <= 0) { counter.delete(id); faded.add(id) } else counter.set(id, n - 1)
-      }
+      tick(counter, pinned, faded)
+      tick(editTimer, pinned, faded)
     }
     for (const e of events) {
       if (e.turn !== t) continue
       for (const id of e.anchors) {
-        if (e.verb === 'edit') { edited.add(id); continue }
-        counter.set(id, counter.has(id) ? counter.get(id) + 1 : 3)
+        if (e.verb === 'edit') editTimer.set(id, (editTimer.get(id) || 0) + editKeep)
+        else counter.set(id, counter.has(id) ? counter.get(id) + 1 : 3)
         faded.delete(id)
       }
     }
   })
+  const edited = new Set(editTimer.keys())
   const seeds = new Set([...edited, ...counter.keys()])
-  return { seeds, edited, counter, rounds: rounds.length, faded: [...faded].filter(id => !seeds.has(id)) }
+  return { seeds, edited, editTimer, counter, editKeep, rounds: rounds.length, faded: [...faded].filter(id => !seeds.has(id)) }
 }
 
-module.exports = { keyLine, touchesFromEvents, seedsAt }
+module.exports = { keyLine, touchesFromEvents, seedsAt, normalizeEditKeep, EDIT_KEEP_DEFAULT }

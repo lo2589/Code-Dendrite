@@ -106,7 +106,7 @@ check('edit 改后文本找不到就用改前文本', s4.edited.includes(A('g'))
 check('没有 read/edit/write 的 turn 不算一轮（T4 f 还在）', shown(s4).has(A('f')))
 const s5 = keep(screen({ turn: 5, tree: 'degree1' }))
 check('过 3 轮计数器归零（T5 f 撤下）', !shown(s5).has(A('f')))
-check('edit 过的一直留', shown(s5).has(A('g')) && shown(s5).has('b.py::w1'))
+check('edit 过的在计时内（T5 g、b.py::w1 还在）', shown(s5).has(A('g')) && shown(s5).has('b.py::w1'))
 check('再看一次续命（T5 h 还在）', shown(s5).has(A('h')) && s5.counter[A('h')] === 2)
 
 // 4 树与旁边
@@ -131,6 +131,23 @@ const pinX = keep(screen({ turn: 2, tree: 'degree1', pins: [{ id: A('x'), at: 2 
 check('搜索 pin 一个非 seed：有什么边连什么边', pinX.edges.some(e => e.from === A('h') && e.to === A('x'))
   && pinX.edges.some(e => e.from === A('x') && e.to === A('k')))
 check('搜索 pin 连上的旁边 seed 进树', pinX.nodes.includes(A('h')) && pinX.nodes.includes(A('k')) && same(pinX.side, [A('lonely')]))
+
+// 5b edit 计时器：每个节点自己管自己，edit 一次 +editKeep 轮（默认 7，可设），过一轮 -1，到 0 不再算 edit；pin 不减
+{
+  const { seedsAt, normalizeEditKeep } = require(path.join(__dirname, '..', 'src', 'compute', 'evidence.js'))
+  const rounds = (n, extra) => Array.from({ length: n }, (_, i) => ({ turn: i + 1, verb: 'read', anchors: ['z.py::tick'] })).concat(extra)
+  const ev = rounds(12, [{ turn: 1, verb: 'edit', anchors: ['e.py::a'] }])
+  check('edit 默认留 7 轮：T7 剩 1、T8 不再算 edit', seedsAt(ev, 7).editTimer.get('e.py::a') === 1 && !seedsAt(ev, 8).edited.has('e.py::a'))
+  const again = rounds(12, [{ turn: 1, verb: 'edit', anchors: ['e.py::a'] }, { turn: 3, verb: 'edit', anchors: ['e.py::a'] }])
+  check('轮数内再 edit：剩下的 +7（T3 = 5 + 7 = 12）', seedsAt(again, 3).editTimer.get('e.py::a') === 12 && seedsAt(again, 12).edited.has('e.py::a'))
+  check('可以设：editKeep=2 → T2 还算、T3 不算', seedsAt(ev, 2, [], { editKeep: 2 }).edited.has('e.py::a') && !seedsAt(ev, 3, [], { editKeep: 2 }).edited.has('e.py::a'))
+  check('pin 住 edit 计时器不减', seedsAt(ev, 12, [{ id: 'e.py::a', at: 1, until: null }]).editTimer.get('e.py::a') === 7)
+  const both = rounds(12, [{ turn: 1, verb: 'edit', anchors: ['e.py::a'] }, { turn: 6, verb: 'read', anchors: ['e.py::a'] }])
+  check('两个计数自己管自己：edit 到 0 时看过的还在 → 仍是 seed', !seedsAt(both, 8).edited.has('e.py::a') && seedsAt(both, 8).seeds.has('e.py::a'))
+  check('设置不合法回到 7', normalizeEditKeep(0) === 7 && normalizeEditKeep(100) === 7 && normalizeEditKeep('x') === 7 && normalizeEditKeep(3) === 3)
+  const withKeep = screen({ turn: 5, tree: 'edit', editKeep: 2 })
+  check('屏幕带 editKeep 和每个节点的 edit 计时', withKeep.editKeep === 2 && withKeep.editTimer !== null && typeof withKeep.editTimer === 'object')
+}
 
 // 6 展开
 const opens = [{ id: A('h'), rel: 'call', dir: 'down' }, { id: A('x'), rel: 'call', dir: 'down' }]

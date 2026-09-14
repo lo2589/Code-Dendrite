@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_49_LOG_AT_BOTTOM_001
+// build: V1_50_EDIT_TIMER_001
 // parts: 43
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_49_LOG_AT_BOTTOM_001'
+    var BUILD = 'V1_50_EDIT_TIMER_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1569,10 +1569,21 @@ __cddLocal.load({
     var shortId = function (id) { return String(id).split('::').pop() }
     var kb = function (bytes) { return (bytes / 1024).toFixed(0) + 'KB' }
 
+    var EDIT_KEEP_KEY = 'cdd-lens.edit-keep.v1'
+
+    /** edit 一次保留几轮：上次在工具栏设过的数，没设过是 7（和 compute/evidence.js 同一个默认）。 */
+    function savedEditKeep() {
+      try {
+        var n = Number(window.localStorage.getItem(EDIT_KEEP_KEY))
+        if (Number.isInteger(n) && n >= 1 && n <= 99) return n
+      } catch (e) { /* 浏览器存储可选 */ }
+      return 7
+    }
+
     function defaultView() {
       var rels = {}
       RELATIONS.forEach(function (r) { rels[r] = true })
-      return { tree: 'degree2', rels: rels, pins: [], opens: [] }
+      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep() }
     }
 
     function viewOf() {
@@ -1713,7 +1724,7 @@ __cddLocal.load({
         var t0 = Date.now()
         var known = shared.anchorCacheStamp === undefined ? [] : Object.keys(cacheOf())
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
-          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · edit 保留 ' + (view.editKeep || 7) + ' 轮 · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
           if (!Array.isArray(body.nodes)) {
             note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
@@ -1813,6 +1824,18 @@ __cddLocal.load({
           var view = viewOf()
           view.rels[rel] = !view.rels[rel]
           note('btn', '按下 关系 ' + rel + ' → ' + (view.rels[rel] ? '开' : '关'))
+          return engine.refresh()
+        },
+
+        /** edit 保留几轮：每个节点自己的计时器，edit 一次加这么多轮，过一轮减 1。 */
+        setEditKeep: function (value) {
+          var n = Math.round(Number(value))
+          if (!(n >= 1 && n <= 99)) { note('btn', '✗ edit 保留轮数要在 1–99：' + value); return Promise.resolve() }
+          var view = viewOf()
+          if (view.editKeep === n) return Promise.resolve()
+          note('btn', '设置 edit 保留 ' + (view.editKeep || 7) + ' → ' + n + ' 轮')
+          view.editKeep = n
+          try { window.localStorage.setItem(EDIT_KEEP_KEY, String(n)) } catch (e) { /* 浏览器存储可选 */ }
           return engine.refresh()
         },
 
@@ -6659,6 +6682,19 @@ __cddLocal.load({
         }))
     }
 
+    /** edit 保留几轮：每个节点自己的计时器，edit 一次加 N 轮，每过一轮减 1，到 0 不再算 edit 过。 */
+    function editKeepInput(engine) {
+      var keep = engine.view().editKeep || 7
+      return h('label', { key: 'keep', className: 'cddl-meta cddl-editkeep', title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' }, [
+        'edit 保留 ',
+        h('input', {
+          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-edit-keep': keep, style: { width: '44px' },
+          onChange: function (event) { engine.setEditKeep(event.target.value) },
+        }),
+        ' 轮',
+      ])
+    }
+
     function relationSelector(engine) {
       var rels = engine.view().rels
       return h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系开关' },
@@ -6692,6 +6728,7 @@ __cddLocal.load({
           h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: clicked('cdd draw', function () { tab[1]('draw') }) }, 'cdd draw'),
         ]),
         tab[0] !== 'graph' ? null : treeSelector(engine),
+        tab[0] !== 'graph' ? null : editKeepInput(engine),
         h(Search, { key: 'q', engine: engine }),
         relationSelector(engine),
         h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },

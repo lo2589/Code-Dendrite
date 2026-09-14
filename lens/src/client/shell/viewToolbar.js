@@ -60,6 +60,19 @@ window.__ModuleLoader__.load({
         }))
     }
 
+    /** edit 保留几轮：每个节点自己的计时器，edit 一次加 N 轮，每过一轮减 1，到 0 不再算 edit 过。 */
+    function editKeepInput(engine) {
+      var keep = engine.view().editKeep || 7
+      return h('label', { key: 'keep', className: 'cddl-meta cddl-editkeep', title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' }, [
+        'edit 保留 ',
+        h('input', {
+          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-edit-keep': keep, style: { width: '44px' },
+          onChange: function (event) { engine.setEditKeep(event.target.value) },
+        }),
+        ' 轮',
+      ])
+    }
+
     function relationSelector(engine) {
       var rels = engine.view().rels
       return h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系开关' },
@@ -93,6 +106,7 @@ window.__ModuleLoader__.load({
           h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: clicked('cdd draw', function () { tab[1]('draw') }) }, 'cdd draw'),
         ]),
         tab[0] !== 'graph' ? null : treeSelector(engine),
+        tab[0] !== 'graph' ? null : editKeepInput(engine),
         h(Search, { key: 'q', engine: engine }),
         relationSelector(engine),
         h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },
