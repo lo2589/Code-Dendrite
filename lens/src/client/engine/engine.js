@@ -57,6 +57,16 @@ window.__ModuleLoader__.load({
       Object.assign(engine, ingestMethods(ctx, engine, session, params))
       Object.assign(engine, gatherMethods(ctx, engine, session, params))
       Object.assign(engine, screenMethods(ctx, engine, session, params))
+      // 这几个按钮入口也要留痕：点了就记一条 log（展开/树/关系/pin/清空在 engine/screen 里记得更细）。
+      var note = require('dsh-cdd-lens/runtime/debug').note
+      ;['members', 'select', 'lightEdge', 'reindex'].forEach(function (name) {
+        var fn = engine[name]
+        if (typeof fn !== 'function') return
+        engine[name] = function () {
+          note('btn', '按下 ' + name + ' ' + Array.prototype.slice.call(arguments).map(function (a) { return String(a).split('::').pop() }).join(' '))
+          return fn.apply(engine, arguments)
+        }
+      })
       // Also on the engine, not only handed to the method factories. `Draw`
       // builds its own URL and asks for these, and finding `engine.params`
       // undefined threw on every render of that tab — which is why `cdd draw`

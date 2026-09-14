@@ -732,6 +732,28 @@ const handlers = {
     ...require('./compute/screen.js').screenFor(repo.compute, Array.isArray(q.touches) ? q.touches : [], q.state ?? {}),
     stamp: repo.stamp,
   }),
+  // 展开：按 id 从新 anchor 表（anchors.json 原始记录 + relation 补边）里拿 anchor，
+  // 顺带给出这些节点的按钮数字——和 /screen 走同一个 peers，数字不会对不上。
+  anchors: (repo, q) => {
+    const { RELATIONS, peers } = require('./compute/anchors.js')
+    const ids = Array.isArray(q.ids) ? [...new Set(q.ids.map(String))] : []
+    const anchors = {}
+    const buttons = {}
+    const missing = []
+    for (const id of ids) {
+      if (!repo.compute.visible.has(id)) { missing.push(id); continue }
+      anchors[id] = repo.compute.anchors[id]
+      const b = {}
+      for (const rel of RELATIONS) {
+        const up = peers(repo.compute, id, rel, 'up').length
+        const down = peers(repo.compute, id, rel, 'down').length
+        if (up > 0) b[rel + 'up'] = up
+        if (down > 0) b[rel + 'down'] = down
+      }
+      buttons[id] = b
+    }
+    return { anchors, buttons, missing, stamp: repo.stamp }
+  },
   among: (repo, q) => {
     const ids = typeof q.ids === 'string' ? q.ids.split(',').filter(Boolean) : (q.ids ?? [])
     const result = among(repo, ids, q.bridge === '1' || q.bridge === true)

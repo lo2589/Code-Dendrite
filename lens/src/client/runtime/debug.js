@@ -1,16 +1,10 @@
-// dsh-cdd-lens — Debug 模式。
+// dsh-cdd-lens — 调试 log：默认开。
 //
-// 图上点不出来的时候，光看画面分不清是哪一层坏的：请求没发出去、服务端返回空、
-// 布局收到 0 个节点、还是渲染时抛错——四种在屏幕上都长成一样（一片空白）。
+// 每个按钮按下、之后每一步做了什么（读哪个字段、发什么请求、拿回多少、建了几个节点
+// 几条边、画出多少）都记一条带毫秒时间的 log：显示在图面板顶部的窄栏里，同时打到浏览器
+// 控制台（`[cdd 时间] [类别]` 前缀）。点了没反应时，看最后一条 log 就知道断在哪一步。
 //
-// 这个模块把这三层的事实都记下来，并显示在图面板顶部的一条窄栏里：
-//
-//   请求   最近几次 /expand /walk /resolve 的路径、HTTP 码、返回数量
-//   图的形状  ingest 之后有多少节点、多少边；布局收到多少、画出多少
-//   错误   任何一层抛出的原始消息（截断到一行）
-//
-// 开关：`?cddl-debug=1` 或 localStorage 里的 `cdd-lens.debug=1`。
-// 关掉时所有记录都是空操作，不影响正常路径。
+// 关闭：`?cddl-debug=0`，或 localStorage 里 `cdd-lens.debug.v1=0`。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/runtime/debug',
   factory: (require) => {
@@ -19,41 +13,50 @@ window.__ModuleLoader__.load({
     var h = React.createElement
 
     var KEY = 'cdd-lens.debug.v1'
-    var MAX = 24
+    var MAX = 200
+    var SHOWN = 12
 
-    /** 开关状态：URL 参数优先，其次 localStorage，默认关。 */
+    /** 开关：默认开；只有明确写了 0 才关。 */
     function debugEnabled() {
       try {
         if (typeof window !== 'undefined' && window.location) {
           var q = new URLSearchParams(window.location.search)
-          if (q.get('cddl-debug') === '1') return true
           if (q.get('cddl-debug') === '0') return false
+          if (q.get('cddl-debug') === '1') return true
         }
-        var stored = window.localStorage.getItem(KEY)
-        if (stored === '1') return true
-        if (stored === '0') return false
-      } catch (e) { /* 隐私模式下 localStorage 会抛，按关闭处理 */ }
-      return false
+        if (window.localStorage.getItem(KEY) === '0') return false
+      } catch (e) { /* 读不到开关就按默认开 */ }
+      return true
     }
 
     var on = debugEnabled()
     var events = []
     var facts = {}
 
+    function clock() {
+      var d = new Date()
+      var pad = function (n, w) { return String(n).padStart(w, '0') }
+      return pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2) + ':' + pad(d.getSeconds(), 2) + '.' + pad(d.getMilliseconds(), 3)
+    }
+
+    function snapshot() {
+      return { enabled: on, facts: facts, events: events.slice() }
+    }
+
     /**
-     * 记一条事件。任何一层都可以调，关掉时是空操作。
-     *
-     * @param kind - 'req' | 'res' | 'graph' | 'layout' | 'error'。
+     * 记一条 log。
+     * @param kind - 'btn' | 'expand' | 'screen' | 'req' | 'res' | 'graph' | 'layout' | 'error' …
      * @param text - 一行描述。
      */
     function note(kind, text) {
       if (!on) return
-      events.push({ at: new Date().toLocaleTimeString(), kind: kind, text: String(text).slice(0, 220) })
+      var entry = { at: clock(), kind: kind, text: String(text).slice(0, 300) }
+      events.push(entry)
       if (events.length > MAX) events.splice(0, events.length - MAX)
-      // 也挂到 window 上：控制台里 `__cddLens.debug()` 直接能看。
+      try { console.log('[cdd ' + entry.at + '] [' + kind + '] ' + entry.text) } catch (e) { /* 没有控制台就只进窄栏 */ }
       try {
         window.__cddLens = window.__cddLens || {}
-        window.__cddLens.debug = debugSnapshot
+        window.__cddLens.debug = snapshot
       } catch (e) { /* 没有 window 就算了 */ }
     }
 
@@ -63,16 +66,12 @@ window.__ModuleLoader__.load({
       facts[name] = value
     }
 
-    function snapshot() {
-      return { enabled: on, facts: facts, events: events.slice() }
-    }
-
-    /** 调试窄栏。关掉调试时不渲染任何东西。 */
+    /** 调试窄栏：最近 SHOWN 条 log。 */
     function DebugBar(props) {
       if (!on) return null
       var lines = []
       Object.keys(facts).forEach(function (k) { lines.push(k + '=' + facts[k]) })
-      var shown = events.slice(-6)
+      var shown = events.slice(-SHOWN)
       return h('div', {
         className: 'cddl-debugbar',
         style: {
@@ -85,9 +84,10 @@ window.__ModuleLoader__.load({
         },
       }, [
         h('div', { key: 'f', style: { fontWeight: 700, color: 'var(--dsw-alias-label-primary)' } },
-          'CDD debug ' + (props.build || '') + '  ' + lines.join('  ')),
+          'CDD log ' + (props.build || '') + '  ' + lines.join('  ') + '  （关闭：?cddl-debug=0）'),
         h('div', { key: 'e' }, shown.map(function (e, i) {
-          return h('div', { key: i }, e.at + ' [' + e.kind + '] ' + e.text)
+          return h('div', { key: i, style: e.kind === 'error' ? { color: 'var(--dsw-alias-label-danger, #d33)' } : null },
+            e.at + ' [' + e.kind + '] ' + e.text)
         })),
       ])
     }

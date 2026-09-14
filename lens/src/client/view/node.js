@@ -42,10 +42,12 @@ window.__ModuleLoader__.load({
           var n = counts[rel + dir]
           if (!(n > 0)) return
           var open = engine.isOpen(id, rel, dir)
+          var busy = engine.isBusy(id, rel, dir)
           out.push(h('button', {
             key: dir + ':' + rel,
-            title: REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
-            className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : ''),
+            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
+            className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : '') + (busy ? ' cddl-busy' : ''),
+            'aria-busy': busy ? 'true' : 'false',
             'data-action': dir === 'up' ? 'expand-callers' : 'expand-callees',
             'data-relation': rel,
             'data-count': n,
@@ -55,7 +57,7 @@ window.__ModuleLoader__.load({
               engine.toggleOpen(id, rel, dir)
             },
           }, [
-            h('span', { key: 'a', className: 'cddl-rel-arrow' }, dir === 'up' ? '↑' : '↓'),
+            h('span', { key: 'a', className: 'cddl-rel-arrow' }, busy ? '…' : (dir === 'up' ? '↑' : '↓')),
             h('span', { key: 'n', className: 'cddl-rel-count' }, n),
             h('span', { key: 'r', className: 'cddl-rel-name' }, rel),
           ]))

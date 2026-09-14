@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_37_SCREEN_FRONTEND_001
+// build: V1_38_BUTTON_LOG_DIRECT_EXPAND_001
 // parts: 41
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_37_SCREEN_FRONTEND_001'
+    var BUILD = 'V1_38_BUTTON_LOG_DIRECT_EXPAND_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -77,19 +77,13 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — Debug 模式。
+// dsh-cdd-lens — 调试 log：默认开。
 //
-// 图上点不出来的时候，光看画面分不清是哪一层坏的：请求没发出去、服务端返回空、
-// 布局收到 0 个节点、还是渲染时抛错——四种在屏幕上都长成一样（一片空白）。
+// 每个按钮按下、之后每一步做了什么（读哪个字段、发什么请求、拿回多少、建了几个节点
+// 几条边、画出多少）都记一条带毫秒时间的 log：显示在图面板顶部的窄栏里，同时打到浏览器
+// 控制台（`[cdd 时间] [类别]` 前缀）。点了没反应时，看最后一条 log 就知道断在哪一步。
 //
-// 这个模块把这三层的事实都记下来，并显示在图面板顶部的一条窄栏里：
-//
-//   请求   最近几次 /expand /walk /resolve 的路径、HTTP 码、返回数量
-//   图的形状  ingest 之后有多少节点、多少边；布局收到多少、画出多少
-//   错误   任何一层抛出的原始消息（截断到一行）
-//
-// 开关：`?cddl-debug=1` 或 localStorage 里的 `cdd-lens.debug=1`。
-// 关掉时所有记录都是空操作，不影响正常路径。
+// 关闭：`?cddl-debug=0`，或 localStorage 里 `cdd-lens.debug.v1=0`。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/runtime/debug',
   factory: (require) => {
@@ -98,41 +92,50 @@ window.__ModuleLoader__.load({
     var h = React.createElement
 
     var KEY = 'cdd-lens.debug.v1'
-    var MAX = 24
+    var MAX = 200
+    var SHOWN = 12
 
-    /** 开关状态：URL 参数优先，其次 localStorage，默认关。 */
+    /** 开关：默认开；只有明确写了 0 才关。 */
     function debugEnabled() {
       try {
         if (typeof window !== 'undefined' && window.location) {
           var q = new URLSearchParams(window.location.search)
-          if (q.get('cddl-debug') === '1') return true
           if (q.get('cddl-debug') === '0') return false
+          if (q.get('cddl-debug') === '1') return true
         }
-        var stored = window.localStorage.getItem(KEY)
-        if (stored === '1') return true
-        if (stored === '0') return false
-      } catch (e) { /* 隐私模式下 localStorage 会抛，按关闭处理 */ }
-      return false
+        if (window.localStorage.getItem(KEY) === '0') return false
+      } catch (e) { /* 读不到开关就按默认开 */ }
+      return true
     }
 
     var on = debugEnabled()
     var events = []
     var facts = {}
 
+    function clock() {
+      var d = new Date()
+      var pad = function (n, w) { return String(n).padStart(w, '0') }
+      return pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2) + ':' + pad(d.getSeconds(), 2) + '.' + pad(d.getMilliseconds(), 3)
+    }
+
+    function snapshot() {
+      return { enabled: on, facts: facts, events: events.slice() }
+    }
+
     /**
-     * 记一条事件。任何一层都可以调，关掉时是空操作。
-     *
-     * @param kind - 'req' | 'res' | 'graph' | 'layout' | 'error'。
+     * 记一条 log。
+     * @param kind - 'btn' | 'expand' | 'screen' | 'req' | 'res' | 'graph' | 'layout' | 'error' …
      * @param text - 一行描述。
      */
     function note(kind, text) {
       if (!on) return
-      events.push({ at: new Date().toLocaleTimeString(), kind: kind, text: String(text).slice(0, 220) })
+      var entry = { at: clock(), kind: kind, text: String(text).slice(0, 300) }
+      events.push(entry)
       if (events.length > MAX) events.splice(0, events.length - MAX)
-      // 也挂到 window 上：控制台里 `__cddLens.debug()` 直接能看。
+      try { console.log('[cdd ' + entry.at + '] [' + kind + '] ' + entry.text) } catch (e) { /* 没有控制台就只进窄栏 */ }
       try {
         window.__cddLens = window.__cddLens || {}
-        window.__cddLens.debug = debugSnapshot
+        window.__cddLens.debug = snapshot
       } catch (e) { /* 没有 window 就算了 */ }
     }
 
@@ -142,16 +145,12 @@ window.__ModuleLoader__.load({
       facts[name] = value
     }
 
-    function snapshot() {
-      return { enabled: on, facts: facts, events: events.slice() }
-    }
-
-    /** 调试窄栏。关掉调试时不渲染任何东西。 */
+    /** 调试窄栏：最近 SHOWN 条 log。 */
     function DebugBar(props) {
       if (!on) return null
       var lines = []
       Object.keys(facts).forEach(function (k) { lines.push(k + '=' + facts[k]) })
-      var shown = events.slice(-6)
+      var shown = events.slice(-SHOWN)
       return h('div', {
         className: 'cddl-debugbar',
         style: {
@@ -164,9 +163,10 @@ window.__ModuleLoader__.load({
         },
       }, [
         h('div', { key: 'f', style: { fontWeight: 700, color: 'var(--dsw-alias-label-primary)' } },
-          'CDD debug ' + (props.build || '') + '  ' + lines.join('  ')),
+          'CDD log ' + (props.build || '') + '  ' + lines.join('  ') + '  （关闭：?cddl-debug=0）'),
         h('div', { key: 'e' }, shown.map(function (e, i) {
-          return h('div', { key: i }, e.at + ' [' + e.kind + '] ' + e.text)
+          return h('div', { key: i, style: e.kind === 'error' ? { color: 'var(--dsw-alias-label-danger, #d33)' } : null },
+            e.at + ' [' + e.kind + '] ' + e.text)
         })),
       ])
     }
@@ -1499,13 +1499,15 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — 前端只做一件事：把状态发给 /screen，按返回的屏幕画。
+// dsh-cdd-lens — 按钮 → 图。每一步都记带时间的 log（runtime/debug）。
 //
-// 状态 shared.view = { tree, rels, pins: [{ id, at, until }], opens: [{ id, rel, dir }] }
-//   按钮只改状态，不碰图。
-// 屏幕 shared.screen = 后端计算单元（src/compute）的结果；shared.graph 由它原样生成：
-//   节点 = screen.nodes ∪ screen.side 的 anchor 记录，边 = screen.edges（一条边一种类型）。
-// 前端任何地方都不许再增删节点或边。
+// 展开（点 ⬆️ / ⬇️）走直线：
+//   ① 读节点存的 anchor 里这个关系这个方向的字段（dataflowup、callers …）拿 id
+//   ② POST /anchors 按 id 从新 anchor 表拉回 anchor（和按钮数字同源）
+//   ③ 建节点、连边（一条边一种类型），和按钮数字核对
+//   ④ 交给布局
+// 其余（切树、切关系、pin、收起、会话往前走）改视图状态后调 /screen 整屏重算，
+// 后端同样重放这些展开，所以两边给出的节点一致。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -1528,6 +1530,10 @@ window.__ModuleLoader__.load({
 
     var RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
     var TREES = ['degree1', 'degree2', 'edit']
+    // anchor 本来就带的方向；其余方向读补出来的「关系名+up/down」。
+    var NATIVE = { 'call:up': 'callers', 'call:down': 'callees', 'inherit:down': 'parent_classes' }
+
+    var shortId = function (id) { return String(id).split('::').pop() }
 
     function defaultView() {
       var rels = {}
@@ -1544,7 +1550,40 @@ window.__ModuleLoader__.load({
       return viewOf().pins.filter(function (p) { return p.id === id && (p.until === null || p.until === undefined) })[0]
     }
 
-    /** 屏幕 → shared.graph。已画过的位置、类成员的展开状态原样带过去（展开时节点不跳）。 */
+    function fieldOf(rel, dir) { return NATIVE[rel + ':' + dir] || rel + dir }
+
+    /** 节点存的 anchor 里这个关系这个方向记着的 id：去重、去掉自己。 */
+    function idsInField(anchor, rel, dir) {
+      var list = Array.isArray(anchor[fieldOf(rel, dir)]) ? anchor[fieldOf(rel, dir)] : []
+      var out = []
+      list.forEach(function (x) {
+        var id = String(x)
+        if (id !== anchor.id && out.indexOf(id) < 0) out.push(id)
+      })
+      return out
+    }
+
+    function postJson(path, query, payload) {
+      return fetch(ROUTE + path + '?' + new URLSearchParams(query).toString(), {
+        method: 'POST', cache: 'no-store',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(function (res) {
+        return res.json().then(function (body) {
+          if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status))
+          return body
+        })
+      })
+    }
+
+    function setBusy(key, value) {
+      shared.busy = shared.busy || {}
+      if (value) shared.busy[key] = true
+      else delete shared.busy[key]
+      publish()
+    }
+
+    /** 屏幕 → shared.graph。已画过的位置、类成员展开状态原样带过去（展开时节点不跳）。 */
     function applyScreen(body) {
       var before = shared.graph || emptyGraph()
       var graph = emptyGraph()
@@ -1570,6 +1609,27 @@ window.__ModuleLoader__.load({
       if (body.stamp !== undefined) shared.graphStamp = body.stamp
     }
 
+    /** 展开拉回来的节点和边，并进当前屏幕（布局只画屏幕上的）。 */
+    function mergeIntoScreen(peersIn, edgesIn, buttonsIn) {
+      var screen = shared.screen
+      if (screen === null || screen === undefined) {
+        screen = shared.screen = { nodes: [], side: [], edges: [], buttons: {}, anchors: {}, pinned: [], treeTotals: {} }
+      }
+      var rels = viewOf().rels
+      peersIn.forEach(function (id) {
+        var s = screen.side.indexOf(id)
+        if (s >= 0) screen.side.splice(s, 1)
+        if (screen.nodes.indexOf(id) < 0) screen.nodes.push(id)
+        var b = {}
+        Object.keys(buttonsIn[id] || {}).forEach(function (k) {
+          if (rels[k.replace(/(up|down)$/, '')]) b[k] = buttonsIn[id][k]
+        })
+        if (screen.buttons[id] === undefined) screen.buttons[id] = b
+      })
+      edgesIn.forEach(function (e) { screen.edges.push({ from: e.from, to: e.to, type: e.types[0] }) })
+      if (shared.graph.rootId === null && shared.graph.order.length > 0) shared.graph.rootId = shared.graph.order[0]
+    }
+
     /** 高亮一个节点和它在屏幕上的相邻节点（展开后看得出刚出来的是哪一团）。 */
     function lightAround(id) {
       var nodes = {}
@@ -1592,30 +1652,75 @@ window.__ModuleLoader__.load({
       var send = function () {
         inflight = true
         again = false
-        var url = ROUTE + '/screen?' + new URLSearchParams(params()).toString()
-        return fetch(url, {
-          method: 'POST', cache: 'no-store',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ state: viewOf() }),
-        }).then(function (res) {
-          return res.json().then(function (body) {
-            if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status))
-            return body
-          })
-        }).then(function (body) {
+        var view = viewOf()
+        var t0 = Date.now()
+        note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(','))
+        return postJson('/screen', params(), { state: view }).then(function (body) {
           applyScreen(body)
           shared.screenError = null
-          note('screen', 'tree=' + body.tree + ' 节点=' + body.nodes.length + ' 旁边=' + body.side.length
-            + ' 边=' + body.edges.length + ' 违例=' + (body.violations || []).length)
+          note('screen', '← 节点 ' + body.nodes.length + ' · 旁边 ' + body.side.length + ' · 边 ' + body.edges.length
+            + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length + ' · ' + (Date.now() - t0) + 'ms'
+            + (body.reason ? ' · ' + body.reason : ''))
+          ;(body.expansions || []).forEach(function (x) {
+            if (x.skipped) note('screen', '  展开被跳过 ' + shortId(x.id) + ' ' + x.rel + x.dir + '：' + (x.skipped === 'relation-off' ? '这个关系没开' : '节点不在屏幕上'))
+          })
+          ;(body.violations || []).slice(0, 3).forEach(function (v) { note('error', '违例 ' + v) })
         }).catch(function (error) {
           shared.screenError = String(error && error.message ? error.message : error)
-          note('screen', 'FAILED ' + shared.screenError)
+          note('error', '✗ /screen 失败：' + shared.screenError)
         }).then(function () {
           inflight = false
           // 状态在请求途中又变了：再算一次，用最新的状态。回调等最后一次落地才跑。
           if (again) { publish(); return send() }
           waiting.splice(0).forEach(function (fn) { fn() })
           publish()
+        })
+      }
+
+      /** ①②③④：读字段 → 拉 anchor → 建节点连边 → 交给布局。 */
+      var expandDirect = function (id, rel, dir) {
+        var t0 = Date.now()
+        var key = id + '|' + rel + dir
+        var anchor = shared.graph.nodes[id]
+        if (anchor === undefined) {
+          note('error', '✗ ' + shortId(id) + ' 不在图上，没法展开')
+          return Promise.resolve()
+        }
+        var field = fieldOf(rel, dir)
+        var ids = idsInField(anchor, rel, dir)
+        var button = ((shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {})[rel + dir] || 0
+        note('expand', '① 读 ' + shortId(id) + '.' + field + ' → ' + ids.length + ' 个 id（按钮数字 ' + button + '）')
+        setBusy(key, true)
+        return postJson('/anchors', params(), { ids: ids }).then(function (body) {
+          var got = Object.keys(body.anchors || {})
+          var missing = body.missing || []
+          note('expand', '② /anchors 拉回 ' + got.length + ' 个 anchor，拿不到 ' + missing.length + ' 个'
+            + (missing.length > 0 ? '（' + missing.slice(0, 4).map(shortId).join(', ') + (missing.length > 4 ? ' …' : '') + '：裸名字或不在索引）' : '')
+            + ' · ' + (Date.now() - t0) + 'ms')
+          var fresh = 0
+          var linked = 0
+          var added = []
+          got.forEach(function (peer) {
+            if (shared.graph.nodes[peer] === undefined) { addNode(shared.graph, body.anchors[peer]); fresh += 1 } else linked += 1
+            var from = dir === 'down' ? id : peer
+            var to = dir === 'down' ? peer : id
+            var exists = shared.graph.edges.some(function (e) { return e.from === from && e.to === to && e.types[0] === rel })
+            if (!exists) {
+              var edge = { from: from, to: to, types: [rel] }
+              shared.graph.edges.push(edge)
+              added.push(edge)
+            }
+          })
+          mergeIntoScreen(got, added, body.buttons || {})
+          note(got.length === button ? 'expand' : 'error', '③ 新建节点 ' + fresh + ' · 连已有 ' + linked + ' · 新建边 ' + added.length
+            + (got.length === button ? ' · 和按钮数字一致' : ' · ✗ 按钮说 ' + button + '，实际 ' + got.length))
+          lightAround(id)
+          setBusy(key, false)
+          note('expand', '④ 交给布局：图上 ' + shared.graph.order.length + ' 个节点、' + shared.graph.edges.length + ' 条边 · 共 ' + (Date.now() - t0) + 'ms')
+        }).catch(function (error) {
+          setBusy(key, false)
+          note('error', '✗ 展开 ' + shortId(id) + ' ' + rel + dir + ' 失败：' + String(error && error.message ? error.message : error))
         })
       }
 
@@ -1631,6 +1736,7 @@ window.__ModuleLoader__.load({
 
         setTree: function (mode) {
           if (TREES.indexOf(mode) < 0) return Promise.resolve()
+          note('btn', '按下 切树 → ' + mode)
           viewOf().tree = mode
           return engine.refresh()
         },
@@ -1639,6 +1745,7 @@ window.__ModuleLoader__.load({
           if (RELATIONS.indexOf(rel) < 0) return Promise.resolve()
           var view = viewOf()
           view.rels[rel] = !view.rels[rel]
+          note('btn', '按下 关系 ' + rel + ' → ' + (view.rels[rel] ? '开' : '关'))
           return engine.refresh()
         },
 
@@ -1646,17 +1753,27 @@ window.__ModuleLoader__.load({
           return viewOf().opens.some(function (o) { return o.id === id && o.rel === rel && o.dir === dir })
         },
 
-        /** ↑N / ↓N：有这条展开就收起，没有就加上。数字、节点、边都由 /screen 给。 */
+        isBusy: function (id, rel, dir) {
+          return shared.busy !== undefined && shared.busy !== null && shared.busy[id + '|' + rel + dir] === true
+        },
+
+        /** ⬆️ / ⬇️：没开就展开（直线拉 anchor），开着就收起（整屏重算）。 */
         toggleOpen: function (id, rel, dir) {
           var view = viewOf()
           var at = -1
           view.opens.forEach(function (o, i) { if (o.id === id && o.rel === rel && o.dir === dir) at = i })
-          if (at >= 0) view.opens.splice(at, 1)
-          else view.opens.push({ id: id, rel: rel, dir: dir })
           shared.selected = id
           requestViewport(id, 'ensure')
-          note('btn', (at >= 0 ? '收起 ' : '展开 ') + rel + dir + ' ' + String(id).split('::').pop())
-          return engine.refresh(function () { lightAround(id) })
+          if (at >= 0) {
+            view.opens.splice(at, 1)
+            note('btn', '按下 收起 ' + (dir === 'up' ? '⬆️' : '⬇️') + rel + ' ' + shortId(id))
+            return engine.refresh(function () {
+              note('expand', '收起完成：图上 ' + shared.graph.order.length + ' 个节点、' + shared.graph.edges.length + ' 条边')
+            })
+          }
+          view.opens.push({ id: id, rel: rel, dir: dir })
+          note('btn', '按下 展开 ' + (dir === 'up' ? '⬆️' : '⬇️') + rel + ' ' + shortId(id))
+          return expandDirect(id, rel, dir)
         },
 
         isPinned: function (id) {
@@ -1671,12 +1788,14 @@ window.__ModuleLoader__.load({
           if (active === undefined) view.pins.push({ id: id, at: turn, until: null })
           else if (active.at >= turn) view.pins.splice(view.pins.indexOf(active), 1)
           else active.until = turn
+          note('btn', '按下 ' + (active === undefined ? 'pin ' : '取消 pin ') + shortId(id) + '（第 ' + turn + ' 轮）')
           return engine.refresh()
         },
 
         /** 搜索、目录点中一个 anchor：相当于 pin 它——开什么树加进什么树，有什么边连什么边。 */
         focus: function (anchor) {
           if (anchor === null || anchor === undefined) return Promise.resolve()
+          note('btn', '选中搜索结果 ' + shortId(anchor.id) + ' → pin')
           shared.wantGraph = (shared.wantGraph || 0) + 1
           shared.dockOpen = true
           shared.selected = anchor.id
@@ -1688,6 +1807,7 @@ window.__ModuleLoader__.load({
         /** 清空：去掉所有展开和 pin，回到只有树的屏幕。 */
         resetView: function () {
           var view = viewOf()
+          note('btn', '按下 清空（去掉 ' + view.opens.length + ' 个展开、' + view.pins.length + ' 个 pin）')
           view.opens = []
           view.pins = []
           shared.lit = null
@@ -1760,6 +1880,16 @@ window.__ModuleLoader__.load({
       Object.assign(engine, ingestMethods(ctx, engine, session, params))
       Object.assign(engine, gatherMethods(ctx, engine, session, params))
       Object.assign(engine, screenMethods(ctx, engine, session, params))
+      // 这几个按钮入口也要留痕：点了就记一条 log（展开/树/关系/pin/清空在 engine/screen 里记得更细）。
+      var note = require('dsh-cdd-lens/runtime/debug').note
+      ;['members', 'select', 'lightEdge', 'reindex'].forEach(function (name) {
+        var fn = engine[name]
+        if (typeof fn !== 'function') return
+        engine[name] = function () {
+          note('btn', '按下 ' + name + ' ' + Array.prototype.slice.call(arguments).map(function (a) { return String(a).split('::').pop() }).join(' '))
+          return fn.apply(engine, arguments)
+        }
+      })
       // Also on the engine, not only handed to the method factories. `Draw`
       // builds its own URL and asks for these, and finding `engine.params`
       // undefined threw on every render of that tab — which is why `cdd draw`
@@ -2631,10 +2761,12 @@ window.__ModuleLoader__.load({
           var n = counts[rel + dir]
           if (!(n > 0)) return
           var open = engine.isOpen(id, rel, dir)
+          var busy = engine.isBusy(id, rel, dir)
           out.push(h('button', {
             key: dir + ':' + rel,
-            title: REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
-            className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : ''),
+            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
+            className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : '') + (busy ? ' cddl-busy' : ''),
+            'aria-busy': busy ? 'true' : 'false',
             'data-action': dir === 'up' ? 'expand-callers' : 'expand-callees',
             'data-relation': rel,
             'data-count': n,
@@ -2644,7 +2776,7 @@ window.__ModuleLoader__.load({
               engine.toggleOpen(id, rel, dir)
             },
           }, [
-            h('span', { key: 'a', className: 'cddl-rel-arrow' }, dir === 'up' ? '↑' : '↓'),
+            h('span', { key: 'a', className: 'cddl-rel-arrow' }, busy ? '…' : (dir === 'up' ? '↑' : '↓')),
             h('span', { key: 'n', className: 'cddl-rel-count' }, n),
             h('span', { key: 'r', className: 'cddl-rel-name' }, rel),
           ]))
@@ -5896,6 +6028,7 @@ window.__ModuleLoader__.load({
 //
 // 树开关、关系开关只改视图状态（engine/screen.js），屏幕由 /screen 重算；
 // 每棵树按钮上直接写「N节点/M关系」，数字就是选中这棵树时屏幕上的数。
+// 每个按钮点下去都记一条 log（runtime/debug）。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -5915,6 +6048,8 @@ window.__ModuleLoader__.load({
     var Search = __view_panels.Search
     var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
     var openDockBesideChat = __shell_chat_eat.openDockBesideChat
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
 
     var TREE_BUTTONS = [
       ['degree1', '1 度树', 'seed 之间直接有边，中间不插点'],
@@ -5922,6 +6057,14 @@ window.__ModuleLoader__.load({
       ['edit', 'edit 树', '同 2 度树，但头和叶只认 edit 过的 seed'],
     ]
     var RELATIONS = ['call', 'dataflow', 'inherit', 'impact', 'dispatch']
+
+    /** 按钮点击：先记 log，再做事。 */
+    function clicked(label, fn) {
+      return function (event) {
+        note('btn', '按下 ' + label)
+        return fn(event)
+      }
+    }
 
     function treeSelector(engine) {
       var view = engine.view()
@@ -5971,9 +6114,9 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'cddl-toolbar', key: 't' }, [
         h('div', { key: 'seg', className: 'cddl-seg' }, [
-          h('button', { key: 'g', className: tab[0] === 'graph' ? 'on' : '', onClick: function () { tab[1]('graph') } }, '逻辑图'),
-          h('button', { key: 'o', className: tab[0] === 'outline' ? 'on' : '', onClick: function () { tab[1]('outline') } }, '目录'),
-          h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: function () { tab[1]('draw') } }, 'cdd draw'),
+          h('button', { key: 'g', className: tab[0] === 'graph' ? 'on' : '', onClick: clicked('逻辑图', function () { tab[1]('graph') }) }, '逻辑图'),
+          h('button', { key: 'o', className: tab[0] === 'outline' ? 'on' : '', onClick: clicked('目录', function () { tab[1]('outline') }) }, '目录'),
+          h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: clicked('cdd draw', function () { tab[1]('draw') }) }, 'cdd draw'),
         ]),
         tab[0] !== 'graph' ? null : treeSelector(engine),
         h(Search, { key: 'q', engine: engine }),
@@ -5983,25 +6126,25 @@ window.__ModuleLoader__.load({
         shared.screenError ? h('span', { key: 'err', className: 'cddl-meta cddl-error', title: shared.screenError }, '屏幕计算失败') : null,
         h('span', { key: 's', className: 'cddl-spacer' }),
         h('div', { key: 'z', className: 'cddl-zoom', 'aria-label': '缩放控制' }, [
-          h('button', { key: 'o', className: 'cddl-btn', onClick: function () { setZoom(zoom[0] - .1) } }, '−'),
-          h('button', { key: 'n', className: 'cddl-btn', onClick: function () { setZoom(1) } }, Math.round(zoom[0] * 100) + '%'),
-          h('button', { key: 'i', className: 'cddl-btn', onClick: function () { setZoom(zoom[0] + .1) } }, '＋'),
+          h('button', { key: 'o', className: 'cddl-btn', onClick: clicked('缩小', function () { setZoom(zoom[0] - .1) }) }, '−'),
+          h('button', { key: 'n', className: 'cddl-btn', onClick: clicked('缩放 100%', function () { setZoom(1) }) }, Math.round(zoom[0] * 100) + '%'),
+          h('button', { key: 'i', className: 'cddl-btn', onClick: clicked('放大', function () { setZoom(zoom[0] + .1) }) }, '＋'),
         ]),
         h('button', {
           key: 'l', className: 'cddl-btn',
-          onClick: function () {
+          onClick: clicked('恢复自动布局', function () {
             clearNodePositions()
             layoutRevision[1](function (n) { return n + 1 })
             publish()
-          },
+          }),
         }, '恢复自动布局'),
         h('button', {
           key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
-          onClick: function () { fit(shared.selected || shared.graph.rootId, .35) },
+          onClick: clicked('适配', function () { fit(shared.selected || shared.graph.rootId, .35) }),
         }, '适配'),
         props.docked ? null : h('button', {
           key: 'float', className: 'cddl-btn',
-          onClick: function () { openDockBesideChat(ctx) },
+          onClick: clicked('并排 Chat', function () { openDockBesideChat(ctx) }),
         }, '并排 Chat ⤢'),
         h('button', {
           key: 'r', className: 'cddl-btn',

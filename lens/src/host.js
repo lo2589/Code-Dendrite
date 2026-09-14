@@ -386,6 +386,14 @@ module.exports = {
       json(res, 200, { session: q.session ?? null, reason: log === null ? 'no-session' : null, ...screen })
     })
 
+    /** 展开：按 id 去新 anchor 表拉 anchor，外加这些节点的按钮数字和拿不到的 id。 */
+    register('/anchors', async (req, res, q) => {
+      if (req.method !== 'POST') { json(res, 405, { error: 'POST only' }); return }
+      const body = await readJson(req)
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 5000) : []
+      json(res, 200, await ask('anchors', q, { ids }))
+    })
+
     // Re-validation takes the whole drawn graph, so the id list rides in a POST
     // body — a query string of three hundred anchor ids is a URL some proxy
     // will silently cut in half.
