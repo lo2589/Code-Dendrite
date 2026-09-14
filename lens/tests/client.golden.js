@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_40_HMR_SINGLE_REGISTRATION_001
+// build: V1_41_ARROWS_2_OR_3_001
 // parts: 41
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_40_HMR_SINGLE_REGISTRATION_001'
+    var BUILD = 'V1_41_ARROWS_2_OR_3_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -3702,13 +3702,14 @@ __cddLocal.load({
       return { a: a, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y }, b: b }
     }
 
+    /**
+     * 一根线放几个箭头：短线 2 个、长线 3 个，均匀分布（1/3、2/3 或 1/4、1/2、3/4）。
+     * 长短按线长分：不到 4 个 ARROW_EVERY（约一个列距）算短线。
+     * 以前按 56px 一个、最多 6 个铺，532 根线铺出 2946 个箭头，渲染被拖慢。
+     */
     function arrowDistances(total, every) {
       if (total <= 0) return []
-      if (total < every) return [total * .55]
-      var step = Math.max(56, every)
-      var count = Math.floor((total - 28) / step)
-      if (count < 1) count = 1
-      if (count > 6) count = 6
+      var count = total < every * 4 ? 2 : 3
       var out = []
       for (var i = 1; i <= count; i += 1) out.push(total * i / (count + 1))
       return out
