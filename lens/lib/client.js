@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_55_FOLD_BOXES_001
+// build: V1_56_FOLD_UPSTREAM_001
 // parts: 44
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_55_FOLD_BOXES_001'
+    var BUILD = 'V1_56_FOLD_UPSTREAM_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
