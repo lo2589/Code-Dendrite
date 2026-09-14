@@ -1,18 +1,22 @@
 // dsh-cdd-lens — browser half. GENERATED, DO NOT EDIT.
 //
 // Built from src/client/ by scripts/build.js. Edit the parts, not this file.
-// Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
-// the loader's `require`), so a generated bundle drops in on top.
+// Parts register into the bundle's own table; the host module table only
+// receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_39_NO_BARE_NAMES_IN_FIELDS_001
+// build: V1_40_HMR_SINGLE_REGISTRATION_001
 // parts: 41
 
+;(function () {
+var __cddHost = window.__ModuleLoader__
+var __cddParts = {}
+var __cddLocal = { load: function (registration) { __cddParts[registration.id] = registration.factory } }
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/runtime/api',
   factory: (require) => {
     var module = { exports: {} }
@@ -20,7 +24,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_39_NO_BARE_NAMES_IN_FIELDS_001'
+    var BUILD = 'V1_40_HMR_SINGLE_REGISTRATION_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -84,7 +88,7 @@ window.__ModuleLoader__.load({
 // 控制台（`[cdd 时间] [类别]` 前缀）。点了没反应时，看最后一条 log 就知道断在哪一步。
 //
 // 关闭：`?cddl-debug=0`，或 localStorage 里 `cdd-lens.debug.v1=0`。
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/runtime/debug',
   factory: (require) => {
     var module = { exports: {} }
@@ -181,7 +185,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/graph/model',
   factory: (require) => {
     var module = { exports: {} }
@@ -325,7 +329,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/state/store',
   factory: (require) => {
     var module = { exports: {} }
@@ -613,7 +617,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/state/persist',
   factory: (require) => {
     var module = { exports: {} }
@@ -753,7 +757,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/session/trajectory',
   factory: (require) => {
     var module = { exports: {} }
@@ -949,7 +953,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/fetch',
   factory: (require) => {
     var module = { exports: {} }
@@ -1085,7 +1089,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/explore',
   factory: (require) => {
     var module = { exports: {} }
@@ -1141,7 +1145,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/selection',
   factory: (require) => {
     var module = { exports: {} }
@@ -1252,7 +1256,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/ingest',
   factory: (require) => {
     var module = { exports: {} }
@@ -1438,7 +1442,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/gather',
   factory: (require) => {
     var module = { exports: {} }
@@ -1512,7 +1516,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/screen',
   factory: (require) => {
     var module = { exports: {} }
@@ -1827,7 +1831,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/engine/engine',
   factory: (require) => {
     var module = { exports: {} }
@@ -1910,7 +1914,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/session/trace',
   factory: (require) => {
     var module = { exports: {} }
@@ -2029,7 +2033,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/record',
   factory: (require) => {
     var module = { exports: {} }
@@ -2128,7 +2132,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/tree',
   factory: (require) => {
     var module = { exports: {} }
@@ -2290,7 +2294,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/outline',
   factory: (require) => {
     var module = { exports: {} }
@@ -2479,7 +2483,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/panels',
   factory: (require) => {
     var module = { exports: {} }
@@ -2662,7 +2666,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/needIndex',
   factory: (require) => {
     var module = { exports: {} }
@@ -2728,7 +2732,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/node',
   factory: (require) => {
     var module = { exports: {} }
@@ -2933,7 +2937,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/hscroll',
   factory: (require) => {
     var module = { exports: {} }
@@ -3017,7 +3021,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/styles/graph',
   factory: (require) => {
     var module = { exports: {} }
@@ -3265,7 +3269,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/layout/cardBox',
   factory: (require) => {
     var module = { exports: {} }
@@ -3338,7 +3342,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/layout/metrics',
   factory: (require) => {
     var module = { exports: {} }
@@ -3575,7 +3579,7 @@ window.__ModuleLoader__.load({
 })
 
 // Shared, structured geometry. SVG is output only, never a routing input.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/routing/geometry',
   factory: (require) => {
     function compact(points) {
@@ -3645,7 +3649,7 @@ window.__ModuleLoader__.load({
 })
 
 // All skins emit from final geometry. No stage repairs SVG strings afterwards.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/routing/emit',
   factory: (require) => {
     var geometry = require('dsh-cdd-lens/routing/geometry')
@@ -3751,7 +3755,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/layout/gather',
   factory: (require) => {
     var module = { exports: {} }
@@ -3945,7 +3949,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/layout/space',
   factory: (require) => {
     var module = { exports: {} }
@@ -4277,7 +4281,7 @@ window.__ModuleLoader__.load({
 //
 // 输入是 CDD 的图：`graph.nodes[id]` 就是 anchor 记录，`graph.ui[id]` 是按钮状态，
 // 布局只读前者，一个字段都不写回。
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/layout/sugiyama',
   factory: (require) => {
     var module = { exports: {} }
@@ -4663,7 +4667,7 @@ window.__ModuleLoader__.load({
 //   screen.side  → 不在当前树里的 seed，堆到树的下面，排成等宽的列
 //   screen.edges → 一条不少地出线（一条边一种类型）
 // 这里不做任何筛选：不看按钮状态、不看关系开关、不挑主干。
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/layout/layout',
   factory: (require) => {
     var module = { exports: {} }
@@ -4894,7 +4898,7 @@ window.__ModuleLoader__.load({
 // The graph explains code relationships. This rail explains the session in
 // time, and deliberately owns its own rendering state: compaction may fade a
 // graph node, but it must never erase or pale a historical trajectory entry.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/view/stream',
   factory: (require) => {
     var module = { exports: {} }
@@ -5450,7 +5454,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/chatSeat',
   factory: (require) => {
     var module = { exports: {} }
@@ -5491,7 +5495,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/panel',
   factory: (require) => {
     var module = { exports: {} }
@@ -5677,7 +5681,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/viewState',
   factory: (require) => {
     var module = { exports: {} }
@@ -5838,7 +5842,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/viewCanvas',
   factory: (require) => {
     var module = { exports: {} }
@@ -6034,7 +6038,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/viewToolbar',
   factory: (require) => {
     var module = { exports: {} }
@@ -6168,7 +6172,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/boundary',
   factory: (require) => {
     var module = { exports: {} }
@@ -6235,7 +6239,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/graphView',
   factory: (require) => {
     var module = { exports: {} }
@@ -6352,7 +6356,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/shell/dock',
   factory: (require) => {
     var module = { exports: {} }
@@ -6465,7 +6469,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens/styles/shell',
   factory: (require) => {
     var module = { exports: {} }
@@ -6625,7 +6629,7 @@ window.__ModuleLoader__.load({
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
 // the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
+__cddLocal.load({
   id: 'dsh-cdd-lens',
   factory: (require) => {
     var module = { exports: {} }
@@ -6695,3 +6699,20 @@ window.__ModuleLoader__.load({
     return module.exports
   },
 })
+
+// 入口的工厂：部件从本次执行的表里取，其余（react 等）交给宿主。
+function __cddMount(hostRequire) {
+  var made = {}
+  var req = function (id) {
+    if (!Object.prototype.hasOwnProperty.call(__cddParts, id)) return hostRequire(id)
+    if (!Object.prototype.hasOwnProperty.call(made, id)) made[id] = __cddParts[id](req)
+    return made[id]
+  }
+  return req
+}
+Object.keys(__cddParts).forEach(function (id) {
+  if (id === 'dsh-cdd-lens') return
+  try { __cddHost.load({ id: id, factory: __cddParts[id] }) } catch (e) { /* 热更新重跑：宿主已有这个部件 id，入口不经过宿主表 */ }
+})
+__cddHost.load({ id: 'dsh-cdd-lens', factory: function (hostRequire) { return __cddMount(hostRequire)('dsh-cdd-lens') } })
+})()
