@@ -122,6 +122,8 @@ window.__ModuleLoader__.load({
           key: 'l', className: 'cddl-btn',
           onClick: clicked('恢复自动布局', function () {
             clearNodePositions()
+            // 框的先后也按交流重新算一遍。
+            shared.boxOrder = null
             layoutRevision[1](function (n) { return n + 1 })
             publish()
           }),

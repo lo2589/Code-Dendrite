@@ -63,6 +63,8 @@ window.__ModuleLoader__.load({
           shared.screen = null
           shared.anchorCache = {}
           shared.anchorCacheStamp = undefined
+          // 框的先后属于那个会话：换会话按交流重新算。
+          shared.boxOrder = null
           shared.evidenceSignature = null
           shared.trace = {}
           shared.resolved = {}
