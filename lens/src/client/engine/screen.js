@@ -192,6 +192,7 @@ window.__ModuleLoader__.load({
           note('screen', '← 节点 ' + body.nodes.length + ' · 旁边 ' + body.side.length + ' · 边 ' + body.edges.length
             + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length
             + ' · 响应 ' + kb(body.__bytes) + '（新发 anchor ' + fresh + ' 个）· ' + (Date.now() - t0) + 'ms'
+            + (body.timing ? '（读会话 ' + body.timing.log + 'ms · ' + body.timing.source + ' · 计算 ' + body.timing.compute + 'ms）' : '')
             + (body.reason ? ' · ' + body.reason : ''))
           ;(body.expansions || []).forEach(function (x) {
             if (x.skipped) note('screen', '  展开被跳过 ' + shortId(x.id) + ' ' + x.rel + x.dir + '：' + (x.skipped === 'relation-off' ? '这个关系没开' : '节点不在屏幕上'))

@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_46_CARD_WIDTH_001
+// build: V1_47_SESSION_READ_CACHE_001
 // parts: 43
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_46_CARD_WIDTH_001'
+    var BUILD = 'V1_47_SESSION_READ_CACHE_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1724,6 +1724,7 @@ __cddLocal.load({
           note('screen', '← 节点 ' + body.nodes.length + ' · 旁边 ' + body.side.length + ' · 边 ' + body.edges.length
             + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length
             + ' · 响应 ' + kb(body.__bytes) + '（新发 anchor ' + fresh + ' 个）· ' + (Date.now() - t0) + 'ms'
+            + (body.timing ? '（读会话 ' + body.timing.log + 'ms · ' + body.timing.source + ' · 计算 ' + body.timing.compute + 'ms）' : '')
             + (body.reason ? ' · ' + body.reason : ''))
           ;(body.expansions || []).forEach(function (x) {
             if (x.skipped) note('screen', '  展开被跳过 ' + shortId(x.id) + ' ' + x.rel + x.dir + '：' + (x.skipped === 'relation-off' ? '这个关系没开' : '节点不在屏幕上'))

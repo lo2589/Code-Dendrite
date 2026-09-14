@@ -257,31 +257,68 @@ module.exports = {
     }
 
     /**
-     * One session's complete log and current surface, read from persistence.
+     * 一个会话的事件和会话头。
      *
-     * Cached by id and by the log's length, so repeated polls do not re-read a
-     * whole session off disk while the page is open.
+     * 正在跑的会话在 ctx.sessions 里：直接拿内存里的事件，不读盘、不回放校验，按 seq 缓存（有新事件才重取）。
+     * 没在跑的会话从持久化读一次就留着——它不会再变；被恢复成正在跑的会话时走上面那条，
+     * 之后又停下来时 key 不是 'disk'，会重新读盘一次，不会拿到旧的。
+     * 以前每 1.5 秒过期就整份重读（readSession + readSurface）：5MB / 17683 行的会话每次 /screen 要 4.4 秒。
+     * surface 只有 /trace 要，单独读（readSurfaceSeqs），/screen 不再读。
      */
+    const LOG_CACHE_MAX = 8
     const logCache = new Map()
-    const readLog = async (id) => {
-      if (typeof id !== 'string' || id.length === 0) return null
-      const query = ctx.get('sessionQuery')
-      if (query === undefined || typeof query.readSession !== 'function') return null
-      const cached = logCache.get(id)
-      const now = Date.now()
-      if (cached !== undefined && now - cached.at < 1500) return cached.value
+    const surfaceCache = new Map()
+    const remember = (cache, id, entry) => {
+      cache.delete(id)
+      cache.set(id, entry)
+      while (cache.size > LOG_CACHE_MAX) cache.delete(cache.keys().next().value)
+    }
+    const liveSession = (id) => {
       try {
-        const snapshot = await query.readSession(id)
-        let surface = []
-        try {
-          const face = await query.readSurface(id)
-          surface = (face.events ?? []).map(event => event.seq)
-        } catch { /* no surface read means nothing fades, not that nothing happened */ }
-        const value = { events: snapshot.events ?? [], surface, header: snapshot.session ?? {} }
-        logCache.set(id, { at: now, value })
-        return value
+        const sessions = ctx.get('sessions')
+        const live = sessions !== undefined && typeof sessions.get === 'function' ? sessions.get(id) : undefined
+        return live !== undefined && live !== null && typeof live.snapshotEvents === 'function' ? live : null
       } catch {
         return null
+      }
+    }
+    const readLog = async (id) => {
+      if (typeof id !== 'string' || id.length === 0) return null
+      const cached = logCache.get(id)
+      const live = liveSession(id)
+      if (live !== null) {
+        const key = 'live:' + Number(live.seq)
+        if (cached !== undefined && cached.key === key) return { ...cached.value, source: 'cache' }
+        const value = { events: live.snapshotEvents(), header: live.header ?? {} }
+        remember(logCache, id, { key, value })
+        return { ...value, source: 'live' }
+      }
+      if (cached !== undefined && cached.key === 'disk') return { ...cached.value, source: 'cache' }
+      const query = ctx.get('sessionQuery')
+      if (query === undefined || typeof query.readSession !== 'function') return null
+      try {
+        const snapshot = await query.readSession(id)
+        const value = { events: snapshot.events ?? [], header: snapshot.session ?? {} }
+        remember(logCache, id, { key: 'disk', value })
+        return { ...value, source: 'disk' }
+      } catch {
+        return null
+      }
+    }
+    const readSurfaceSeqs = async (id) => {
+      const query = ctx.get('sessionQuery')
+      if (typeof id !== 'string' || query === undefined || typeof query.readSurface !== 'function') return []
+      const live = liveSession(id)
+      const key = live === null ? 'disk' : 'live:' + Number(live.seq)
+      const cached = surfaceCache.get(id)
+      if (cached !== undefined && cached.key === key) return cached.seqs
+      try {
+        const face = await query.readSurface(id)
+        const seqs = (face.events ?? []).map(event => event.seq)
+        remember(surfaceCache, id, { key, seqs })
+        return seqs
+      } catch {
+        return [] /* no surface read means nothing fades, not that nothing happened */
       }
     }
 
@@ -386,13 +423,17 @@ module.exports = {
     register('/screen', async (req, res, q) => {
       if (req.method !== 'POST') { json(res, 405, { error: 'POST only' }); return }
       const body = await readJson(req)
+      const t0 = Date.now()
       const log = await readLog(q.session)
+      const t1 = Date.now()
       const touches = log === null ? [] : touchesFromEvents(log.events)
       const screen = await ask('screen', q, {
         touches, state: body.state ?? {},
         known: Array.isArray(body.known) ? body.known : [], knownStamp: body.knownStamp ?? null,
       })
-      json(res, 200, { session: q.session ?? null, reason: log === null ? 'no-session' : null, ...screen })
+      // 慢在哪一眼看得出：读会话多久、从哪读的（live 内存 / cache / disk 读盘）、算多久。
+      const timing = { log: t1 - t0, source: log === null ? 'none' : log.source, compute: Date.now() - t1 }
+      json(res, 200, { session: q.session ?? null, reason: log === null ? 'no-session' : null, timing, ...screen })
     })
 
     /** 展开：按 id 去新 anchor 表拉 anchor，外加这些节点的按钮数字和拿不到的 id。 */
@@ -522,7 +563,7 @@ module.exports = {
         json(res, 200, { root, turn: 0, records: [], reason: 'no-session' })
         return
       }
-      const { turn, touches, outside } = collect(log.events, log.surface, root)
+      const { turn, touches, outside } = collect(log.events, await readSurfaceSeqs(q.session), root)
       const resolved = []
       /** Touched inside the workspace but owning no anchor, keyed by file. */
       const unresolved = new Map()
