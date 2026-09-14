@@ -63,6 +63,9 @@ window.__ModuleLoader__.load({
       // anchors belong together; a column says only how deep the chain is, and
       // drawing it as a box is what made the two skins indistinguishable.
       '.cddl-sidebox{border-style:dotted;background:transparent}',
+      '.cddl-filebox .cddl-foldwrap{pointer-events:auto}',
+      '.cddl-fold{margin-left:6px;min-width:26px;height:18px;padding:0 6px;border:1px solid var(--dsw-alias-border-l3);border-radius:5px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:700 11px var(--ds-font-family-code,monospace);cursor:pointer}',
+      '.cddl-fold:hover{border-color:var(--dsw-alias-state-business-primary)}',
       '.cddl-flowbox{border-width:1px;border-color:var(--dsw-alias-border-l2);border-radius:9px;background:transparent}',
       '.cddl-flowbox strong{font-weight:500;color:var(--dsw-alias-label-caption)}',
       '.cddl-flowbox span{display:none}',

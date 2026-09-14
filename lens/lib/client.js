@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_54_HALF_BOX_ROW_001
+// build: V1_55_FOLD_BOXES_001
 // parts: 44
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_54_HALF_BOX_ROW_001'
+    var BUILD = 'V1_55_FOLD_BOXES_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1583,7 +1583,7 @@ __cddLocal.load({
     function defaultView() {
       var rels = {}
       RELATIONS.forEach(function (r) { rels[r] = true })
-      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep() }
+      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep(), openFiles: [] }
     }
 
     function viewOf() {
@@ -1839,6 +1839,17 @@ __cddLocal.load({
           return engine.refresh()
         },
 
+        /** 文件框 + / −：点开看这个文件的全部节点，再点折叠回只留层级高的和 pin 的。@param key - 'tree:文件' 或 'side:文件'。 */
+        toggleFile: function (key) {
+          var view = viewOf()
+          view.openFiles = view.openFiles || []
+          var at = view.openFiles.indexOf(key)
+          if (at >= 0) view.openFiles.splice(at, 1)
+          else view.openFiles.push(key)
+          note('btn', '按下 ' + (at >= 0 ? '− 折叠文件框 ' : '+ 展开文件框 ') + String(key).split('/').pop())
+          return engine.refresh()
+        },
+
         isOpen: function (id, rel, dir) {
           return viewOf().opens.some(function (o) { return o.id === id && o.rel === rel && o.dir === dir })
         },
@@ -1900,6 +1911,7 @@ __cddLocal.load({
           note('btn', '按下 清空（去掉 ' + view.opens.length + ' 个展开、' + view.pins.length + ' 个 pin）')
           view.opens = []
           view.pins = []
+          view.openFiles = []
           shared.lit = null
           return engine.refresh()
         },
@@ -3239,6 +3251,9 @@ __cddLocal.load({
       // anchors belong together; a column says only how deep the chain is, and
       // drawing it as a box is what made the two skins indistinguishable.
       '.cddl-sidebox{border-style:dotted;background:transparent}',
+      '.cddl-filebox .cddl-foldwrap{pointer-events:auto}',
+      '.cddl-fold{margin-left:6px;min-width:26px;height:18px;padding:0 6px;border:1px solid var(--dsw-alias-border-l3);border-radius:5px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:700 11px var(--ds-font-family-code,monospace);cursor:pointer}',
+      '.cddl-fold:hover{border-color:var(--dsw-alias-state-business-primary)}',
       '.cddl-flowbox{border-width:1px;border-color:var(--dsw-alias-border-l2);border-radius:9px;background:transparent}',
       '.cddl-flowbox strong{font-weight:500;color:var(--dsw-alias-label-caption)}',
       '.cddl-flowbox span{display:none}',
@@ -6719,6 +6734,21 @@ __cddLocal.load({
     var __view_wire_layer = require('dsh-cdd-lens/view/wireLayer')
     var WireLayer = __view_wire_layer.WireLayer
 
+    /** 框头右上：超过 5 个的框显示「5/40 个节点 +35」或「40 个节点 −」，点了切换折叠（计算单元 fold.js 决定画谁）。 */
+    function foldBadge(box, engine) {
+      var key = (box.frame === 'side' ? 'side:' : 'tree:') + box.file
+      var fold = shared.screen && shared.screen.folds ? shared.screen.folds[key] : undefined
+      if (fold === undefined) return h('span', { key: 'count' }, box.count + ' 个节点')
+      return h('span', { key: 'count', className: 'cddl-foldwrap' }, [
+        (fold.open ? fold.total : fold.shown + '/' + fold.total) + ' 个节点 ',
+        h('button', {
+          key: 'fold', className: 'cddl-fold', 'data-fold': key,
+          title: fold.open ? '折叠：只留层级高的和 pin 的' : '展开这个文件的全部 ' + fold.total + ' 个节点',
+          onClick: function (event) { event.stopPropagation(); engine.toggleFile(key) },
+        }, fold.open ? '−' : '+' + fold.hidden),
+      ])
+    }
+
     function renderCanvas(props, view) {
       var context = view.context
       var engine = view.engine
@@ -6758,7 +6788,8 @@ __cddLocal.load({
           h('div', { key: 'f', className: 'cddl-fileboxes' },
             (model.files || []).map(function (box) {
               return h('div', {
-                key: box.file,
+                // 同一个文件可能在树里和旁边各有一个框：键带上是哪一段。
+                key: box.frame + ':' + box.file,
                 // A flow column guide is not a container: it gets the quiet
                 // frame, and the box keeps the loud one for what holds files.
                 className: 'cddl-filebox' + (box.frame === 'flow' ? ' cddl-flowbox' : '') + (box.frame === 'side' ? ' cddl-sidebox' : ''),
@@ -6769,7 +6800,7 @@ __cddLocal.load({
                 },
               }, [
                 h('strong', { key: 'name', title: box.file }, box.label || box.file),
-                h('span', { key: 'count' }, box.count + ' 个节点'),
+                foldBadge(box, engine),
               ])
             })),
           h(WireLayer, { key: 'w', model: model, engine: engine }),

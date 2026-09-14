@@ -29,6 +29,21 @@ window.__ModuleLoader__.load({
     var __view_wire_layer = require('dsh-cdd-lens/view/wireLayer')
     var WireLayer = __view_wire_layer.WireLayer
 
+    /** 框头右上：超过 5 个的框显示「5/40 个节点 +35」或「40 个节点 −」，点了切换折叠（计算单元 fold.js 决定画谁）。 */
+    function foldBadge(box, engine) {
+      var key = (box.frame === 'side' ? 'side:' : 'tree:') + box.file
+      var fold = shared.screen && shared.screen.folds ? shared.screen.folds[key] : undefined
+      if (fold === undefined) return h('span', { key: 'count' }, box.count + ' 个节点')
+      return h('span', { key: 'count', className: 'cddl-foldwrap' }, [
+        (fold.open ? fold.total : fold.shown + '/' + fold.total) + ' 个节点 ',
+        h('button', {
+          key: 'fold', className: 'cddl-fold', 'data-fold': key,
+          title: fold.open ? '折叠：只留层级高的和 pin 的' : '展开这个文件的全部 ' + fold.total + ' 个节点',
+          onClick: function (event) { event.stopPropagation(); engine.toggleFile(key) },
+        }, fold.open ? '−' : '+' + fold.hidden),
+      ])
+    }
+
     function renderCanvas(props, view) {
       var context = view.context
       var engine = view.engine
@@ -68,7 +83,8 @@ window.__ModuleLoader__.load({
           h('div', { key: 'f', className: 'cddl-fileboxes' },
             (model.files || []).map(function (box) {
               return h('div', {
-                key: box.file,
+                // 同一个文件可能在树里和旁边各有一个框：键带上是哪一段。
+                key: box.frame + ':' + box.file,
                 // A flow column guide is not a container: it gets the quiet
                 // frame, and the box keeps the loud one for what holds files.
                 className: 'cddl-filebox' + (box.frame === 'flow' ? ' cddl-flowbox' : '') + (box.frame === 'side' ? ' cddl-sidebox' : ''),
@@ -79,7 +95,7 @@ window.__ModuleLoader__.load({
                 },
               }, [
                 h('strong', { key: 'name', title: box.file }, box.label || box.file),
-                h('span', { key: 'count' }, box.count + ' 个节点'),
+                foldBadge(box, engine),
               ])
             })),
           h(WireLayer, { key: 'w', model: model, engine: engine }),

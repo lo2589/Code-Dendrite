@@ -13,6 +13,7 @@ const { RELATIONS, peers } = require('./anchors.js')
 const { seedsAt, normalizeEditKeep } = require('./evidence.js')
 const { resolveAll } = require('./resolve.js')
 const { TREES, edgeKey, addEdge, treeFor } = require('./trees.js')
+const { foldBoxes } = require('./fold.js')
 
 function normalizePins(ctx, state) {
   const pins = (Array.isArray(state.pins) ? state.pins : [])
@@ -31,7 +32,9 @@ function normalizeState(ctx, state, events) {
     && typeof o.id === 'string' && RELATIONS.includes(o.rel) && (o.dir === 'up' || o.dir === 'down'))
   const pins = normalizePins(ctx, state)
   const pinned = [...new Set(pins.filter(p => p.at <= turn && (p.until === null || turn < p.until)).map(p => p.id))].sort()
-  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens, editKeep: normalizeEditKeep(state.editKeep) }
+  // openFiles：点开（+）的文件框，键见 fold.boxKey。
+  const openFiles = Array.isArray(state.openFiles) ? state.openFiles.filter(k => typeof k === 'string') : []
+  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens, editKeep: normalizeEditKeep(state.editKeep), openFiles }
 }
 
 /** 一棵树在所有选中关系上的并集。 */
@@ -97,7 +100,15 @@ function screenLayer(ctx, st, mode, seedState) {
   const expansions = applyOpens(ctx, st, layer, seedState.seeds)
   connectPinned(ctx, st, layer, seedState.seeds)
   const side = [...seedState.seeds].sort().filter(id => !layer.nodes.has(id))
-  return { layer, expansions, side }
+  // 文件框折叠：超过 5 个的框只留层级高的和 pin / 展开的，其余节点和边不画（fold.js）。
+  const forced = new Set(st.pinned)
+  for (const x of expansions) {
+    if (x.skipped) continue
+    forced.add(x.id)
+    ;(x.peers || []).forEach(p => forced.add(p))
+  }
+  const folded = foldBoxes(ctx, layer, side, forced, st.openFiles)
+  return { layer, expansions, side: folded.side, folds: folded.folds }
 }
 
 function buttonsFor(ctx, ids, rels) {
@@ -123,7 +134,7 @@ function computeScreen(ctx, events, state, known) {
   const have = new Set(Array.isArray(known) ? known : [])
   const seedState = seedsAt(events, st.turn, st.pins, { editKeep: st.editKeep })
   const rels = RELATIONS.filter(r => st.rels[r])
-  const { layer, expansions, side } = screenLayer(ctx, st, st.tree, seedState)
+  const { layer, expansions, side, folds } = screenLayer(ctx, st, st.tree, seedState)
   const nodes = [...layer.nodes].sort()
   const shown = [...nodes, ...side]
   const treeTotals = {}
@@ -139,7 +150,7 @@ function computeScreen(ctx, events, state, known) {
     nodes, side, edges: layer.edges,
     buttons: buttonsFor(ctx, shown, rels),
     anchors: Object.fromEntries(shown.filter(id => !have.has(id)).map(id => [id, ctx.anchors[id]])),
-    expansions, trees: layer.perRelation, treeTotals,
+    expansions, trees: layer.perRelation, treeTotals, folds, openFiles: st.openFiles,
   }
   screen.violations = check(ctx, screen, seedState)
   return screen

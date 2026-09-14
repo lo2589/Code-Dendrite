@@ -50,7 +50,7 @@ window.__ModuleLoader__.load({
     function defaultView() {
       var rels = {}
       RELATIONS.forEach(function (r) { rels[r] = true })
-      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep() }
+      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep(), openFiles: [] }
     }
 
     function viewOf() {
@@ -306,6 +306,17 @@ window.__ModuleLoader__.load({
           return engine.refresh()
         },
 
+        /** 文件框 + / −：点开看这个文件的全部节点，再点折叠回只留层级高的和 pin 的。@param key - 'tree:文件' 或 'side:文件'。 */
+        toggleFile: function (key) {
+          var view = viewOf()
+          view.openFiles = view.openFiles || []
+          var at = view.openFiles.indexOf(key)
+          if (at >= 0) view.openFiles.splice(at, 1)
+          else view.openFiles.push(key)
+          note('btn', '按下 ' + (at >= 0 ? '− 折叠文件框 ' : '+ 展开文件框 ') + String(key).split('/').pop())
+          return engine.refresh()
+        },
+
         isOpen: function (id, rel, dir) {
           return viewOf().opens.some(function (o) { return o.id === id && o.rel === rel && o.dir === dir })
         },
@@ -367,6 +378,7 @@ window.__ModuleLoader__.load({
           note('btn', '按下 清空（去掉 ' + view.opens.length + ' 个展开、' + view.pins.length + ' 个 pin）')
           view.opens = []
           view.pins = []
+          view.openFiles = []
           shared.lit = null
           return engine.refresh()
         },
