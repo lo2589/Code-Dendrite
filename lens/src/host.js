@@ -239,6 +239,8 @@ module.exports = {
           Promise.resolve()
             .then(() => handler(req, res, query(req.url)))
             .catch((error) => {
+              // 没有会话不是故障：答 200，页面照常显示空图，不去猜仓库。
+              if (error?.code === 'no-session') { json(res, 200, { root: null, reason: 'no-session' }); return }
               // A failed query must answer with its reason. A hanging request is
               // a spinner the page can never clear and no log ever explains.
               json(res, 500, { error: String(error && error.message ? error.message : error), code: error?.code ?? 'failed' })
@@ -296,7 +298,11 @@ module.exports = {
       const cwd = (await readLog(q.session))?.header?.cwd
       if (typeof cwd === 'string' && cwd.length > 0) return path.resolve(cwd)
       if (typeof config.root === 'string' && config.root.length > 0) return path.resolve(config.root)
-      return process.cwd()
+      // 不再退回 harness 进程自己的目录：那是 deepseek-harness，索引 136MB，一个 worker 读进去就是 1GB，
+      // 而页面只是还没拿到会话。没有会话就是没有仓库——所有路由统一由 register 答「no-session」。
+      const error = new Error('no session and no root')
+      error.code = 'no-session'
+      throw error
     }
 
     const ask = async (op, q, extra = {}) => store.ask(op, await rootOf(q), { ...q, ...extra })

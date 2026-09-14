@@ -47,8 +47,20 @@ window.__ModuleLoader__.load({
         },
 
         context: function () {
+          // 还没有会话、也没有仓库：不问。问了 host 只能猜一个仓库，猜错的代价是把别的项目整份索引读进内存。
+          var sid = session()
+          if ((sid === undefined || sid === null) && shared.root === undefined) {
+            require('dsh-cdd-lens/runtime/debug').note('req', '/context 跳过：还没有会话')
+            return Promise.resolve(undefined)
+          }
           return api('/context', params()).then(function (body) {
             shared.context = body
+            // host 答 no-session 时 root 是 null；不能记下来，否则每个请求都带 root=null。
+            if (typeof body.root !== 'string') {
+              require('dsh-cdd-lens/runtime/debug').note('res', '/context 没有仓库：' + (body.reason || 'no-root'))
+              publish()
+              return body
+            }
             shared.root = body.root
             // First contact teaches the graph its stamp; a later context that
             // disagrees with it means the index was rebuilt behind the page.

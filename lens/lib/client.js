@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_42_RENDER_LOAD_001
+// build: V1_43_NO_SESSION_NO_ROOT_001
 // parts: 41
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_42_RENDER_LOAD_001'
+    var BUILD = 'V1_43_NO_SESSION_NO_ROOT_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -997,8 +997,20 @@ __cddLocal.load({
         },
 
         context: function () {
+          // 还没有会话、也没有仓库：不问。问了 host 只能猜一个仓库，猜错的代价是把别的项目整份索引读进内存。
+          var sid = session()
+          if ((sid === undefined || sid === null) && shared.root === undefined) {
+            require('dsh-cdd-lens/runtime/debug').note('req', '/context 跳过：还没有会话')
+            return Promise.resolve(undefined)
+          }
           return api('/context', params()).then(function (body) {
             shared.context = body
+            // host 答 no-session 时 root 是 null；不能记下来，否则每个请求都带 root=null。
+            if (typeof body.root !== 'string') {
+              require('dsh-cdd-lens/runtime/debug').note('res', '/context 没有仓库：' + (body.reason || 'no-root'))
+              publish()
+              return body
+            }
             shared.root = body.root
             // First contact teaches the graph its stamp; a later context that
             // disagrees with it means the index was rebuilt behind the page.
@@ -1378,7 +1390,13 @@ __cddLocal.load({
         ingest: function (snap) {
           if (snap === undefined || snap === null) return Promise.resolve()
           // Resolving before the root is known would ask the wrong repository.
-          if (shared.root === undefined) return engine.context().then(function () { return engine.ingest(snap) })
+          if (shared.root === undefined) {
+            return engine.context().then(function () {
+              // 问过还是没有仓库：停在这里，不再反复问。
+              if (shared.root === undefined) return
+              return engine.ingest(snap)
+            })
+          }
           shared.turn = snap.turn
           // 会话快照在 agent 流式输出时一秒变很多次，但证据（read/edit/write 及其状态）没变时，
           // 屏幕不会变：不重折轨迹、不重算 /screen、不重画。
@@ -1704,6 +1722,10 @@ __cddLocal.load({
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
           + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
+          if (!Array.isArray(body.nodes)) {
+            note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
+            return
+          }
           var fresh = Object.keys(body.anchors || {}).length
           applyScreen(body)
           shared.screenError = null

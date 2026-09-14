@@ -182,6 +182,10 @@ window.__ModuleLoader__.load({
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
           + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
+          if (!Array.isArray(body.nodes)) {
+            note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
+            return
+          }
           var fresh = Object.keys(body.anchors || {}).length
           applyScreen(body)
           shared.screenError = null

@@ -120,7 +120,13 @@ window.__ModuleLoader__.load({
         ingest: function (snap) {
           if (snap === undefined || snap === null) return Promise.resolve()
           // Resolving before the root is known would ask the wrong repository.
-          if (shared.root === undefined) return engine.context().then(function () { return engine.ingest(snap) })
+          if (shared.root === undefined) {
+            return engine.context().then(function () {
+              // 问过还是没有仓库：停在这里，不再反复问。
+              if (shared.root === undefined) return
+              return engine.ingest(snap)
+            })
+          }
           shared.turn = snap.turn
           // 会话快照在 agent 流式输出时一秒变很多次，但证据（read/edit/write 及其状态）没变时，
           // 屏幕不会变：不重折轨迹、不重算 /screen、不重画。
