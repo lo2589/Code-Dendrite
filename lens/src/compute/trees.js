@@ -4,13 +4,12 @@
 //   degree2：没连上的 seed 沿关系上下游各展开 2 度 → 和 1 度树 merge →
 //            反复删掉「不是 seed 的头节点（入度 0）和叶子节点（出度 0）」，直到头和叶全是 seed
 //   edit   ：同 degree2，端点只认 edit 过的 seed
-//   anchor ：搜索得到的 anchor（可以为空）
-// 不在树里的 seed 由 screen.js 堆到一边。
+// 不在树里的 seed 由 screen.js 堆到树的下面；pin 的节点由 screen.js 加进当前树。
 'use strict'
 
 const { peers } = require('./anchors.js')
 
-const TREES = ['degree1', 'degree2', 'edit', 'anchor']
+const TREES = ['degree1', 'degree2', 'edit']
 
 function edgeKey(e) {
   return e.from + '\0' + e.to + '\0' + e.type
@@ -105,11 +104,6 @@ function degree2(ctx, terminals, rel) {
   return { nodes, edges: graph.edges, middles: nodes.filter(id => !term.has(id)), candidates }
 }
 
-function anchorTree(ctx, searched, rel) {
-  const nodes = [...new Set(searched.filter(id => ctx.anchors[id] !== undefined))].sort()
-  return { nodes, edges: edgesAmong(ctx, nodes, rel), middles: [], candidates: nodes.length }
-}
-
 /** 树自检：非端点节点不许是头（入度 0）或叶（出度 0）。 */
 function leafCheck(tree, terminals) {
   const term = new Set(terminals)
@@ -117,11 +111,11 @@ function leafCheck(tree, terminals) {
   return tree.nodes.filter(id => !term.has(id) && (!indeg.get(id) || !outdeg.get(id)))
 }
 
-/** 一棵树、一种关系。按 (模式, 关系, seed/edit 集合或搜索集合) 缓存。 */
-function treeFor(ctx, mode, rel, seedState, searched) {
+/** 一棵树、一种关系。按 (模式, 关系, seed/edit 集合) 缓存。 */
+function treeFor(ctx, mode, rel, seedState) {
   const seeds = [...seedState.seeds].sort()
   const edits = [...seedState.edited].sort()
-  const key = [mode, rel, mode === 'anchor' ? searched.join(',') : seeds.join(',') + '|' + edits.join(',')].join('#')
+  const key = [mode, rel, seeds.join(','), edits.join(',')].join('#')
   if (ctx.treeCache.has(key)) return ctx.treeCache.get(key)
   if (ctx.treeCache.size > 500) ctx.treeCache.clear()
   let tree
@@ -129,9 +123,8 @@ function treeFor(ctx, mode, rel, seedState, searched) {
   if (mode === 'degree1') tree = direct(ctx, seeds, rel)
   else if (mode === 'degree2') tree = degree2(ctx, seeds, rel)
   else if (mode === 'edit') { terminals = edits; tree = degree2(ctx, edits, rel) }
-  else if (mode === 'anchor') { terminals = searched; tree = anchorTree(ctx, searched, rel) }
   else throw new Error('unknown tree ' + mode)
-  tree.badLeaves = mode === 'anchor' ? [] : leafCheck(tree, terminals)
+  tree.badLeaves = leafCheck(tree, terminals)
   ctx.treeCache.set(key, tree)
   return tree
 }

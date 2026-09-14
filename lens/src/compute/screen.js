@@ -1,15 +1,10 @@
 // dsh-cdd-lens — 计算单元 4：状态 → 屏幕。界面上有什么只由这里决定，其他地方不许再过滤。
 //
-// state  = { turn, tree, rels: {call:bool,…}, searched: [id], opens: [{ id, rel, dir }] }
-// screen = {
-//   nodes     选中的树（每个选中关系各算一棵，合并）+ 展开拉进来的
-//   side      属于 seed、但不在 nodes 里的 → 堆一边
-//   edges     只有选中关系的边；一条边一种类型
-//   buttons   nodes ∪ side 上每个选中关系：len(字段) > 0 才有
-//   anchors   nodes ∪ side 的新 anchor 记录
-//   treeTotals 每棵树多少节点、多少关系（避免对不上）
-//   violations 不变式违例（必须为空）
-// }
+// state = { turn, tree, rels: {call:bool,…}, pins: [{ id, at, until }], opens: [{ id, rel, dir }] }
+//   pins ：人为固定（含搜索），优先级最高。pin 期间计数器不减、取消 pin 后再减（见 evidence.seedsAt）；
+//          开什么树加进什么树，和屏幕上的节点有什么边连什么边。兼容 pinned: [id]（从一开始就 pin 着）。
+// 顺序（固定）：选中的树 → 加 pin → 展开 → pin 连边 → 旁边（不在树里的 seed，堆到树下面）
+// screen = { nodes, side, pinned, edges, buttons, anchors, expansions, trees, treeTotals, violations }
 'use strict'
 
 const { RELATIONS, peers } = require('./anchors.js')
@@ -17,30 +12,34 @@ const { seedsAt } = require('./evidence.js')
 const { resolveAll } = require('./resolve.js')
 const { TREES, edgeKey, addEdge, treeFor } = require('./trees.js')
 
-function normalizeState(state, events) {
+function normalizePins(ctx, state) {
+  const pins = (Array.isArray(state.pins) ? state.pins : [])
+    .filter(p => p !== null && typeof p === 'object' && typeof p.id === 'string')
+    .map(p => ({ id: p.id, at: Number.isFinite(p.at) ? p.at : -Infinity, until: Number.isFinite(p.until) ? p.until : null }))
+  const legacy = (Array.isArray(state.pinned) ? state.pinned : []).map(id => ({ id: String(id), at: -Infinity, until: null }))
+  return [...pins, ...legacy].filter(p => ctx.visible.has(p.id))
+}
+
+function normalizeState(ctx, state, events) {
   const turns = [...new Set(events.map(e => e.turn))].sort((a, b) => a - b)
+  const turn = Number.isFinite(state.turn) ? state.turn : (turns.length > 0 ? turns[turns.length - 1] : 0)
   const rels = {}
   for (const r of RELATIONS) rels[r] = state.rels && typeof state.rels[r] === 'boolean' ? state.rels[r] : true
   const opens = (Array.isArray(state.opens) ? state.opens : []).filter(o => o !== null && typeof o === 'object'
     && typeof o.id === 'string' && RELATIONS.includes(o.rel) && (o.dir === 'up' || o.dir === 'down'))
-  return {
-    turns,
-    turn: Number.isFinite(state.turn) ? state.turn : (turns.length > 0 ? turns[turns.length - 1] : 0),
-    tree: TREES.includes(state.tree) ? state.tree : 'degree2',
-    rels,
-    searched: Array.isArray(state.searched) ? state.searched.map(String) : [],
-    opens,
-  }
+  const pins = normalizePins(ctx, state)
+  const pinned = [...new Set(pins.filter(p => p.at <= turn && (p.until === null || turn < p.until)).map(p => p.id))].sort()
+  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens }
 }
 
 /** 一棵树在所有选中关系上的并集。 */
-function treeLayer(ctx, mode, rels, seedState, searched) {
+function treeLayer(ctx, mode, rels, seedState) {
   const nodes = new Set()
   const edges = []
   const seen = new Set()
   const perRelation = {}
   for (const rel of rels) {
-    const tree = treeFor(ctx, mode, rel, seedState, searched)
+    const tree = treeFor(ctx, mode, rel, seedState)
     perRelation[rel] = { candidates: tree.candidates, nodes: tree.nodes.length, edges: tree.edges.length, middles: tree.middles.length, badLeaves: tree.badLeaves.length }
     tree.nodes.forEach(id => nodes.add(id))
     tree.edges.forEach(e => addEdge(edges, seen, e.from, e.to, e.type))
@@ -48,7 +47,7 @@ function treeLayer(ctx, mode, rels, seedState, searched) {
   return { nodes, edges, seen, perRelation }
 }
 
-/** 按顺序应用展开：显示出来的节点都能展开；邻居已在屏幕上就连，不在就新建。 */
+/** 展开：显示出来的节点（树里的、旁边的）都能展开；邻居在屏幕上就连，不在就新建。 */
 function applyOpens(ctx, st, layer, seeds) {
   const expansions = []
   for (const op of st.opens) {
@@ -69,6 +68,36 @@ function applyOpens(ctx, st, layer, seeds) {
   return expansions
 }
 
+/** pin 连边：和屏幕上的节点（含旁边的 seed）有什么边连什么边；被连到的旁边 seed 进树。 */
+function connectPinned(ctx, st, layer, seeds) {
+  const onScreen = id => layer.nodes.has(id) || seeds.has(id)
+  for (const id of st.pinned) {
+    for (const rel of RELATIONS.filter(r => st.rels[r])) {
+      for (const p of peers(ctx, id, rel, 'down')) {
+        if (!onScreen(p)) continue
+        layer.nodes.add(p)
+        addEdge(layer.edges, layer.seen, id, p, rel)
+      }
+      for (const p of peers(ctx, id, rel, 'up')) {
+        if (!onScreen(p)) continue
+        layer.nodes.add(p)
+        addEdge(layer.edges, layer.seen, p, id, rel)
+      }
+    }
+  }
+}
+
+/** 某棵树选中时屏幕上的节点和边（固定顺序：树 → pin → 展开 → pin 连边 → 旁边）。 */
+function screenLayer(ctx, st, mode, seedState) {
+  const rels = RELATIONS.filter(r => st.rels[r])
+  const layer = treeLayer(ctx, mode, rels, seedState)
+  st.pinned.forEach(id => layer.nodes.add(id))
+  const expansions = applyOpens(ctx, st, layer, seedState.seeds)
+  connectPinned(ctx, st, layer, seedState.seeds)
+  const side = [...seedState.seeds].sort().filter(id => !layer.nodes.has(id))
+  return { layer, expansions, side }
+}
+
 function buttonsFor(ctx, ids, rels) {
   const buttons = {}
   for (const id of ids) {
@@ -84,34 +113,26 @@ function buttonsFor(ctx, ids, rels) {
   return buttons
 }
 
-/** 每棵树（在当前选中关系下）多少节点、多少关系、旁边堆几个。 */
-function treeTotals(ctx, rels, seedState, searched) {
-  const totals = {}
-  for (const mode of TREES) {
-    const layer = treeLayer(ctx, mode, rels, seedState, searched)
-    totals[mode] = { nodes: layer.nodes.size, edges: layer.edges.length, side: [...seedState.seeds].filter(id => !layer.nodes.has(id)).length }
-  }
-  return totals
-}
-
 function computeScreen(ctx, events, state) {
-  const st = normalizeState(state || {}, events)
-  const seedState = seedsAt(events, st.turn)
+  const st = normalizeState(ctx, state || {}, events)
+  const seedState = seedsAt(events, st.turn, st.pins)
   const rels = RELATIONS.filter(r => st.rels[r])
-  const layer = treeLayer(ctx, st.tree, rels, seedState, st.searched)
-  const expansions = applyOpens(ctx, st, layer, seedState.seeds)
+  const { layer, expansions, side } = screenLayer(ctx, st, st.tree, seedState)
   const nodes = [...layer.nodes].sort()
-  const side = [...seedState.seeds].sort().filter(id => !layer.nodes.has(id))
   const shown = [...nodes, ...side]
+  const treeTotals = {}
+  for (const mode of TREES) {
+    const other = mode === st.tree ? { layer, side } : screenLayer(ctx, st, mode, seedState)
+    treeTotals[mode] = { nodes: other.layer.nodes.size, edges: other.layer.edges.length, side: other.side.length }
+  }
   const screen = {
-    turn: st.turn, turns: st.turns, tree: st.tree, rels: st.rels, searched: st.searched,
+    turn: st.turn, turns: st.turns, tree: st.tree, rels: st.rels, pinned: st.pinned,
     seeds: seedState.seeds.size, edited: [...seedState.edited].sort(),
     counter: Object.fromEntries(seedState.counter), faded: seedState.faded.length,
     nodes, side, edges: layer.edges,
     buttons: buttonsFor(ctx, shown, rels),
     anchors: Object.fromEntries(shown.map(id => [id, ctx.anchors[id]])),
-    expansions, trees: layer.perRelation,
-    treeTotals: treeTotals(ctx, rels, seedState, st.searched),
+    expansions, trees: layer.perRelation, treeTotals,
   }
   screen.violations = check(ctx, screen, seedState)
   return screen
@@ -123,15 +144,18 @@ function check(ctx, s, seedState) {
   const nodes = new Set(s.nodes)
   const keys = new Set(s.edges.map(edgeKey))
   for (const id of s.nodes) if (!ctx.visible.has(id)) v.push('节点不在索引: ' + id)
+  for (const id of s.pinned) if (!nodes.has(id)) v.push('pin 的节点不在屏幕上: ' + id)
   for (const e of s.edges) {
     if (!nodes.has(e.from) || !nodes.has(e.to)) v.push('边端点不在屏幕: ' + edgeKey(e))
     if (!s.rels[e.type]) v.push('未选关系的边上屏: ' + edgeKey(e))
   }
   for (const id of s.side) {
-    if (nodes.has(id)) v.push('side 与节点重叠: ' + id)
-    if (!seedState.seeds.has(id)) v.push('side 不是 seed: ' + id)
+    if (nodes.has(id)) v.push('旁边与节点重叠: ' + id)
+    if (!seedState.seeds.has(id)) v.push('旁边不是 seed: ' + id)
   }
   for (const [rel, t] of Object.entries(s.trees)) if (t.badLeaves > 0) v.push(`${s.tree}×${rel} 有 ${t.badLeaves} 个非 seed 头/叶`)
+  const own = s.treeTotals[s.tree]
+  if (own.nodes !== s.nodes.length || own.edges !== s.edges.length || own.side !== s.side.length) v.push('当前树的数字和屏幕对不上')
   for (const x of s.expansions) {
     if (x.skipped) continue
     const button = s.buttons[x.id][x.rel + x.dir] || 0

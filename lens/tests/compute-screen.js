@@ -2,10 +2,11 @@
 //   1 新 anchor 保留原始字段、只补「关系名+up/down」；call 读原生字段并过滤到只剩 anchor
 //   2 write 取整个文件；edit 改后文本找不到就找改前文本
 //   3 只有 read/edit/write 的 turn 才算一轮；计数器 3、每轮 -1；edit 一直留
-//   4 1 度树；2 度树头叶必须是 seed（a-b-c*-d-e* 只留 c*-d-e*）；anchor 树 = 搜索
-//   5 不在树里的 seed 堆一边；按钮数 = 展开数 = 画出的边；展开连已有、连不上建新
-//   6 关掉关系 → 该关系的展开、按钮、边都没有；每棵树都报节点数和关系数
-//   7 worker 的 screen 操作与直接计算一致
+//   4 1 度树；2 度树头叶必须是 seed（a-b-c*-d-e* 只留 c*-d-e*）；不在树里的 seed 堆一边
+//   5 pin：计数器不减、取消 pin 再减；搜索 pin 进当前树，有什么边连什么边
+//   6 按钮数 = 展开数 = 画出的边；展开连已有、连不上建新
+//   7 关掉关系 → 该关系的展开、按钮、边都没有；每棵树的节点数和关系数与选中时的屏幕一致
+//   8 worker 的 screen 操作与直接计算一致
 'use strict'
 const fs = require('fs')
 const path = require('path')
@@ -69,12 +70,14 @@ const check = (name, cond) => {
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const A = id => 'a.py::' + id
-const ALL_OFF = { call: false, dataflow: false, inherit: false, dispatch: false, impact: false }
+const ONLY_CALL = { call: true, dataflow: false, inherit: false, dispatch: false, impact: false }
 
 const ctx = fromIndex(root, raw, relations.edges)
 const touches = touchesFromEvents(rows)
 const screen = state => screenFor(ctx, touches, state)
 const shown = s => new Set([...s.nodes, ...s.side])
+const all = []
+const keep = s => { all.push(s); return s }
 
 // 1 新 anchor
 check('原始字段原样保留', same(Object.keys(raw[A('g')]).map(k => ctx.anchors[A('g')][k]), Object.values(raw[A('g')])))
@@ -83,54 +86,63 @@ check('call 不补字段', ctx.anchors[A('f')].calldown === undefined && ctx.anc
 check('call 读原生字段并滤掉裸名字', same(peers(ctx, A('f'), 'call', 'down'), [A('g')]))
 
 // 2、3 证据与轮次
-const s4 = screen({ turn: 4, tree: 'degree1' })
+const s4 = keep(screen({ turn: 4, tree: 'degree1' }))
 check('write 取整个文件的 anchor', s4.edited.includes('b.py::w1') && s4.edited.includes('b.py::w2'))
 check('edit 改后文本找不到就用改前文本', s4.edited.includes(A('g')))
 check('没有 read/edit/write 的 turn 不算一轮（T4 f 还在）', shown(s4).has(A('f')))
-const s5 = screen({ turn: 5, tree: 'degree1' })
+const s5 = keep(screen({ turn: 5, tree: 'degree1' }))
 check('过 3 轮计数器归零（T5 f 撤下）', !shown(s5).has(A('f')))
 check('edit 过的一直留', shown(s5).has(A('g')) && shown(s5).has('b.py::w1'))
 check('再看一次续命（T5 h 还在）', shown(s5).has(A('h')) && s5.counter[A('h')] === 2)
 
-// 4、5 树与旁边
-const d1 = screen({ turn: 2, tree: 'degree1' })
+// 4 树与旁边
+const d1 = keep(screen({ turn: 2, tree: 'degree1' }))
 check('1 度树只有 seed 直连', same(d1.nodes, [A('f'), A('g')]))
 check('不在树里的 seed 堆一边', same(d1.side, [A('h'), A('k'), A('lonely')]))
 check('一条边一种类型（call、dataflow 各一条）', d1.edges.length === 2 && new Set(d1.edges.map(e => e.type)).size === 2)
-const d2 = screen({ turn: 2, tree: 'degree2', rels: { ...ALL_OFF, call: true } })
+const d2 = keep(screen({ turn: 2, tree: 'degree2', rels: ONLY_CALL }))
 check('2 度树连上 h→x→k', ['h', 'x', 'k'].every(id => d2.nodes.includes(A(id))))
 check('2 度树剪掉非 seed 头 p、q', !d2.nodes.includes(A('p')) && !d2.nodes.includes(A('q')))
 check('2 度树头叶全是 seed、中间点 1 个', d2.trees.call.badLeaves === 0 && d2.trees.call.middles === 1)
 check('2 度树连不上的 seed 在旁边', same(d2.side, [A('lonely')]))
-const at = screen({ turn: 2, tree: 'anchor', searched: [A('lonely')] })
-check('anchor 树 = 搜索得到的 anchor', same(at.nodes, [A('lonely')]) && at.side.length === 4)
 
-// 5 展开
+// 5 pin
+const frozen = keep(screen({ turn: 5, tree: 'degree1', pins: [{ id: A('f'), at: 1 }] }))
+check('pin 期间计数器不减（T5 f 仍是 3）', frozen.counter[A('f')] === 3 && frozen.nodes.includes(A('f')))
+const unpinned = keep(screen({ turn: 5, tree: 'degree1', pins: [{ id: A('f'), at: 1, until: 3 }] }))
+check('取消 pin 后再开始减（T5 f 剩 1）', unpinned.counter[A('f')] === 1 && shown(unpinned).has(A('f')))
+const pinLonely = keep(screen({ turn: 2, tree: 'degree1', pins: [{ id: A('lonely'), at: 2 }] }))
+check('pin 的节点进当前树、不在旁边', pinLonely.nodes.includes(A('lonely')) && !pinLonely.side.includes(A('lonely')))
+const pinX = keep(screen({ turn: 2, tree: 'degree1', pins: [{ id: A('x'), at: 2 }] }))
+check('搜索 pin 一个非 seed：有什么边连什么边', pinX.edges.some(e => e.from === A('h') && e.to === A('x'))
+  && pinX.edges.some(e => e.from === A('x') && e.to === A('k')))
+check('搜索 pin 连上的旁边 seed 进树', pinX.nodes.includes(A('h')) && pinX.nodes.includes(A('k')) && same(pinX.side, [A('lonely')]))
+
+// 6 展开
 const opens = [{ id: A('h'), rel: 'call', dir: 'down' }, { id: A('x'), rel: 'call', dir: 'down' }]
-const ex = screen({ turn: 2, tree: 'degree1', opens })
+const ex = keep(screen({ turn: 2, tree: 'degree1', opens }))
 check('旁边的节点能展开，按钮数 = 展开数', ex.buttons[A('h')].calldown === 1 && ex.expansions[0].count === 1 && ex.expansions[0].fresh === 1)
 check('展开出来的节点能继续展开，连已有节点', ex.expansions[1].count === 1 && ex.expansions[1].fresh === 0)
 check('被连上的 seed 从旁边进树', ex.nodes.includes(A('k')) && !ex.side.includes(A('k')))
 check('画出的边就是展开的边', ex.edges.some(e => e.from === A('h') && e.to === A('x') && e.type === 'call')
   && ex.edges.some(e => e.from === A('x') && e.to === A('k') && e.type === 'call'))
 
-// 6 关系开关、每棵树的数
-const off = screen({ turn: 2, tree: 'degree1', rels: { call: false }, opens })
+// 7 关系开关、每棵树的数
+const off = keep(screen({ turn: 2, tree: 'degree1', rels: { call: false }, opens }))
 check('关掉 call：展开不生效', off.expansions.every(x => x.skipped === 'relation-off'))
 check('关掉 call：没有 call 边、没有 call 按钮', off.edges.every(e => e.type !== 'call')
   && Object.values(off.buttons).every(b => Object.keys(b).every(k => !k.startsWith('call'))))
-check('每棵树报节点数和关系数', ['degree1', 'degree2', 'edit', 'anchor'].every(m => typeof d1.treeTotals[m].nodes === 'number' && typeof d1.treeTotals[m].edges === 'number')
-  && d1.treeTotals.degree1.nodes === d1.nodes.length && d1.treeTotals.degree1.edges === d1.edges.length)
-check('以上所有屏幕没有违例', [s4, s5, d1, d2, at, ex, off].every(s => s.violations.length === 0))
+check('三棵树都报节点数和关系数', ['degree1', 'degree2', 'edit'].every(m => Number.isInteger(pinX.treeTotals[m].nodes) && Number.isInteger(pinX.treeTotals[m].edges)))
+check('当前树的数字 = 屏幕', all.every(s => s.treeTotals[s.tree].nodes === s.nodes.length && s.treeTotals[s.tree].edges === s.edges.length))
+check('以上所有屏幕没有违例', all.every(s => s.violations.length === 0))
 
-// 7 worker
+// 8 worker
 const worker = new Worker(path.join(__dirname, '..', 'src', 'index_worker.js'))
 const ask = (op, query) => new Promise((resolve, reject) => {
   worker.once('message', m => (m.ok ? resolve(m.data) : reject(new Error(m.error))))
   worker.postMessage({ seq: 1, op, root, query })
 })
-const state = { turn: 2, tree: 'degree2', rels: { ...ALL_OFF, call: true } }
-ask('screen', { touches, state }).then((viaWorker) => {
+ask('screen', { touches, state: { turn: 2, tree: 'degree2', rels: ONLY_CALL } }).then((viaWorker) => {
   check('worker screen 与直接计算一致', same(viaWorker.nodes, d2.nodes) && same(viaWorker.side, d2.side) && typeof viaWorker.stamp === 'string')
 }).catch((error) => {
   check('worker screen 可调用: ' + error.message, false)

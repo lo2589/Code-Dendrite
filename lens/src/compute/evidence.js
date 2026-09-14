@@ -85,16 +85,20 @@ function touchesFromEvents(events) {
 /**
  * 截止到 turn 的 seed。
  * @param events - resolve 之后的证据：[{ turn, verb, anchors }]。
+ * @param pins - [{ id, at, until }]：if pin，不减（取消 pin 之后的轮次照常减）。
  * @returns seeds（edit ∪ 计数器 > 0）、edited、counter、rounds、faded。
  */
-function seedsAt(events, turn) {
+function seedsAt(events, turn, pins = []) {
   const rounds = [...new Set(events.map(e => e.turn))].filter(t => t <= turn).sort((a, b) => a - b)
   const counter = new Map()
   const edited = new Set()
   const faded = new Set()
+  const pinnedAt = t => new Set(pins.filter(p => p.at <= t && (p.until === null || t < p.until)).map(p => p.id))
   rounds.forEach((t, i) => {
     if (i > 0) {
+      const pinned = pinnedAt(t)
       for (const [id, n] of counter) {
+        if (pinned.has(id)) continue
         if (n - 1 <= 0) { counter.delete(id); faded.add(id) } else counter.set(id, n - 1)
       }
     }
