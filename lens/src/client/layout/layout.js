@@ -22,6 +22,8 @@ window.__ModuleLoader__.load({
     var boxMetrics = __layout_metrics.boxMetrics
     var __layout_file_grid = require('dsh-cdd-lens/layout/fileGrid')
     var placeFileGrid = __layout_file_grid.placeFileGrid
+    var __layout_settle = require('dsh-cdd-lens/layout/settle')
+    var settleBoxes = __layout_settle.settleBoxes
     var __layout_space = require('dsh-cdd-lens/layout/space')
     var reclaimStrays = __layout_space.reclaimStrays
     var separateOverlaps = __layout_space.separateOverlaps
@@ -173,6 +175,8 @@ window.__ModuleLoader__.load({
       place.placed.forEach(function (p) { orient.byId[p.id] = p })
       applyGather(graph, place, metrics)
       separateOverlaps(place, metrics)
+      // 文件框最后收一遍：框按框里节点的实际位置重算，互相压住的连同节点整体往下推——框永远不叠。
+      var settled = settleBoxes(place, s.laid, metrics)
       syncPorts(place)
 
       // ---- 出线：每条边一根线，一条不少 ----
@@ -196,8 +200,8 @@ window.__ModuleLoader__.load({
         fit = fitExtent(place, drawn, metrics)
       }
       rememberPlaces(graph, place)
-      var files = shifted(s.laid.boxes, dx, dy)
-      var rows = shifted(s.laid.rows, dx, dy)
+      var files = shifted(settled.boxes, dx, dy)
+      var rows = shifted(settled.rows, dx, dy)
       var maxX = files.reduce(function (m, b) { return Math.max(m, b.x + b.w) }, fit.maxX)
       var maxY = files.reduce(function (m, b) { return Math.max(m, b.y + b.h) }, fit.maxY)
 
