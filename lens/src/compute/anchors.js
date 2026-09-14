@@ -70,7 +70,17 @@ function fromIndex(root, raw, relationEdges) {
     if (NATIVE[e.type + ':up'] === undefined) pushUnique(extra[e.to], e.type + 'up', e.from)
   }
   const anchors = {}
-  for (const id of visible) anchors[id] = Object.assign({ id }, raw[id], extra[id])
+  for (const id of visible) {
+    const anchor = Object.assign({ id }, raw[id], extra[id])
+    // 原生的 callers / callees / parent_classes 里混着裸名字（print、len、Promise.resolve 的 resolve…）
+    // 和不在索引里的 id（external::TestCase）。裸名字不是 anchor，不参与计数：节点上的这三个字段
+    // 只留真实 anchor id——字段长度就是按钮数字，也就是展开能拉回的个数。
+    for (const field of Object.values(NATIVE)) {
+      if (!Array.isArray(anchor[field])) continue
+      anchor[field] = [...new Set(anchor[field].map(String))].filter(x => x !== id && visible.has(x))
+    }
+    anchors[id] = anchor
+  }
   return { root, raw, visible, anchors, edgeCount: edges.length, treeCache: new Map() }
 }
 

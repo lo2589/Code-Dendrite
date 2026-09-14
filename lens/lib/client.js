@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_38_BUTTON_LOG_DIRECT_EXPAND_001
+// build: V1_39_NO_BARE_NAMES_IN_FIELDS_001
 // parts: 41
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_38_BUTTON_LOG_DIRECT_EXPAND_001'
+    var BUILD = 'V1_39_NO_BARE_NAMES_IN_FIELDS_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1690,7 +1690,8 @@ window.__ModuleLoader__.load({
         var field = fieldOf(rel, dir)
         var ids = idsInField(anchor, rel, dir)
         var button = ((shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {})[rel + dir] || 0
-        note('expand', '① 读 ' + shortId(id) + '.' + field + ' → ' + ids.length + ' 个 id（按钮数字 ' + button + '）')
+        note(ids.length === button ? 'expand' : 'error', '① 读 ' + shortId(id) + '.' + field + ' → ' + ids.length + ' 个 anchor id'
+          + (ids.length === button ? '（= 按钮数字）' : '（✗ 按钮数字是 ' + button + '）'))
         setBusy(key, true)
         return postJson('/anchors', params(), { ids: ids }).then(function (body) {
           var got = Object.keys(body.anchors || {})

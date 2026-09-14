@@ -84,6 +84,7 @@ check('原始字段原样保留', same(Object.keys(raw[A('g')]).map(k => ctx.anc
 check('补 dataflowup 且去重', same(ctx.anchors[A('g')].dataflowup, [A('f')]))
 check('call 不补字段', ctx.anchors[A('f')].calldown === undefined && ctx.anchors[A('g')].callup === undefined)
 check('call 读原生字段并滤掉裸名字', same(peers(ctx, A('f'), 'call', 'down'), [A('g')]))
+check('节点上的 callees 不含裸名字：字段长度 = 按钮数字', same(ctx.anchors[A('f')].callees, [A('g')]) && raw[A('f')].callees.includes('print'))
 
 // 2、3 证据与轮次
 const s4 = keep(screen({ turn: 4, tree: 'degree1' }))

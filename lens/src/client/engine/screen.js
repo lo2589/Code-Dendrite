@@ -189,7 +189,8 @@ window.__ModuleLoader__.load({
         var field = fieldOf(rel, dir)
         var ids = idsInField(anchor, rel, dir)
         var button = ((shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {})[rel + dir] || 0
-        note('expand', '① 读 ' + shortId(id) + '.' + field + ' → ' + ids.length + ' 个 id（按钮数字 ' + button + '）')
+        note(ids.length === button ? 'expand' : 'error', '① 读 ' + shortId(id) + '.' + field + ' → ' + ids.length + ' 个 anchor id'
+          + (ids.length === button ? '（= 按钮数字）' : '（✗ 按钮数字是 ' + button + '）'))
         setBusy(key, true)
         return postJson('/anchors', params(), { ids: ids }).then(function (body) {
           var got = Object.keys(body.anchors || {})
