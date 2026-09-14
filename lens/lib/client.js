@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_30_WIRE_LOCK_EXPAND_LOG_003
+// build: V1_32_EXPANDED_EDGES_DRAWN_001
 // parts: 44
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_30_WIRE_LOCK_EXPAND_LOG_003'
+    var BUILD = 'V1_32_EXPANDED_EDGES_DRAWN_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1382,8 +1382,20 @@ window.__ModuleLoader__.load({
             // 展开锁定：只在被展开的节点已经不在视野里时才挪视口。
             requestViewport(id, 'ensure')
           }
-          if (ui.open[slot] === true || ui.open[autoSlot] === true) {
+          if (ui.open[slot] === true) {
             note('expand', 'SKIP 这个方向已经开着（' + slot + '）')
+            return Promise.resolve()
+          }
+          if (ui.open[autoSlot] === true) {
+            if (!auto) {
+              ui.open[slot] = true
+              ui.open[autoSlot] = false
+              lightNeighbourhood(id)
+              publish()
+              note('expand', 'PROMOTE 自动展开状态为用户打开（' + slot + '）')
+              return Promise.resolve()
+            }
+            note('expand', 'SKIP 这个方向已经自动开着（' + autoSlot + '）')
             return Promise.resolve()
           }
           // 桥接点只解释连接，不参与继续展开：它是布局借来的中间点，
@@ -3777,6 +3789,8 @@ window.__ModuleLoader__.load({
     var GRAPH_CSS = [
       '.cddl-stage{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;position:relative}',
       '.cddl-canvaswrap{grid-column:1;grid-row:1;position:relative;overflow:auto;scrollbar-gutter:stable;background:radial-gradient(circle at 1px 1px, var(--dsw-alias-border-l1) 1px, transparent 0) 0 0/22px 22px,var(--dsw-alias-bg-base)}',
+      '.cddl-stage-inner{position:relative;min-width:100%;min-height:100%}',
+      '.cddl-canvasbody{position:relative;min-width:100%;min-height:100%}',
       '.cddl-canvaswrap::-webkit-scrollbar{width:12px;height:12px}',
       '.cddl-hscroll{grid-column:1;grid-row:2;align-self:end;position:relative;height:12px;margin:0 2px 2px;border-radius:6px;background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.10));cursor:pointer;z-index:3}',
       '.cddl-hscroll-thumb{position:absolute;top:2px;bottom:2px;border-radius:5px;background:var(--dsw-alias-border-l4);pointer-events:none}',
@@ -4447,6 +4461,10 @@ window.__ModuleLoader__.load({
         var types = e.types || ['call']
         return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
       })
+      var explicitlyOpened = function (e) {
+        var types = e.types || ['call']
+        return opened(uiOf(graph, e.from), 'down', types) || opened(uiOf(graph, e.to), 'up', types)
+      }
       var chosen = drawable
       var hiddenCount = 0
       if (activeFocus !== null) {
@@ -4459,6 +4477,12 @@ window.__ModuleLoader__.load({
       } else if (shared.wireMode !== 'all') {
         var keep = {}
         var focus = shared.selected
+        // A pressed ↑/↓ button is a literal request: show every relation that
+        // made that count. The trunk pass below is only for background edges;
+        // it may not compress "2" visible neighbours into one line.
+        drawable.forEach(function (e) {
+          if (explicitlyOpened(e)) keep[e.from + '→' + e.to] = true
+        })
         // Every relation of the selected node, in both directions.
         drawable.forEach(function (e) {
           if (e.from === focus || e.to === focus) keep[e.from + '→' + e.to] = true
@@ -5557,6 +5581,40 @@ window.__ModuleLoader__.load({
     var chooseEdges = __routing_select.chooseEdges
     var __routing_emit = require('dsh-cdd-lens/routing/emit')
     var emitWires = __routing_emit.emitWires
+    var PORT_OFFSET = 6
+
+    function portsFor(p) {
+      return {
+        in: { x: p.x - PORT_OFFSET, y: p.y + p.h / 2 },
+        out: { x: p.x + p.w + PORT_OFFSET, y: p.y + p.h / 2 },
+      }
+    }
+
+    function syncPorts(place) {
+      place.placed.forEach(function (p) { p.ports = portsFor(p) })
+    }
+
+    function finalPolylines(lines, picked, byId) {
+      return lines.filter(function (line) {
+        return picked[line.from + '\u0000' + line.to] === true
+      }).map(function (line) {
+        var a = byId[line.from]
+        var b = byId[line.to]
+        var pts = (line.pts || []).map(function (pt) { return { x: pt.x, y: pt.y } })
+        if (a !== undefined && b !== undefined) {
+          if (pts.length < 2) pts = [a.ports.out, b.ports.in]
+          else {
+            pts[0] = a.ports.out
+            pts[pts.length - 1] = b.ports.in
+          }
+        }
+        return Object.assign({}, line, {
+          pts: pts,
+          sourcePort: a === undefined ? line.sourcePort : { side: 'right', point: a.ports.out },
+          targetPort: b === undefined ? line.targetPort : { side: 'left', point: b.ports.in },
+        })
+      })
+    }
 
     /**
      * Turn one graph into one drawing.
@@ -5617,6 +5675,7 @@ window.__ModuleLoader__.load({
       // 收拢列里刚排好的卡片会被分离过程推走。
       applyGather(graph, place, metrics)
       separateOverlaps(place, metrics)
+      syncPorts(place)
 
       // ---- 布线：哪条边值得画 ----
       var edges = chooseEdges(graph, scope, orient)
@@ -5624,9 +5683,7 @@ window.__ModuleLoader__.load({
       edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
 
       // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
-      var polylines = laid.polylines.filter(function (line) {
-        return picked[line.from + '\u0000' + line.to] === true
-      })
+      var polylines = finalPolylines(laid.polylines, picked, orient.byId)
       var kept = {}
       polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
       // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
@@ -5639,14 +5696,16 @@ window.__ModuleLoader__.load({
       var fit = fitExtent(place, drawn, metrics)
       if (fit.dx > 0 || fit.dy > 0) {
         shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
+        syncPorts(place)
         orient.byId = {}
         place.placed.forEach(function (p) { orient.byId[p.id] = p })
         drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }
-      // 把这一次画出来的坐标记回 graph.layout，下一次展开时它们就是「已经在
-      // 屏幕上的位置」，会被冻结，不再因为新节点进来而整体跳变。
+      // 只记录第一次上屏的位置。之后普通布局、选中、高亮、过滤、画布尺寸变化
+      // 都不许改它；只有用户拖动走 shared.nodePositions 才能覆盖。
       place.placed.forEach(function (p) {
+        if (placeOf(graph, p.id) !== null) return
         setPlace(graph, p.id, {
           x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer,
           ports: p.ports,
@@ -6562,14 +6621,12 @@ window.__ModuleLoader__.load({
         return function () { window.removeEventListener('keydown', escape) }
       }, [])
 
-      // Selection IS the gather switch: a node that becomes selected pulls its
-      // callers and callees to its side; losing the selection puts them back.
-      // Watching the value catches every path that selects — click, search,
-      // directory, a trace landing — without each of them having to know.
+      // Selection is a highlight/source action only. Node coordinates are
+      // stable after first paint unless the user drags them, so selecting a
+      // card must not auto-expand or re-seat its neighbours.
       var selectedNow = shared.selected
       useEffect(function () {
         if (selectedNow === null || selectedNow === undefined) engine.releaseGather()
-        else engine.gather(selectedNow)
       }, [selectedNow])
 
       // Re-measured on every resize: the source column, the neighbour rail and
@@ -6870,7 +6927,7 @@ window.__ModuleLoader__.load({
       // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
         h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
-        h('div', { key: 'cv', className: 'cddl-canvaswrap' }, canvas),
+        h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),
       ])
     }
 

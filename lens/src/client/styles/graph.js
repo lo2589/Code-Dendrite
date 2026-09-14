@@ -12,6 +12,8 @@ window.__ModuleLoader__.load({
     var GRAPH_CSS = [
       '.cddl-stage{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;position:relative}',
       '.cddl-canvaswrap{grid-column:1;grid-row:1;position:relative;overflow:auto;scrollbar-gutter:stable;background:radial-gradient(circle at 1px 1px, var(--dsw-alias-border-l1) 1px, transparent 0) 0 0/22px 22px,var(--dsw-alias-bg-base)}',
+      '.cddl-stage-inner{position:relative;min-width:100%;min-height:100%}',
+      '.cddl-canvasbody{position:relative;min-width:100%;min-height:100%}',
       '.cddl-canvaswrap::-webkit-scrollbar{width:12px;height:12px}',
       '.cddl-hscroll{grid-column:1;grid-row:2;align-self:end;position:relative;height:12px;margin:0 2px 2px;border-radius:6px;background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.10));cursor:pointer;z-index:3}',
       '.cddl-hscroll-thumb{position:absolute;top:2px;bottom:2px;border-radius:5px;background:var(--dsw-alias-border-l4);pointer-events:none}',

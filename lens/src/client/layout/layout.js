@@ -37,6 +37,40 @@ window.__ModuleLoader__.load({
     var chooseEdges = __routing_select.chooseEdges
     var __routing_emit = require('dsh-cdd-lens/routing/emit')
     var emitWires = __routing_emit.emitWires
+    var PORT_OFFSET = 6
+
+    function portsFor(p) {
+      return {
+        in: { x: p.x - PORT_OFFSET, y: p.y + p.h / 2 },
+        out: { x: p.x + p.w + PORT_OFFSET, y: p.y + p.h / 2 },
+      }
+    }
+
+    function syncPorts(place) {
+      place.placed.forEach(function (p) { p.ports = portsFor(p) })
+    }
+
+    function finalPolylines(lines, picked, byId) {
+      return lines.filter(function (line) {
+        return picked[line.from + '\u0000' + line.to] === true
+      }).map(function (line) {
+        var a = byId[line.from]
+        var b = byId[line.to]
+        var pts = (line.pts || []).map(function (pt) { return { x: pt.x, y: pt.y } })
+        if (a !== undefined && b !== undefined) {
+          if (pts.length < 2) pts = [a.ports.out, b.ports.in]
+          else {
+            pts[0] = a.ports.out
+            pts[pts.length - 1] = b.ports.in
+          }
+        }
+        return Object.assign({}, line, {
+          pts: pts,
+          sourcePort: a === undefined ? line.sourcePort : { side: 'right', point: a.ports.out },
+          targetPort: b === undefined ? line.targetPort : { side: 'left', point: b.ports.in },
+        })
+      })
+    }
 
     /**
      * Turn one graph into one drawing.
@@ -97,6 +131,7 @@ window.__ModuleLoader__.load({
       // 收拢列里刚排好的卡片会被分离过程推走。
       applyGather(graph, place, metrics)
       separateOverlaps(place, metrics)
+      syncPorts(place)
 
       // ---- 布线：哪条边值得画 ----
       var edges = chooseEdges(graph, scope, orient)
@@ -104,9 +139,7 @@ window.__ModuleLoader__.load({
       edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
 
       // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
-      var polylines = laid.polylines.filter(function (line) {
-        return picked[line.from + '\u0000' + line.to] === true
-      })
+      var polylines = finalPolylines(laid.polylines, picked, orient.byId)
       var kept = {}
       polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
       // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
@@ -119,14 +152,16 @@ window.__ModuleLoader__.load({
       var fit = fitExtent(place, drawn, metrics)
       if (fit.dx > 0 || fit.dy > 0) {
         shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
+        syncPorts(place)
         orient.byId = {}
         place.placed.forEach(function (p) { orient.byId[p.id] = p })
         drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }
-      // 把这一次画出来的坐标记回 graph.layout，下一次展开时它们就是「已经在
-      // 屏幕上的位置」，会被冻结，不再因为新节点进来而整体跳变。
+      // 只记录第一次上屏的位置。之后普通布局、选中、高亮、过滤、画布尺寸变化
+      // 都不许改它；只有用户拖动走 shared.nodePositions 才能覆盖。
       place.placed.forEach(function (p) {
+        if (placeOf(graph, p.id) !== null) return
         setPlace(graph, p.id, {
           x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer,
           ports: p.ports,

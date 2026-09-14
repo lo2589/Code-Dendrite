@@ -66,6 +66,13 @@ const textOf = n => {
   if (typeof n !== 'object') return ''
   return (n.kids || []).map(textOf).join('')
 }
+const findAll = (node, pred, out = []) => {
+  if (node && typeof node === 'object') {
+    if (pred(node)) out.push(node)
+    ;(node.kids || []).forEach(k => findAll(k, pred, out))
+  }
+  return out
+}
 const assertUniqueSiblingKeys = (node, path = 'root') => {
   if (!node || typeof node !== 'object') return
   const kids = (node.kids || []).filter(k => k && typeof k === 'object')
@@ -104,6 +111,9 @@ assertUniqueSiblingKeys(lensView)
 console.log('✓ ' + 'React keys'.padEnd(10) + '每组同级节点的 key 唯一')
 assert(!textOf(lensView).includes('铺满宽度'), '不可用的铺满宽度按钮必须从工具栏移除')
 console.log('✓ ' + '工具栏'.padEnd(10) + '不再渲染铺满宽度按钮')
+const wraps = findAll(lensView, n => n.props && String(n.props.className || '').split(/\s+/).includes('cddl-canvaswrap'))
+assert.strictEqual(wraps.length, 1, 'LensView must have exactly one scroll-owning canvaswrap')
+console.log('✓ ' + '画布 DOM'.padEnd(10) + '只有一层 cddl-canvaswrap')
 
 // 目录：真实规模。4566 个目录一次性进 DOM 就是一个卡死的标签页。
 const many = []
@@ -269,6 +279,27 @@ shared.outline = undefined
   assert(buttons.filter(b => b.rel === 'inherit').every(b => b.cls.includes('cddl-rel-inherit')),
     'inherit buttons carry the inherit colour class')
   console.log('✓ ' + '按关系挂按钮'.padEnd(10) + 'call ↑8↓2 · inherit ↑3↓1 · 其余不出现')
+})()
+
+;(function userClickPromotesAutoExpansion() {
+  const { makeEngine } = require_('dsh-cdd-lens/engine/engine')
+  const real = makeEngine({ on: () => () => {}, emit: () => {} })
+  const anchor = {
+    id: 'a.py::f', symbol: 'f', file: 'a.py', kind: 'function', line_start: 1, line_end: 9, members: 0,
+    peerCounts: { call: { up: 1, down: 1 } },
+  }
+  shared.graph = model.emptyGraph()
+  model.addNode(shared.graph, anchor)
+  shared.graph.rootId = anchor.id
+  const ui = model.uiOf(shared.graph, anchor.id)
+  ui.open['autodown:call'] = true
+  shared.selected = null
+  shared.trace = {}
+  shared.turn = 1
+  real.expand(anchor.id, 'down', null, 'call')
+  assert.strictEqual(ui.open['down:call'], true, 'user click must take over the real button state')
+  assert.strictEqual(ui.open['autodown:call'], false, 'auto state must stop shadowing the button')
+  console.log('✓ ' + '上下键'.padEnd(10) + '用户点击接管 auto 展开，不再被 SKIP 吞掉')
 })()
 
 // 用真的 engine 渲染，不用手捏的。

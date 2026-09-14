@@ -52,6 +52,10 @@ window.__ModuleLoader__.load({
         var types = e.types || ['call']
         return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
       })
+      var explicitlyOpened = function (e) {
+        var types = e.types || ['call']
+        return opened(uiOf(graph, e.from), 'down', types) || opened(uiOf(graph, e.to), 'up', types)
+      }
       var chosen = drawable
       var hiddenCount = 0
       if (activeFocus !== null) {
@@ -64,6 +68,12 @@ window.__ModuleLoader__.load({
       } else if (shared.wireMode !== 'all') {
         var keep = {}
         var focus = shared.selected
+        // A pressed ↑/↓ button is a literal request: show every relation that
+        // made that count. The trunk pass below is only for background edges;
+        // it may not compress "2" visible neighbours into one line.
+        drawable.forEach(function (e) {
+          if (explicitlyOpened(e)) keep[e.from + '→' + e.to] = true
+        })
         // Every relation of the selected node, in both directions.
         drawable.forEach(function (e) {
           if (e.from === focus || e.to === focus) keep[e.from + '→' + e.to] = true

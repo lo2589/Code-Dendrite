@@ -181,7 +181,7 @@ window.__ModuleLoader__.load({
       // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
         h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
-        h('div', { key: 'cv', className: 'cddl-canvaswrap' }, canvas),
+        h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),
       ])
     }
 

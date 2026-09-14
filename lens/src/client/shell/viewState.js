@@ -82,14 +82,12 @@ window.__ModuleLoader__.load({
         return function () { window.removeEventListener('keydown', escape) }
       }, [])
 
-      // Selection IS the gather switch: a node that becomes selected pulls its
-      // callers and callees to its side; losing the selection puts them back.
-      // Watching the value catches every path that selects — click, search,
-      // directory, a trace landing — without each of them having to know.
+      // Selection is a highlight/source action only. Node coordinates are
+      // stable after first paint unless the user drags them, so selecting a
+      // card must not auto-expand or re-seat its neighbours.
       var selectedNow = shared.selected
       useEffect(function () {
         if (selectedNow === null || selectedNow === undefined) engine.releaseGather()
-        else engine.gather(selectedNow)
       }, [selectedNow])
 
       // Re-measured on every resize: the source column, the neighbour rail and

@@ -1,4 +1,4 @@
 {
-  "build": "V1_30_WIRE_LOCK_EXPAND_LOG_003",
-  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_30: 线与节点同帧到位（端点锁死端口小圈）、展开全链路 debug log、树选择器、贝塞尔、出入口小圈、箭头加密、展开锁视口。"
+  "build": "V1_32_EXPANDED_EDGES_DRAWN_001",
+  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_32: 用户点开的 ↑/↓ 关系边全部强制画出，主干模式只裁未显式展开的背景边；保留 V1_31 的固定节点和单层画布修复。"
 }

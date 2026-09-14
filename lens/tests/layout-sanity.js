@@ -701,13 +701,18 @@ function expandIsFullyLogged() {
         ].sort()
         const root = side.shared.graph.nodes['pkg/core.js::root']
         const rootUI = side.require_('dsh-cdd-lens/graph/model').uiOf(side.shared.graph, 'pkg/core.js::root')
+        side.shared.wireMode = 'tree'
+        side.shared.selected = null
+        const drawn = side.layout(side.shared.graph, { call: true, dataflow: true, dispatch: true }, 900)
         const ok = calls.filter(u => u.indexOf('/expand') >= 0).length === 4
           && root.peerCounts.call.up === 2 && root.peerCounts.call.down === 2
           && ids.sort().join('|') === expectedIds.join('|')
           && edges.join('|') === expectedEdges.join('|')
           && rootUI.open['up:call'] === true && rootUI.open['down:call'] === true
+          && drawn.wires.length === 4
         console.log((ok ? '✓ ' : '✗ ') + '节点展开'.padEnd(12)
-          + ' 上游 2/2 · 下游 2/2 · 边方向 ' + (edges.join('|') === expectedEdges.join('|') ? '✓' : '✗'))
+          + ' 上游 2/2 · 下游 2/2 · 边方向 ' + (edges.join('|') === expectedEdges.join('|') ? '✓' : '✗')
+          + ' · 画线 ' + drawn.wires.length + '/4')
         if (!ok) bad += 1
         return nodeExpansionRefreshesShortDirection()
       })

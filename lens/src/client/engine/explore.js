@@ -106,8 +106,20 @@ window.__ModuleLoader__.load({
             // 展开锁定：只在被展开的节点已经不在视野里时才挪视口。
             requestViewport(id, 'ensure')
           }
-          if (ui.open[slot] === true || ui.open[autoSlot] === true) {
+          if (ui.open[slot] === true) {
             note('expand', 'SKIP 这个方向已经开着（' + slot + '）')
+            return Promise.resolve()
+          }
+          if (ui.open[autoSlot] === true) {
+            if (!auto) {
+              ui.open[slot] = true
+              ui.open[autoSlot] = false
+              lightNeighbourhood(id)
+              publish()
+              note('expand', 'PROMOTE 自动展开状态为用户打开（' + slot + '）')
+              return Promise.resolve()
+            }
+            note('expand', 'SKIP 这个方向已经自动开着（' + autoSlot + '）')
             return Promise.resolve()
           }
           // 桥接点只解释连接，不参与继续展开：它是布局借来的中间点，
