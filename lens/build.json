@@ -1,4 +1,4 @@
 {
-  "build": "V1_32_EXPANDED_EDGES_DRAWN_001",
-  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_32: 用户点开的 ↑/↓ 关系边全部强制画出，主干模式只裁未显式展开的背景边；保留 V1_31 的固定节点和单层画布修复。"
+  "build": "V1_34_PORT_CENTER_LOCK_001",
+  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_34: 线端点与节点端口共享同一坐标对象，并把端口坐标校准到 11px 小圆的真实圆心；每次 emit 前按 from/to 重新绑定首尾端点。"
 }

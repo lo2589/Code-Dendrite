@@ -112,6 +112,20 @@ function overlap(a, b) {
   var iy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
   return ix > 1 && iy > 1 ? Math.round(ix * iy) : 0
 }
+function endpointLocks(m) {
+  const byId = new Map(m.nodes.map(n => [n.id, n]))
+  const loose = []
+  ;(m.wires || []).forEach(w => {
+    const from = byId.get(w.from)
+    const to = byId.get(w.to)
+    if (!from || !to) { loose.push(w.id + ' 缺节点'); return }
+    if (!w.pts || w.pts[0] !== from.ports.out) loose.push(w.id + ' 起点没共享 from.out')
+    if (!w.pts || w.pts[w.pts.length - 1] !== to.ports.in) loose.push(w.id + ' 终点没共享 to.in')
+    if (!w.sourcePort || w.sourcePort.point !== from.ports.out) loose.push(w.id + ' sourcePort 没共享 from.out')
+    if (!w.targetPort || w.targetPort.point !== to.ports.in) loose.push(w.id + ' targetPort 没共享 to.in')
+  })
+  return loose
+}
 const {segments:segs,hits:segHitsRect}=require('./svg-geometry.cjs')
 
 // What fetch.js actually does with islands: every one of them is seated in a
@@ -305,18 +319,21 @@ for (const [label, seed, filter, avail] of CASES) {
       if (ws.size > 1) ragged.push('层 ' + k + ' 宽度不一 ' + [...ws].join('/'))
     })
   }
+  const looseEndpoints = endpointLocks(m)
 
   // A case that quietly drew nothing must not report a pass.
   // placement.js only boxes a file with three or more anchors present —
   // otherwise the drawing becomes a wall of almost-empty frames.
   const ok = far.length === 0 && hits.length === 0 && through === 0 && cramped.length === 0
-    && boxHits.length === 0 && ragged.length === 0
+    && boxHits.length === 0 && ragged.length === 0 && looseEndpoints.length === 0
   if (!ok) bad += 1
   console.log((ok ? '✓ ' : '✗ ') + label.padEnd(14)
     + ' 跑远 ' + far.length + ' · 遮挡 ' + hits.length + ' · 角标打架 ' + cramped.length
     + ' · 线穿节点 ' + through + ' · 文件盒重叠 ' + boxHits.length
+    + ' · 端点脱锁 ' + looseEndpoints.length
     + ' · 层 ' + (m.layers || 0) + ' · 交叉 ' + (m.crossings || 0))
   if (ragged.length) console.log('    不齐: ' + ragged.slice(0, 3).join(' | '))
+  if (looseEndpoints.length) console.log('    端点脱锁: ' + looseEndpoints.slice(0, 3).join(' | '))
   if (boxHits.length) console.log('    文件盒重叠: ' + boxHits.slice(0, 3).join(' | '))
   if (cramped.length) console.log('    角标打架: ' + cramped.slice(0, 3).join(' | '))
   if (far.length) console.log('    跑远: ' + far.slice(0, 4).map(r => r.id).join(' | '))

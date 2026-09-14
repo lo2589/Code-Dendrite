@@ -131,6 +131,21 @@ function points(m) {
   return out
 }
 
+function endpointLocks(m) {
+  const byId = new Map(m.nodes.map(n => [n.id, n]))
+  const loose = []
+  ;(m.wires || []).forEach(w => {
+    const from = byId.get(w.from)
+    const to = byId.get(w.to)
+    if (!from || !to) { loose.push(w.id + ' 缺节点'); return }
+    if (!w.pts || w.pts[0] !== from.ports.out) loose.push(w.id + ' 起点没共享 from.out')
+    if (!w.pts || w.pts[w.pts.length - 1] !== to.ports.in) loose.push(w.id + ' 终点没共享 to.in')
+    if (!w.sourcePort || w.sourcePort.point !== from.ports.out) loose.push(w.id + ' sourcePort 没共享 from.out')
+    if (!w.targetPort || w.targetPort.point !== to.ports.in) loose.push(w.id + ' targetPort 没共享 to.in')
+  })
+  return loose
+}
+
 const CASES = [
   ['默认', {}, undefined, 900],
   ['选中一个节点', { selected: 'a/main.js::wire' }, undefined, 900],
@@ -152,14 +167,16 @@ for (const [label, seed, filter, avail] of CASES) {
   const m = side.layout(g, filter, avail)
   const pts = points(m)
   const out = pts.filter(p => p.x < 0 || p.y < 0 || p.x > m.width || p.y > m.height)
+  const looseEndpoints = endpointLocks(m)
   const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
   const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
   // Every case here has edges, so a drawing with no wires is a drawing that
   // was computed and then thrown away — which looks fine to a bounds check.
   const wires = (m.wires || []).length
-  const mark = wires === 0 ? '一条线都没有' : (out.length === 0 ? '全部在内' : `越界 ${out.length}/${pts.length}`)
-  console.log(`${out.length || wires === 0 ? '✗' : '✓'} ${label.padEnd(14)} 画布 ${m.width}x${m.height}  内容 x[${minX.toFixed(0)},${maxX.toFixed(0)}] y[${minY.toFixed(0)},${maxY.toFixed(0)}]  ${wires} 线  ${mark}`)
+  const mark = wires === 0 ? '一条线都没有' : (out.length === 0 && looseEndpoints.length === 0 ? '全部在内且端点锁死' : `越界 ${out.length}/${pts.length} · 端点脱锁 ${looseEndpoints.length}`)
+  console.log(`${out.length || wires === 0 || looseEndpoints.length ? '✗' : '✓'} ${label.padEnd(14)} 画布 ${m.width}x${m.height}  内容 x[${minX.toFixed(0)},${maxX.toFixed(0)}] y[${minY.toFixed(0)},${maxY.toFixed(0)}]  ${wires} 线  ${mark}`)
   if (wires === 0) bad += 1
+  if (looseEndpoints.length) { bad += 1; console.log('   端点脱锁:', looseEndpoints.slice(0, 3).join(' | ')) }
   if (out.length) {
     bad += 1
     const kinds = {}

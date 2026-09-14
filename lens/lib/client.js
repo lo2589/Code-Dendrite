@@ -4,7 +4,7 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_32_EXPANDED_EDGES_DRAWN_001
+// build: V1_34_PORT_CENTER_LOCK_001
 // parts: 44
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_32_EXPANDED_EDGES_DRAWN_001'
+    var BUILD = 'V1_34_PORT_CENTER_LOCK_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -5175,10 +5175,9 @@ window.__ModuleLoader__.load({
     var MARGIN = 40
     var SWEEPS = 12
 
-    // 端口小圈往外探出的距离，必须和 styles/graph.js 里 .cddl-port 的
-    // left/right 偏移（6px）对上：圈心 = 边界 ∓ 6。线的两端就停在这个圈心上，
-    // 所以这个数字改了，那边也要改——线才不会悬在圈外面。
-    var PORT_OFFSET = 6
+    // 端口小圈 11px，CSS 写 left/right:-6px，所以圆心落在节点边界外 0.5px。
+    // 线的端点就是这个圆心；这里和 layout/layout.js 的 PORT_OFFSET 必须一致。
+    var PORT_OFFSET = 0.5
 
     /** 端点：入在左、出在右，各外探 PORT_OFFSET。 */
     function portsFor(x, y, w, h) {
@@ -5581,7 +5580,7 @@ window.__ModuleLoader__.load({
     var chooseEdges = __routing_select.chooseEdges
     var __routing_emit = require('dsh-cdd-lens/routing/emit')
     var emitWires = __routing_emit.emitWires
-    var PORT_OFFSET = 6
+    var PORT_OFFSET = 0.5
 
     function portsFor(p) {
       return {
@@ -5594,26 +5593,27 @@ window.__ModuleLoader__.load({
       place.placed.forEach(function (p) { p.ports = portsFor(p) })
     }
 
-    function finalPolylines(lines, picked, byId) {
-      return lines.filter(function (line) {
-        return picked[line.from + '\u0000' + line.to] === true
-      }).map(function (line) {
+    function bindPolylineEndpoints(line, byId) {
         var a = byId[line.from]
         var b = byId[line.to]
-        var pts = (line.pts || []).map(function (pt) { return { x: pt.x, y: pt.y } })
-        if (a !== undefined && b !== undefined) {
-          if (pts.length < 2) pts = [a.ports.out, b.ports.in]
-          else {
-            pts[0] = a.ports.out
-            pts[pts.length - 1] = b.ports.in
-          }
-        }
+        if (a === undefined || b === undefined) return line
+        var middle = (line.pts || []).slice(1, -1).map(function (pt) { return { x: pt.x, y: pt.y } })
+        var pts = [a.ports.out].concat(middle).concat([b.ports.in])
         return Object.assign({}, line, {
           pts: pts,
-          sourcePort: a === undefined ? line.sourcePort : { side: 'right', point: a.ports.out },
-          targetPort: b === undefined ? line.targetPort : { side: 'left', point: b.ports.in },
+          sourcePort: { side: 'right', point: a.ports.out },
+          targetPort: { side: 'left', point: b.ports.in },
         })
-      })
+    }
+
+    function bindPolylineSet(polylines, byId) {
+      return polylines.map(function (line) { return bindPolylineEndpoints(line, byId) })
+    }
+
+    function finalPolylines(lines, picked, byId) {
+      return bindPolylineSet(lines.filter(function (line) {
+        return picked[line.from + '\u0000' + line.to] === true
+      }), byId)
     }
 
     /**
@@ -5699,6 +5699,7 @@ window.__ModuleLoader__.load({
         syncPorts(place)
         orient.byId = {}
         place.placed.forEach(function (p) { orient.byId[p.id] = p })
+        polylines = bindPolylineSet(polylines, orient.byId)
         drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }

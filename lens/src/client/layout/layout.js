@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
     var chooseEdges = __routing_select.chooseEdges
     var __routing_emit = require('dsh-cdd-lens/routing/emit')
     var emitWires = __routing_emit.emitWires
-    var PORT_OFFSET = 6
+    var PORT_OFFSET = 0.5
 
     function portsFor(p) {
       return {
@@ -50,26 +50,27 @@ window.__ModuleLoader__.load({
       place.placed.forEach(function (p) { p.ports = portsFor(p) })
     }
 
-    function finalPolylines(lines, picked, byId) {
-      return lines.filter(function (line) {
-        return picked[line.from + '\u0000' + line.to] === true
-      }).map(function (line) {
+    function bindPolylineEndpoints(line, byId) {
         var a = byId[line.from]
         var b = byId[line.to]
-        var pts = (line.pts || []).map(function (pt) { return { x: pt.x, y: pt.y } })
-        if (a !== undefined && b !== undefined) {
-          if (pts.length < 2) pts = [a.ports.out, b.ports.in]
-          else {
-            pts[0] = a.ports.out
-            pts[pts.length - 1] = b.ports.in
-          }
-        }
+        if (a === undefined || b === undefined) return line
+        var middle = (line.pts || []).slice(1, -1).map(function (pt) { return { x: pt.x, y: pt.y } })
+        var pts = [a.ports.out].concat(middle).concat([b.ports.in])
         return Object.assign({}, line, {
           pts: pts,
-          sourcePort: a === undefined ? line.sourcePort : { side: 'right', point: a.ports.out },
-          targetPort: b === undefined ? line.targetPort : { side: 'left', point: b.ports.in },
+          sourcePort: { side: 'right', point: a.ports.out },
+          targetPort: { side: 'left', point: b.ports.in },
         })
-      })
+    }
+
+    function bindPolylineSet(polylines, byId) {
+      return polylines.map(function (line) { return bindPolylineEndpoints(line, byId) })
+    }
+
+    function finalPolylines(lines, picked, byId) {
+      return bindPolylineSet(lines.filter(function (line) {
+        return picked[line.from + '\u0000' + line.to] === true
+      }), byId)
     }
 
     /**
@@ -155,6 +156,7 @@ window.__ModuleLoader__.load({
         syncPorts(place)
         orient.byId = {}
         place.placed.forEach(function (p) { orient.byId[p.id] = p })
+        polylines = bindPolylineSet(polylines, orient.byId)
         drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }

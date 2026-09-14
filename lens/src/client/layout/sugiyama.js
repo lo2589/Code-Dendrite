@@ -27,10 +27,9 @@ window.__ModuleLoader__.load({
     var MARGIN = 40
     var SWEEPS = 12
 
-    // 端口小圈往外探出的距离，必须和 styles/graph.js 里 .cddl-port 的
-    // left/right 偏移（6px）对上：圈心 = 边界 ∓ 6。线的两端就停在这个圈心上，
-    // 所以这个数字改了，那边也要改——线才不会悬在圈外面。
-    var PORT_OFFSET = 6
+    // 端口小圈 11px，CSS 写 left/right:-6px，所以圆心落在节点边界外 0.5px。
+    // 线的端点就是这个圆心；这里和 layout/layout.js 的 PORT_OFFSET 必须一致。
+    var PORT_OFFSET = 0.5
 
     /** 端点：入在左、出在右，各外探 PORT_OFFSET。 */
     function portsFor(x, y, w, h) {

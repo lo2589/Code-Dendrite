@@ -106,7 +106,8 @@ assert(bundle.includes("className: 'cddl-port cddl-port-in'"))
 assert(bundle.includes("className: 'cddl-port cddl-port-out'"))
 assert(bundle.includes('.cddl-port-in{left:-6px'))
 assert(bundle.includes('.cddl-port-out{right:-6px'))
-assert(bundle.includes('var PORT_OFFSET = 6'))
+assert(bundle.includes('width:11px;height:11px'))
+assert(bundle.includes('var PORT_OFFSET = 0.5'))
 // Two or three boxes across; the box stays the width of its widest name and
 // the width the row does not need goes into the gutters.
 assert(bundle.includes('WIDEST_ROW'))
