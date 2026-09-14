@@ -91,8 +91,8 @@ window.__ModuleLoader__.load({
      *
      * @returns 允许上屏的 id 集合；treeMode 为 all 时返回 null（表示不限制）。
      */
-    function treeFilter(graph) {
-      var mode = shared.treeMode || 'all'
+    function treeFilter(graph, modeOverride) {
+      var mode = modeOverride || shared.treeMode || 'all'
       if (mode === 'all') return null
       var allow = {}
       var edgeTouches = function (id, keep) {
@@ -138,7 +138,7 @@ window.__ModuleLoader__.load({
       return allow
     }
 
-    function visible(graph) {
+    function visibleForMode(graph, modeOverride) {
       var roots = []
       var root = function (id, force) {
         roots.push({ id: id, force: force === true })
@@ -153,7 +153,7 @@ window.__ModuleLoader__.load({
         if (ui.session || ui.island || stickyByRecency(id) || editedNode(graph, id)) root(id, false)
         if (userExplicit(graph, id)) root(id, true)
       })
-      var treeAllow = treeFilter(graph)
+      var treeAllow = treeFilter(graph, modeOverride)
       var seen = {}
       var stack = roots.slice()
       while (stack.length > 0) {
@@ -192,7 +192,11 @@ window.__ModuleLoader__.load({
       return seen
     }
 
-    module.exports = { STICKY_TURNS, stickyByRecency, editedNode, fadedOut, treeFilter, visible }
+    function visible(graph) {
+      return visibleForMode(graph)
+    }
+
+    module.exports = { STICKY_TURNS, stickyByRecency, editedNode, fadedOut, treeFilter, visible, visibleForMode }
     return module.exports
   },
 })

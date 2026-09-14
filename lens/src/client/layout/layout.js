@@ -67,9 +67,23 @@ window.__ModuleLoader__.load({
       return polylines.map(function (line) { return bindPolylineEndpoints(line, byId) })
     }
 
-    function finalPolylines(lines, picked, byId) {
+    function allowedTypes(types, relationFilter) {
+      if (relationFilter === undefined || relationFilter === null) return types
+      return types.filter(function (type) { return relationFilter[type] !== false })
+    }
+
+    function finalPolylines(lines, picked, byId, relationFilter) {
       return bindPolylineSet(lines.filter(function (line) {
-        return picked[line.from + '\u0000' + line.to] === true
+        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
+        return types.length > 0
+          && picked[line.from + '\u0000' + line.to] === true
+      }).map(function (line) {
+        var types = allowedTypes(line.types || [line.type || 'call'], relationFilter)
+        return Object.assign({}, line, {
+          id: line.from + '\u2192' + line.to + ':' + types.join(','),
+          type: types[0],
+          types: types,
+        })
       }), byId)
     }
 
@@ -135,12 +149,12 @@ window.__ModuleLoader__.load({
       syncPorts(place)
 
       // ---- 布线：哪条边值得画 ----
-      var edges = chooseEdges(graph, scope, orient)
+      var edges = chooseEdges(graph, scope, orient, relationFilter)
       var picked = {}
       edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
 
       // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
-      var polylines = finalPolylines(laid.polylines, picked, orient.byId)
+      var polylines = finalPolylines(laid.polylines, picked, orient.byId, relationFilter)
       var kept = {}
       polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
       // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
@@ -181,6 +195,12 @@ window.__ModuleLoader__.load({
         rows: [], files: [],
         layers: laid.layers,
         crossings: laid.crossings,
+        stats: {
+          nodes: place.placed.length,
+          wires: drawn.wires.length,
+          relations: edges.stats.relations,
+          wireTotal: edges.stats.total,
+        },
         width: Math.max(avail || 0, maxX + metrics.PAD),
         height: Math.max(360, maxY + metrics.PAD),
       }

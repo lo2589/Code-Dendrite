@@ -15,7 +15,7 @@ window.__ModuleLoader__.load({
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
     var __graph_visible = require('dsh-cdd-lens/graph/visible')
-    var visible = __graph_visible.visible
+    var visibleForMode = __graph_visible.visibleForMode
     var __layout_camera = require('dsh-cdd-lens/layout/camera')
     var edgeFocusOf = __layout_camera.edgeFocusOf
     var __graph_model = require('dsh-cdd-lens/graph/model')
@@ -24,9 +24,9 @@ window.__ModuleLoader__.load({
     /**
      * What is on screen at all, and which file each anchor belongs to.
      */
-    function layoutScope(graph) {
+    function layoutScope(graph, modeOverride) {
 
-      var shown = visible(graph)
+      var shown = visibleForMode(graph, modeOverride)
 
       // A file is the first visual unit. Session-touched anchors are always
       // present; manual +/- exploration may add more anchors and therefore a
@@ -37,8 +37,9 @@ window.__ModuleLoader__.load({
         return shown[id] && node !== undefined && ui !== null
           && (ui.session || ui.explored || ui.pinned || id === shared.selected || id === graph.rootId)
       })
-      if (included.length === 0 && graph.nodes[graph.rootId]) included.push(graph.rootId)
-      var activeFocus = edgeFocusOf(graph)
+      var mode = modeOverride || shared.treeMode || 'all'
+      if (included.length === 0 && mode === 'all' && graph.nodes[graph.rootId]) included.push(graph.rootId)
+      var activeFocus = modeOverride === undefined ? edgeFocusOf(graph) : null
       if (activeFocus !== null) {
         included = graph.order.filter(function (id) {
           return activeFocus.ids[id] === true && graph.nodes[id] !== undefined

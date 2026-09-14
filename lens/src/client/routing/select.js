@@ -15,9 +15,10 @@ window.__ModuleLoader__.load({
     /**
      * Which relations get a wire: a trunk by default, the rest on demand.
      */
-    function chooseEdges(graph, scope, orient) {
+    function chooseEdges(graph, scope, orient, relationFilter) {
       var activeFocus = scope.activeFocus
       var byId = orient.byId
+      var REL_ORDER = ['call', 'dataflow', 'inherit', 'impact', 'dispatch']
 
       // ---- which edges get drawn ------------------------------------------
       //
@@ -44,7 +45,35 @@ window.__ModuleLoader__.load({
           return ui.open[prefix + ':' + t] === true
         })
       }
-      var drawable = graph.edges.filter(function (e) {
+      var relationAllowed = function (types) {
+        if (relationFilter === undefined || relationFilter === null) return true
+        return types.some(function (t) { return relationFilter[t] !== false })
+      }
+      var relationStats = function (pool, chosenPool) {
+        var stats = {}
+        REL_ORDER.forEach(function (type) { stats[type] = { total: 0, drawn: 0 } })
+        pool.forEach(function (e) {
+          var seen = {}
+          ;(e.types || ['call']).forEach(function (type) {
+            if (seen[type]) return
+            seen[type] = true
+            if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
+            stats[type].total += 1
+          })
+        })
+        chosenPool.forEach(function (e) {
+          var seen = {}
+          ;(e.types || ['call']).forEach(function (type) {
+            if (relationFilter !== undefined && relationFilter !== null && relationFilter[type] === false) return
+            if (seen[type]) return
+            seen[type] = true
+            if (stats[type] === undefined) stats[type] = { total: 0, drawn: 0 }
+            stats[type].drawn += 1
+          })
+        })
+        return stats
+      }
+      var drawableAll = graph.edges.filter(function (e) {
         var fromUI = uiOf(graph, e.from)
         var toUI = uiOf(graph, e.to)
         if (byId[e.from] === undefined || byId[e.to] === undefined) return false
@@ -52,6 +81,7 @@ window.__ModuleLoader__.load({
         var types = e.types || ['call']
         return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
       })
+      var drawable = drawableAll.filter(function (e) { return relationAllowed(e.types || ['call']) })
       var explicitlyOpened = function (e) {
         var types = e.types || ['call']
         return opened(uiOf(graph, e.from), 'down', types) || opened(uiOf(graph, e.to), 'up', types)
@@ -110,9 +140,14 @@ window.__ModuleLoader__.load({
         chosen = drawable.filter(function (e) { return keep[e.from + '→' + e.to] === true })
         hiddenCount = drawable.length - chosen.length
       }
-      shared.wireStats = { drawn: chosen.length, hidden: hiddenCount, total: drawable.length }
+      shared.wireStats = {
+        drawn: chosen.length,
+        hidden: hiddenCount,
+        total: drawable.length,
+        relations: relationStats(drawableAll, chosen),
+      }
 
-      return { chosen: chosen, hiddenCount: hiddenCount }
+      return { chosen: chosen, hiddenCount: hiddenCount, stats: shared.wireStats }
     }
 
     module.exports = { chooseEdges }
