@@ -5,7 +5,8 @@
 //   3. 从左往右轮着摆，第一行顶端对齐；
 //      后面的行「根据上一个排」：放在那一列上一个框的下面，中间空一个 anchor 的高度
 //   4. 先算距离：文件夹之间、文件之间边多的挨着放（顺序挨着 → 格子挨着）
-//   5. 某一列因为 anchor 特别多的框比最短的列长出 TALL_ANCHORS 个 anchor，就不排这列，短的优先
+//   5. 每排一行先看各列底边：比最短那列的底边高出「平均文件框高度的一半」的列这一行不填，
+//      尽量让一行的文件框底边一致；下一行重算（用户：「比最短边高1/2平均文件框的，就不填，尽量让一行的文件框底边一致」）
 //   展开不跳：画过的文件保持原来的先后，新文件接在后面（换会话、恢复自动布局时重新算）
 // 旁边的 seed 同样排，放在树的下面。线：每条边一根，从源节点右口到目标节点左口。
 //
@@ -22,8 +23,6 @@ window.__ModuleLoader__.load({
     var shared = __state_store.shared
     var PORT_OFFSET = 0.5
     var SECTION_GAP = 36
-    // 「特别多」：一列比最短的列长出这么多个 anchor 的高度，下一个框就不排这列。
-    var TALL_ANCHORS = 4
 
     function portsFor(x, y, w, h) {
       return { in: { x: x - PORT_OFFSET, y: y + h / 2 }, out: { x: x + w + PORT_OFFSET, y: y + h / 2 } }
@@ -143,50 +142,59 @@ window.__ModuleLoader__.load({
       return g.head + ids.reduce(function (s, id) { return s + g.size[id].h }, 0) + Math.max(0, ids.length - 1) * g.innerY + g.pad
     }
 
-    /** 从左往右轮着放；轮到的列比最短的列长出 TALL_ANCHORS 个 anchor 就跳过，短的优先。 */
-    function pickColumn(colBottom, next, g) {
-      var filled = colBottom.filter(function (b) { return b !== null })
-      if (filled.length === 0) return next
-      var shortest = Math.min.apply(null, filled)
-      for (var i = 0; i < g.cols; i += 1) {
-        var col = (next + i) % g.cols
-        if (colBottom[col] === null || colBottom[col] - shortest <= g.anchorGap * TALL_ANCHORS) return col
-      }
-      return colBottom.indexOf(shortest)
+    /**
+     * 这一行填哪几列：底边比最短那列高出「平均文件框高度的一半」以上的列不填，尽量让一行底边一致。
+     * 门槛跟着框的实际大小走：框普遍矮，差一点就算差得多；框普遍高，差同样多不算什么。
+     * 例：底边 [45, 30, 30, 25]、平均框高 30 → 门槛 25 + 15 = 40 → 45 不填，填后 3 列。
+     * @param bottoms - 每列现在的底边（还没放框的列 = 这一段的顶）。
+     * @param avgBox - 这一段文件框的平均高度（像素）。
+     * @returns 这一行要填的列号，从左往右。
+     */
+    function eligibleColumns(bottoms, avgBox) {
+      if (bottoms.length === 0) return []
+      var shortest = Math.min.apply(null, bottoms)
+      var out = []
+      bottoms.forEach(function (b, col) { if (b - shortest <= avgBox / 2 + 1e-6) out.push(col) })
+      return out
     }
 
     /**
-     * 一段（树 / 旁边）：从左往右轮着放，第一行顶端对齐；之后放在那一列上一个框的下面，
-     * 中间空一个 anchor 的高度；轮到的列太长（anchor 特别多）就跳过，短的优先。
+     * 一段（树 / 旁边）：一行一行排。每行先挑出不太长的列（eligibleColumns，比最短底边高出平均框高一半的不填），从左往右每列放一个框，
+     * 放在那一列上一个框的下面、空一个 anchor 的高度；这一行放完再重算下一行。第一行各列一样高，顶端对齐。
      * @returns 这一段最下面那个框的下沿；没有框时是 top。
      */
     function packSection(graph, byFile, order, top, g, side, placed, boxes) {
-      var colBottom = []
-      for (var c = 0; c < g.cols; c += 1) colBottom.push(null)
-      var next = 0
-      order.forEach(function (file) {
-        var ids = byFile[file]
-        var col = pickColumn(colBottom, next, g)
-        var y = colBottom[col] === null ? top : colBottom[col] + g.anchorGap
-        var x = g.left + col * (g.cellW + g.gapX)
-        var h = boxHeight(ids, g)
-        boxes.push({ file: file, label: shortFile(file), x: x, y: y, w: g.cellW, h: h, count: ids.length, frame: side ? 'side' : 'tree' })
-        var ny = y + g.head
-        ids.forEach(function (id) {
-          var nh = g.size[id].h
-          placed.push({
-            id: id, node: graph.nodes[id], anchor: graph.nodes[id],
-            x: x + g.pad, y: ny, w: g.cardW, h: nh,
-            file: file, layer: 'box:' + (side ? 'side:' : '') + file, tree: 0, label: g.label[id],
-            ports: portsFor(x + g.pad, ny, g.cardW, nh), flowDir: 'ltr', boxKey: file, side: side,
+      var bottoms = []
+      var used = []
+      for (var c = 0; c < g.cols; c += 1) { bottoms.push(top); used.push(false) }
+      var avgBox = order.length === 0 ? 0 : order.reduce(function (sum, f) { return sum + boxHeight(byFile[f], g) }, 0) / order.length
+      var k = 0
+      while (k < order.length) {
+        eligibleColumns(bottoms, avgBox).forEach(function (col) {
+          if (k >= order.length) return
+          var file = order[k]
+          k += 1
+          var ids = byFile[file]
+          var y = used[col] ? bottoms[col] + g.anchorGap : top
+          var x = g.left + col * (g.cellW + g.gapX)
+          var h = boxHeight(ids, g)
+          boxes.push({ file: file, label: shortFile(file), x: x, y: y, w: g.cellW, h: h, count: ids.length, frame: side ? 'side' : 'tree' })
+          var ny = y + g.head
+          ids.forEach(function (id) {
+            var nh = g.size[id].h
+            placed.push({
+              id: id, node: graph.nodes[id], anchor: graph.nodes[id],
+              x: x + g.pad, y: ny, w: g.cardW, h: nh,
+              file: file, layer: 'box:' + (side ? 'side:' : '') + file, tree: 0, label: g.label[id],
+              ports: portsFor(x + g.pad, ny, g.cardW, nh), flowDir: 'ltr', boxKey: file, side: side,
+            })
+            ny += nh + g.innerY
           })
-          ny += nh + g.innerY
+          bottoms[col] = y + h
+          used[col] = true
         })
-        colBottom[col] = y + h
-        next = (col + 1) % g.cols
-      })
-      var used = colBottom.filter(function (b) { return b !== null })
-      return used.length === 0 ? top : Math.max.apply(null, used)
+      }
+      return Math.max.apply(null, bottoms)
     }
 
     function polylinesFor(graph, placed) {
@@ -245,8 +253,8 @@ window.__ModuleLoader__.load({
       var g = {
         cols: Math.max(1, Math.floor((usable + gapX) / (cellW + gapX))),
         cellW: cellW, cardW: card.cardW, pad: pad, gapX: gapX,
-        // 换行时同一列上下两个框之间空一个 anchor 的高度（最小的那张卡片，就是一行名字的普通卡片）。
-        anchorGap: heights.length > 0 ? Math.min.apply(null, heights) : metrics.BOX_GAP_Y,
+        // 同一列上下两个框之间空一个 anchor 的高度：取所有卡片的平均高度。
+        anchorGap: heights.length > 0 ? heights.reduce(function (sum, h) { return sum + h }, 0) / heights.length : metrics.BOX_GAP_Y,
         head: metrics.BOX_HEAD, innerY: metrics.INNER_GAP_Y,
         left: metrics.PAD, size: card.size, label: metrics.label,
       }
@@ -269,7 +277,7 @@ window.__ModuleLoader__.load({
       return { placed: placed, polylines: polylinesFor(graph, placed), boxes: boxes, rows: rows, cols: g.cols, canvasY: bottom }
     }
 
-    module.exports = { placeFileGrid, greedyOrder, communicationOrder }
+    module.exports = { placeFileGrid, greedyOrder, communicationOrder, eligibleColumns }
     return module.exports
   },
 })
