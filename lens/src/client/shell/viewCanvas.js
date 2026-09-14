@@ -106,11 +106,11 @@ window.__ModuleLoader__.load({
         ]))
       }
 
-      // 调试栏挂在画布外面、上面：它是个诊断窄栏，不该跟着画布缩放平移。
-      // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
+      // 调试栏放在画布下面（用户：「你放最底下吧」），sticky 贴住可视区底部：画布再长也不用滚到底才看见。
+      // 它不跟着画布缩放；关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
-        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
         h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),
+        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
       ])
     }
 

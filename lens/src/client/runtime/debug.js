@@ -76,7 +76,8 @@ window.__ModuleLoader__.load({
         className: 'cddl-debugbar',
         style: {
           fontSize: '10px', lineHeight: '1.45', padding: '4px 8px',
-          borderBottom: '1px solid var(--dsw-alias-border-l2)',
+          borderTop: '1px solid var(--dsw-alias-border-l2)',
+          position: 'sticky', bottom: 0, left: 0, zIndex: 5,
           background: 'var(--dsw-alias-bg-layer-3)',
           color: 'var(--dsw-alias-label-secondary)',
           fontFamily: 'var(--ds-font-family-code,monospace)',

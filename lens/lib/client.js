@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_48_DATAFLOW_RETURN_RELAY_001
+// build: V1_49_LOG_AT_BOTTOM_001
 // parts: 43
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_48_DATAFLOW_RETURN_RELAY_001'
+    var BUILD = 'V1_49_LOG_AT_BOTTOM_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -159,7 +159,8 @@ __cddLocal.load({
         className: 'cddl-debugbar',
         style: {
           fontSize: '10px', lineHeight: '1.45', padding: '4px 8px',
-          borderBottom: '1px solid var(--dsw-alias-border-l2)',
+          borderTop: '1px solid var(--dsw-alias-border-l2)',
+          position: 'sticky', bottom: 0, left: 0, zIndex: 5,
           background: 'var(--dsw-alias-bg-layer-3)',
           color: 'var(--dsw-alias-label-secondary)',
           fontFamily: 'var(--ds-font-family-code,monospace)',
@@ -6583,11 +6584,11 @@ __cddLocal.load({
         ]))
       }
 
-      // 调试栏挂在画布外面、上面：它是个诊断窄栏，不该跟着画布缩放平移。
-      // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
+      // 调试栏放在画布下面（用户：「你放最底下吧」），sticky 贴住可视区底部：画布再长也不用滚到底才看见。
+      // 它不跟着画布缩放；关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
-        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
         h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),
+        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
       ])
     }
 
