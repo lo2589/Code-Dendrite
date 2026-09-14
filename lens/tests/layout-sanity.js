@@ -520,16 +520,16 @@ function expandIsFullyLogged() {
   const show = () => Object.keys(visible(side.shared.graph)).map(k => k.split('::')[1]).sort().join(',')
   const editShown = show()
   const editDrawn = side.layout(g, undefined, 900)
-  side.shared.treeMode = 'all'
-  const allShown = show()
-  const allDrawn = side.layout(g, undefined, 900)
+  side.uiOf(g, 'a/edit.js::root').open['down:call'] = false
+  const closedShown = show()
+  const closedDrawn = side.layout(g, undefined, 900)
   const ok = editShown === 'peer,root'
     && editDrawn.nodes.length === 2 && (editDrawn.wires || []).length === 1
-    && allShown === 'peer,root'
-    && allDrawn.nodes.length === 2 && (allDrawn.wires || []).length === 1
+    && closedShown === 'root'
+    && closedDrawn.nodes.length === 1 && (closedDrawn.wires || []).length === 0
   console.log((ok ? '✓ ' : '✗ ') + '按钮优先'.padEnd(12)
     + ' edit[' + editShown + '] 线 ' + (editDrawn.wires || []).length
-    + ' · all[' + allShown + '] 线 ' + (allDrawn.wires || []).length
+    + ' · 折叠[' + closedShown + '] 线 ' + (closedDrawn.wires || []).length
     + ' · 展开不被默认过滤')
   if (!ok) bad += 1
   side.shared.treeMode = 'all'

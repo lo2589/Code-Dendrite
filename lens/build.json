@@ -1,4 +1,4 @@
 {
   "build": "V1_35_BUTTONS_OVERRIDE_DEFAULT_001",
-  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_35: 用户按钮优先于默认树/过期信息；explored/pinned/open/selected 不会被 edit/anchor/degree 或 recency 过滤掉。"
+  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_35: 用户按钮优先于默认树/过期信息；open/pinned/selected 不会被 edit/anchor/degree 或 recency 过滤掉，折叠后 explored 不再像 pin 一样保留。"
 }

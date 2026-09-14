@@ -665,7 +665,6 @@ window.__ModuleLoader__.load({
       var ui = uiOf(graph, id)
       if (ui === null) return true
       if (ui.pinned === true) return false
-      if (ui.explored === true) return false
       if (hasUserOpen(ui)) return false
       if (id === shared.selected) return false
       // 只有**被查看过**的节点才谈得上变旧。刚展开出来的、会话碰过的、
@@ -689,7 +688,7 @@ window.__ModuleLoader__.load({
     function userExplicit(graph, id) {
       var ui = uiOf(graph, id)
       if (ui === null) return false
-      return ui.pinned === true || ui.explored === true || hasUserOpen(ui) || id === shared.selected
+      return ui.pinned === true || hasUserOpen(ui) || id === shared.selected
     }
 
 
@@ -753,22 +752,29 @@ window.__ModuleLoader__.load({
 
     function visible(graph) {
       var roots = []
-      if (graph.rootId !== null && graph.nodes[graph.rootId] !== undefined) roots.push(graph.rootId)
+      var root = function (id, force) {
+        roots.push({ id: id, force: force === true })
+      }
+      if (graph.rootId !== null && graph.nodes[graph.rootId] !== undefined) root(graph.rootId, userExplicit(graph, graph.rootId))
       graph.order.forEach(function (id) {
         var ui = uiOf(graph, id)
         if (ui === null) return
         // 会话碰过的 anchor 是根：agent 读过/改过它，它就该在图上，不需要谁先按
         // 一下展开才出现。以前这一步只认 pin / island / 最近碰过，于是刚 ingest
         // 出来的图只剩一个根节点，连线自然一根都没有。
-        if (ui.session || userExplicit(graph, id) || ui.island || stickyByRecency(id) || editedNode(graph, id)) roots.push(id)
+        if (ui.session || ui.island || stickyByRecency(id) || editedNode(graph, id)) root(id, false)
+        if (userExplicit(graph, id)) root(id, true)
       })
       var treeAllow = treeFilter(graph)
       var seen = {}
       var stack = roots.slice()
       while (stack.length > 0) {
-        var id = stack.pop()
-        if (seen[id] || fadedOut(graph, id)) continue
-        if (treeAllow !== null && treeAllow[id] !== true && !userExplicit(graph, id)) continue
+        var item = stack.pop()
+        var id = item.id
+        var force = item.force === true
+        if (seen[id]) continue
+        if (!force && fadedOut(graph, id)) continue
+        if (treeAllow !== null && treeAllow[id] !== true && !force && !userExplicit(graph, id)) continue
         seen[id] = true
         if (graph.nodes[id] === undefined) continue
         var ui = uiOf(graph, id)
@@ -782,14 +788,16 @@ window.__ModuleLoader__.load({
           // `auto` 前缀是 gather 选中时自动拉进来的：要画，但不是按钮的状态。
           var types = e.types || ['call']
           if (e.from === id) {
-            if (e.always) { stack.push(e.to); return }
-            var down = types.some(function (t) { return ui.open['down:' + t] === true || ui.open['autodown:' + t] === true })
-            if (down) stack.push(e.to)
+            if (e.always) { stack.push({ id: e.to, force: false }); return }
+            var userDown = types.some(function (t) { return ui.open['down:' + t] === true })
+            var autoDown = types.some(function (t) { return ui.open['autodown:' + t] === true })
+            if (userDown || autoDown) stack.push({ id: e.to, force: force || userDown })
           }
           if (e.to === id) {
-            if (e.always) { stack.push(e.from); return }
-            var up = types.some(function (t) { return ui.open['up:' + t] === true || ui.open['autoup:' + t] === true })
-            if (up) stack.push(e.from)
+            if (e.always) { stack.push({ id: e.from, force: false }); return }
+            var userUp = types.some(function (t) { return ui.open['up:' + t] === true })
+            var autoUp = types.some(function (t) { return ui.open['autoup:' + t] === true })
+            if (userUp || autoUp) stack.push({ id: e.from, force: force || userUp })
           }
         })
       }
