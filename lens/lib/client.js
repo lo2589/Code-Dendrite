@@ -4,8 +4,8 @@
 // Written in the shape tsdown emits (`__ModuleLoader__.load` + a CJS body +
 // the loader's `require`), so a generated bundle drops in on top.
 //
-// build: V1_27_CALL_EDGE_ONE_DIRECTION_001
-// parts: 57
+// build: V1_30_WIRE_LOCK_EXPAND_LOG_003
+// parts: 44
 
 // dsh-cdd-lens — Build stamp, plugin route, and the one fetch wrapper.
 //
@@ -20,24 +20,46 @@ window.__ModuleLoader__.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_20_COMPACT_TOPOLOGY_GRAPH_015'
+    var BUILD = 'V1_30_WIRE_LOCK_EXPAND_LOG_003'
     var ROUTE = '/plugins/cdd-lens'
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
 
     // ---- wire -------------------------------------------------------------
 
     function api(path, params) {
       var url = ROUTE + path + '?' + new URLSearchParams(params || {}).toString()
+      note('req', path + ' ' + (new URLSearchParams(params || {})).toString())
       return fetch(url, { cache: 'no-store' }).then(function (res) {
-        if (!res.ok) return res.json().catch(function () { return {} }).then(function (body) {
-          throw new Error(body.error || ('HTTP ' + res.status))
+        if (!res.ok) {
+          note('error', path + ' -> HTTP ' + res.status)
+          return res.json().catch(function () { return {} }).then(function (body) {
+            throw new Error(body.error || ('HTTP ' + res.status))
+          })
+        }
+        return res.json().then(function (body) {
+          note('res', path + ' -> 200 ' + summarize(path, body))
+          return body
         })
-        return res.json()
       })
+    }
+
+    /** 一行摘要：这次返回了什么，数量对不对。 */
+    function summarize(path, body) {
+      if (body === null || body === undefined) return '(空)'
+      if (path === '/expand') return 'count=' + body.count + ' peers=' + ((body.peers || []).length)
+      if (path === '/walk') return 'nodes=' + ((body.nodes || []).length) + ' edges=' + ((body.edges || []).length)
+      if (path === '/resolve') return 'results=' + ((body.results || []).length)
+      if (path === '/context') return 'anchors=' + ((body.stats || {}).anchors)
+      if (Array.isArray(body.hits)) return 'hits=' + body.hits.length
+      var keys = Object.keys(body)
+      return keys.slice(0, 4).join(',')
     }
 
     /** Same wrapper with a JSON body, for payloads too long for a query string. */
     function apiPost(path, params, payload) {
       var url = ROUTE + path + '?' + new URLSearchParams(params || {}).toString()
+      note('req', 'POST ' + path + ' ids=' + ((payload && payload.ids) ? payload.ids.length : 0))
       return fetch(url, {
         method: 'POST', cache: 'no-store',
         headers: { 'content-type': 'application/json' },
@@ -55,6 +77,105 @@ window.__ModuleLoader__.load({
   },
 })
 
+// dsh-cdd-lens — Debug 模式。
+//
+// 图上点不出来的时候，光看画面分不清是哪一层坏的：请求没发出去、服务端返回空、
+// 布局收到 0 个节点、还是渲染时抛错——四种在屏幕上都长成一样（一片空白）。
+//
+// 这个模块把这三层的事实都记下来，并显示在图面板顶部的一条窄栏里：
+//
+//   请求   最近几次 /expand /walk /resolve 的路径、HTTP 码、返回数量
+//   图的形状  ingest 之后有多少节点、多少边；布局收到多少、画出多少
+//   错误   任何一层抛出的原始消息（截断到一行）
+//
+// 开关：`?cddl-debug=1` 或 localStorage 里的 `cdd-lens.debug=1`。
+// 关掉时所有记录都是空操作，不影响正常路径。
+window.__ModuleLoader__.load({
+  id: 'dsh-cdd-lens/runtime/debug',
+  factory: (require) => {
+    var module = { exports: {} }
+    var React = require('react')
+    var h = React.createElement
+
+    var KEY = 'cdd-lens.debug.v1'
+    var MAX = 24
+
+    /** 开关状态：URL 参数优先，其次 localStorage，默认关。 */
+    function debugEnabled() {
+      try {
+        if (typeof window !== 'undefined' && window.location) {
+          var q = new URLSearchParams(window.location.search)
+          if (q.get('cddl-debug') === '1') return true
+          if (q.get('cddl-debug') === '0') return false
+        }
+        var stored = window.localStorage.getItem(KEY)
+        if (stored === '1') return true
+        if (stored === '0') return false
+      } catch (e) { /* 隐私模式下 localStorage 会抛，按关闭处理 */ }
+      return false
+    }
+
+    var on = debugEnabled()
+    var events = []
+    var facts = {}
+
+    /**
+     * 记一条事件。任何一层都可以调，关掉时是空操作。
+     *
+     * @param kind - 'req' | 'res' | 'graph' | 'layout' | 'error'。
+     * @param text - 一行描述。
+     */
+    function note(kind, text) {
+      if (!on) return
+      events.push({ at: new Date().toLocaleTimeString(), kind: kind, text: String(text).slice(0, 220) })
+      if (events.length > MAX) events.splice(0, events.length - MAX)
+      // 也挂到 window 上：控制台里 `__cddLens.debug()` 直接能看。
+      try {
+        window.__cddLens = window.__cddLens || {}
+        window.__cddLens.debug = debugSnapshot
+      } catch (e) { /* 没有 window 就算了 */ }
+    }
+
+    /** 覆盖式的事实：节点数、边数这些「当前值」。 */
+    function fact(name, value) {
+      if (!on) return
+      facts[name] = value
+    }
+
+    function snapshot() {
+      return { enabled: on, facts: facts, events: events.slice() }
+    }
+
+    /** 调试窄栏。关掉调试时不渲染任何东西。 */
+    function DebugBar(props) {
+      if (!on) return null
+      var lines = []
+      Object.keys(facts).forEach(function (k) { lines.push(k + '=' + facts[k]) })
+      var shown = events.slice(-6)
+      return h('div', {
+        className: 'cddl-debugbar',
+        style: {
+          fontSize: '10px', lineHeight: '1.45', padding: '4px 8px',
+          borderBottom: '1px solid var(--dsw-alias-border-l2)',
+          background: 'var(--dsw-alias-bg-layer-3)',
+          color: 'var(--dsw-alias-label-secondary)',
+          fontFamily: 'var(--ds-font-family-code,monospace)',
+          whiteSpace: 'pre-wrap', maxHeight: '30vh', overflow: 'auto',
+        },
+      }, [
+        h('div', { key: 'f', style: { fontWeight: 700, color: 'var(--dsw-alias-label-primary)' } },
+          'CDD debug ' + (props.build || '') + '  ' + lines.join('  ')),
+        h('div', { key: 'e' }, shown.map(function (e, i) {
+          return h('div', { key: i }, e.at + ' [' + e.kind + '] ' + e.text)
+        })),
+      ])
+    }
+
+    module.exports = { debugEnabled, note, fact, snapshot, DebugBar, isOn: function () { return on } }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — The accumulating node/edge store: pure graph operations.
 //
 // One module of the browser half. The parts are concatenated in dependency
@@ -67,29 +188,85 @@ window.__ModuleLoader__.load({
 
     // ---- graph store ------------------------------------------------------
     //
-    // Nodes and edges accumulate as you walk. Nothing is ever silently dropped:
-    // collapsing hides descendants that no other branch and no pin is holding,
-    // and the anchor's turn record survives regardless — a collapse must not
-    // erase that the agent was there on turn 3.
+    // A node IS an anchor. `graph.nodes[id]` holds the record that came out of
+    // `.codedendrite/anchors.json` — `symbol`, `file`, `line_start`, `callers`,
+    // `mro`, `own_methods`, the lot — and nothing else. There is no wrapper and
+    // no `node.anchor` hop: everything that wants to know about the code reads
+    // the anchor, and anything the drawing needs about a node is either derived
+    // from that record or kept in one of the side tables below.
+    //
+    // Two side tables, both keyed by anchor id, both outside the record:
+    //
+    //   graph.ui     —按钮和交互状态（谁按开了 up、谁在 loading、谁被 pin）。
+    //                  这些是「你看它的方式」，不是「它是什么」，所以不写进
+    //                  anchor，重画一次不会污染索引来的数据。
+    //   graph.layout — 布局算出来的坐标和端口。布局产物，同样不写回 anchor。
+    //
+    // Anything typed into .codedendrite stays there; anything we invent lives
+    // beside it and can be thrown away and recomputed.
 
     function emptyGraph() {
-      return { nodes: {}, order: [], edges: [], rootId: null }
+      return { nodes: {}, ui: {}, layout: {}, order: [], edges: [], rootId: null }
+    }
+
+    /** 每个 anchor 的交互状态。节点进图时建一次，之后只改字段。 */
+    function emptyUI() {
+      return {
+        // 展开状态按「方向:关系」存：一个 anchor 有几个关系就挂几个按钮，各开各的。
+        //   ui.open['down:call']     点开了 call 的下游
+        //   ui.open['up:inherit']    点开了 inherit 的上游
+        //   auto 前缀的是 gather 自动拉进来的，不算用户按过
+        open: {},
+        members: false, memberList: undefined,
+        pinned: false, loading: null, error: null,
+        explored: false, island: false, session: false,
+        bridge: false, synthetic: false,
+        // 这个节点最近一次被查看是哪一轮。看过的节点按轮次变旧、过期撤下；
+        // edit 过的节点不看它，一直留着（判据在 graph/visible.fadedOut）。
+        viewedAt: undefined,
+        // 构图时就明确知道它被 edit 过（trace 还没到时用）。
+        edited: false,
+      }
+    }
+
+    /** anchor 记录的第一次出现，补上 id（索引里本来就带，防外部传裸记录）。 */
+    function anchorRecord(anchor) {
+      return anchor
     }
 
     function addNode(graph, anchor) {
+      if (anchor === undefined || anchor === null || anchor.id === undefined) return false
       if (graph.nodes[anchor.id] !== undefined) {
-        // Refresh the counts; a reindex can change them under us.
-        graph.nodes[anchor.id].anchor = anchor
+        // 重新索引会换掉记录：整条替换，不留旧字段。
+        graph.nodes[anchor.id] = anchorRecord(anchor)
         return false
       }
-      // up/down 是按钮状态（用户按出来的）；autoUp/autoDown 是 gather 选中时
-      // 自动拉进来的邻居。两者分开，按钮才不会被 gather 代按。
-      graph.nodes[anchor.id] = {
-        anchor: anchor, down: false, up: false, autoDown: false, autoUp: false,
-        members: false, pinned: false,
-      }
+      graph.nodes[anchor.id] = anchorRecord(anchor)
+      graph.ui[anchor.id] = emptyUI()
       graph.order.push(anchor.id)
       return true
+    }
+
+    /** 交互状态的读写口。没有这条 node 时返回 null，调用方不必自己判空。 */
+    function uiOf(graph, id) {
+      var entry = graph.ui[id]
+      return entry === undefined ? null : entry
+    }
+
+    /** 布局产物（x/y/w/h/layer/ports）。算子只读它，不改 anchor。 */
+    function placeOf(graph, id) {
+      var entry = graph.layout[id]
+      return entry === undefined ? null : entry
+    }
+
+    function setPlace(graph, id, place) {
+      graph.layout[id] = place
+      return place
+    }
+
+    /** 图上现有的 anchor id，按进入顺序。 */
+    function nodeIds(graph) {
+      return graph.order
     }
 
     function addEdge(graph, from, to, types) {
@@ -116,6 +293,8 @@ window.__ModuleLoader__.load({
     function removeNode(graph, id) {
       if (graph.nodes[id] === undefined) return false
       delete graph.nodes[id]
+      delete graph.ui[id]
+      delete graph.layout[id]
       graph.order = graph.order.filter(function (x) { return x !== id })
       graph.edges = graph.edges.filter(function (e) { return e.from !== id && e.to !== id })
       if (graph.rootId === id) graph.rootId = graph.order.length > 0 ? graph.order[0] : null
@@ -133,7 +312,10 @@ window.__ModuleLoader__.load({
      * explicit pin overrides it and never expires.
      */
 
-    module.exports = { emptyGraph, addNode, addEdge, removeNode }
+    module.exports = {
+      emptyGraph, emptyUI, addNode, addEdge, removeNode,
+      uiOf, placeOf, setPlace, nodeIds,
+    }
     return module.exports
   },
 })
@@ -169,6 +351,12 @@ window.__ModuleLoader__.load({
       selected: null,
       focused: null,
       edgeFocus: null,
+      // 看哪棵树（规则文档 §1.3）：all 不套树，其余是四棵树之一。
+      // 选择器在工具栏；这个值决定布局把哪些节点放上屏幕。
+      treeMode: 'all',
+      // 画线模式。默认 'all' 画全部关系边——默认走「主干」的话，没选中任何节点时
+      // 画面上可能一根线都没有，看起来就是「图坏了」。工具栏上仍可切回主干。
+      wireMode: 'all',
       // What a click on a wire lit up: the anchors and the wires that
       // belong to the same run of relations. A highlight, not a layout —
       // nothing moves, so you can see what you clicked in the place you
@@ -223,6 +411,16 @@ window.__ModuleLoader__.load({
       shared.listeners.forEach(function (fn) { fn() })
     }
 
+    /**
+     * 请求把视口移到某个节点上。
+     *
+     * mode:
+     *   'center'  直接居中（用户主动点选、搜索跳转）
+     *   'fit'     按可读比例居中（换图、会话 ingest）
+     *   'ensure'  **只在它不在视野里时才动**。展开用这个：点一下展开，
+     *             节点就在你眼前，视口却跳一下，看着就是「树乱跳」。
+     *             已经在视野里就什么都不做，你看到的画面一个像素都不动。
+     */
     function requestViewport(id, mode) {
       shared.viewportRequest = {
         id: id,
@@ -423,6 +621,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     var STICKY_TURNS = 3
 
@@ -432,34 +632,153 @@ window.__ModuleLoader__.load({
       return shared.turn - record.lastTurn < STICKY_TURNS
     }
 
+    /**
+     * 这个节点是 edit 过的吗——edit 的一直留着，永远不消失。
+     *
+     * 两条判据，任一条成立就算：trace 记录说这次会话动过它的代码（state 是
+     * edited / working，或有过 verb='edit' 的事件），或者构图时打过 edited 标记。
+     */
+    function editedNode(graph, id) {
+      var record = shared.trace[id]
+      if (record !== undefined) {
+        if (record.state === 'edited' || record.state === 'working') return true
+        if (Array.isArray(record.events)) {
+          for (var i = 0; i < record.events.length; i += 1) {
+            if (record.events[i].verb === 'edit') return true
+          }
+        }
+      }
+      var ui = graph.ui[id]
+      return ui !== undefined && ui.edited === true
+    }
+
+    /**
+     * 看过的节点什么时候撤下。
+     *
+     * 一个节点被查看之后，只在最近 STICKY_TURNS 轮里还算新鲜；会话往前走一轮它
+     * 就更旧一点，走够 STICKY_TURNS 轮就撤下来。**edit 过的例外——一直留着。**
+     *
+     * 没有这个的话图只进不出：翻过去的东西全赖在屏幕上，越看越满。
+     */
+    function fadedOut(graph, id) {
+      if (editedNode(graph, id)) return false
+      var ui = uiOf(graph, id)
+      if (ui === null) return true
+      if (ui.pinned === true) return false
+      // 只有**被查看过**的节点才谈得上变旧。刚展开出来的、会话碰过的、
+      // 布局借来的桥，都还没有「看过多久」这回事，不许被滤掉——否则一展开
+      // 新节点就当场消失。
+      var record = shared.trace[id]
+      if (record !== undefined) return shared.turn - record.lastTurn >= STICKY_TURNS
+      if (typeof ui.viewedAt === 'number') return shared.turn - ui.viewedAt >= STICKY_TURNS
+      return false
+    }
+
+
+    /**
+     * 当前选的是哪棵树，它只要哪些节点（规则文档 §1.3）。
+     *
+     *   all      不套树，图里现有的全画
+     *   anchor   单个 anchor 周围**直接相连**的邻居，中间不插点
+     *   degree1  1 度树 = 直接树：seed 之间直接有边，中间不插点
+     *   degree2  2 度树：允许一个中间点把两个 seed 接起来
+     *   edit     edit 树：只管这次会话 edit 过的那批 anchor
+     *
+     * @returns 允许上屏的 id 集合；treeMode 为 all 时返回 null（表示不限制）。
+     */
+    function treeFilter(graph) {
+      var mode = shared.treeMode || 'all'
+      if (mode === 'all') return null
+      var allow = {}
+      var edgeTouches = function (id, keep) {
+        allow[id] = true
+        graph.edges.forEach(function (e) {
+          if (e.from !== id && e.to !== id) return
+          allow[e.from] = true
+          allow[e.to] = true
+          if (keep !== undefined) keep[e.from] = true
+        })
+      }
+      if (mode === 'edit') {
+        graph.order.forEach(function (id) {
+          if (editedNode(graph, id)) allow[id] = true
+        })
+        return allow
+      }
+      if (mode === 'anchor') {
+        var focus = shared.focused || shared.selected || graph.rootId
+        if (focus !== null && graph.nodes[focus] !== undefined) edgeTouches(focus)
+        return allow
+      }
+      // degree1 / degree2：先把会话碰过的 anchor 当 seed，再按「中间点」放宽。
+      //   1 度树：seed 之间的直接边，中间不许插点 —— 所以只有 seed 和直接相连的 seed。
+      //   2 度树：再多允许一个中间点（非 seed）把两个 seed 接起来。
+      var seed = {}
+      graph.order.forEach(function (id) {
+        var ui = uiOf(graph, id)
+        if (ui === null) return
+        if (ui.session || ui.explored || editedNode(graph, id)) seed[id] = true
+      })
+      Object.keys(seed).forEach(function (id) { allow[id] = true })
+      graph.edges.forEach(function (e) {
+        var a = seed[e.from] === true, b = seed[e.to] === true
+        if (a && b) { allow[e.from] = true; allow[e.to] = true; return }
+        if (mode !== 'degree2') return
+        // 中间点：一端是 seed，另一端也通向另一个 seed。
+        if (a || b) {
+          allow[e.from] = true
+          allow[e.to] = true
+        }
+      })
+      return allow
+    }
+
     function visible(graph) {
       var roots = []
       if (graph.rootId !== null && graph.nodes[graph.rootId] !== undefined) roots.push(graph.rootId)
       graph.order.forEach(function (id) {
-        var node = graph.nodes[id]
-        if (node.pinned || node.island || stickyByRecency(id)) roots.push(id)
+        var ui = uiOf(graph, id)
+        if (ui === null) return
+        // 会话碰过的 anchor 是根：agent 读过/改过它，它就该在图上，不需要谁先按
+        // 一下展开才出现。以前这一步只认 pin / island / 最近碰过，于是刚 ingest
+        // 出来的图只剩一个根节点，连线自然一根都没有。
+        if (ui.session || ui.explored || ui.pinned || ui.island || stickyByRecency(id)) roots.push(id)
       })
+      var treeAllow = treeFilter(graph)
       var seen = {}
       var stack = roots.slice()
       while (stack.length > 0) {
         var id = stack.pop()
-        if (seen[id]) continue
+        if (seen[id] || fadedOut(graph, id)) continue
+        if (treeAllow !== null && treeAllow[id] !== true) continue
         seen[id] = true
-        var node = graph.nodes[id]
-        if (node === undefined) continue
+        if (graph.nodes[id] === undefined) continue
+        var ui = uiOf(graph, id)
+        if (ui === null) continue
         graph.edges.forEach(function (e) {
-          // `always` edges join the session's own anchors; they show whether or
-          // not anyone pressed expand. `autoUp`/`autoDown` are what gather pulled
-          // in on selection: they must be drawn, but they are NOT the button's
-          // state — the button only reads up/down (node.js:74,88).
-          if (e.from === id && (node.down || node.autoDown || e.always)) stack.push(e.to)
-          if (e.to === id && (node.up || node.autoUp || e.always)) stack.push(e.from)
+          // 一条边算不算「打开」：这条边的关系类型对应的那个按钮开没开。
+          // 展开状态按「方向:关系」存，所以这里要看边自己的类型，不能只看方向——
+          // 点开 call 的 ↓ 不该把 inherit 的 ↓ 也点亮。
+          //
+          // `always` 边连的是会话自己的 anchor，不管有没有人按过都要显示。
+          // `auto` 前缀是 gather 选中时自动拉进来的：要画，但不是按钮的状态。
+          var types = e.types || ['call']
+          if (e.from === id) {
+            if (e.always) { stack.push(e.to); return }
+            var down = types.some(function (t) { return ui.open['down:' + t] === true || ui.open['autodown:' + t] === true })
+            if (down) stack.push(e.to)
+          }
+          if (e.to === id) {
+            if (e.always) { stack.push(e.from); return }
+            var up = types.some(function (t) { return ui.open['up:' + t] === true || ui.open['autoup:' + t] === true })
+            if (up) stack.push(e.from)
+          }
         })
       }
       return seen
     }
 
-    module.exports = { STICKY_TURNS, stickyByRecency, visible }
+    module.exports = { STICKY_TURNS, stickyByRecency, editedNode, fadedOut, treeFilter, visible }
     return module.exports
   },
 })
@@ -828,25 +1147,6 @@ window.__ModuleLoader__.load({
      * to land on top of a graph the user has already expanded by hand, which
      * is exactly what explore.focus does with it.
      */
-    function seatChain(graph, body) {
-      var seat = function (id, layer, tree, seed) {
-        var node = graph.nodes[id]
-        if (node === undefined) return
-        node.layer = layer
-        node.tree = tree
-        node.seed = seed === true
-      }
-      body.trees.forEach(function (tree, rank) {
-        tree.nodes.forEach(function (n) { seat(n.id, n.layer, rank, n.seed) })
-      })
-      // An island is a tree of one. It still needs somewhere to stand,
-      // and leaving it without a layer would drop the whole drawing back
-      // to file boxes over one unconnected anchor.
-      body.islands.forEach(function (n) {
-        seat(n.id, 0, body.trees.length, n.seed)
-      })
-    }
-
     /**
      * Everything that asks the host for something.
      *
@@ -860,60 +1160,25 @@ window.__ModuleLoader__.load({
     function fetchMethods(ctx, engine, session, params) {
       return {
         /**
-         * The local picture in one request: the seeds, everything within `hops`
-         * of them both ways, and the trees that grew out of it.
-         *
-         * Asking hop by hop is what left the graph as a pile of anchors with no
-         * idea which layer any of them was on. The layer is the whole point, and
-         * only the side holding the edge tables can work it out.
-         * @param ids - the anchors to grow from; the session's edits, normally.
-         * @param hops - how far each seed reaches in each direction, 1 to 3.
-         * @returns the trees, largest-by-edits first, and the lone seeds.
-         */
-        chain: function (ids, hops) {
-          if (ids === undefined || ids.length === 0) {
-            shared.chain = { trees: [], islands: [] }
-            return Promise.resolve(shared.chain)
-          }
-          return api('/chain', params({ ids: ids.join(','), hops: String(hops || 1) }))
-            .then(function (body) {
-              shared.chain = body
-              // The stamp this graph was last seated against. Any later answer
-              // carrying a different one means the index moved under the drawing.
-              if (body.stamp !== undefined) shared.graphStamp = body.stamp
-              seatChain(shared.graph, body)
-              if (window.__cddLens !== undefined) {
-                window.__cddLens.chain = {
-                  seeds: body.seeds, hops: body.hops, islands: body.islands.length,
-                  trees: body.trees.map(function (t) {
-                    return { size: t.size, seeds: t.seeds, layers: t.layers.map(function (l) { return l.length }) }
-                  }),
-                }
-              }
-              publish()
-              return body
-            })
-        },
-
-        /**
          * Re-check every node on the graph against the index as it stands NOW.
          *
          * Triggered when any answer carries a stamp different from the one the
          * graph was seated against: anchors the rebuild dropped are removed
          * (not hidden — the code they named is gone), survivors get their
-         * counts refreshed, and the graph takes the new stamp. Layers are left
-         * alone here; re-seating is chain's job and it runs on the next focus.
+         * counts refreshed, and the graph takes the new stamp. Layers are
+         * recomputed by the layout itself, so nothing here re-seats anything.
          */
         revalidate: function () {
           if (shared.revalidating === true) return Promise.resolve()
           var ids = shared.graph.order.slice()
           if (ids.length === 0) return Promise.resolve()
           shared.revalidating = true
-          return apiPost('/verify', params({}), { ids: ids }).then(function (body) {
+          return apiPost('/recheck', params({}), { ids: ids }).then(function (body) {
             body.nodes.forEach(function (n) {
               if (n.missing === true) { removeNode(shared.graph, n.id); return }
               var node = shared.graph.nodes[n.id]
-              if (node !== undefined) node.anchor = n
+              // node 就是 anchor：整条替换，不留旧字段。
+              if (node !== undefined) shared.graph.nodes[n.id] = n
             })
             if (body.stamp !== undefined) shared.graphStamp = body.stamp
             shared.revalidating = false
@@ -1004,7 +1269,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    module.exports = { fetchMethods, seatChain }
+    module.exports = { fetchMethods }
     return module.exports
   },
 })
@@ -1024,6 +1289,9 @@ window.__ModuleLoader__.load({
     var addEdge = __graph_model.addEdge
     var addNode = __graph_model.addNode
     var emptyGraph = __graph_model.emptyGraph
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
@@ -1059,20 +1327,10 @@ window.__ModuleLoader__.load({
           shared.selected = anchor.id
           requestViewport(anchor.id, 'fit')
           publish()
-          return engine.expand(anchor.id, 'down').then(function () {
-            return engine.expand(anchor.id, 'up')
+          return engine.expand(anchor.id, 'down', null, 'call').then(function () {
+            return engine.expand(anchor.id, 'up', null, 'call')
           }).then(function () {
-            // /neighbors says who the neighbours are, not where they stand.
-            // The layer is computed host-side over the edge tables (DFS finish
-            // order, longest-path relaxed) and only /chain returns it, so a
-            // graph built by hand arrived layerless: the flow skin could only
-            // pile it into the trailing column and the layered skin never
-            // engaged. Seating after the expands covers everything they pulled
-            // in and removes nothing — seatChain writes stamps only — and the
-            // publish inside chain() re-runs the layout with them. A failed
-            // chain leaves the graph exactly as the expands built it.
-            return engine.chain([anchor.id], 1).catch(function () { return null })
-          }).then(function () {
+            // 层不再问服务端要了：layout/sugiyama 从图自己算。这里只把视图摆正。
             requestViewport(anchor.id, 'fit')
             publish()
             return engine.source(anchor.id)
@@ -1080,12 +1338,9 @@ window.__ModuleLoader__.load({
         },
         /** Add an anchor beside the current exploration without resetting it. */
         add: function (anchor) {
-          // No chain here on purpose: layering is computed over the seeded
-          // neighbourhood, and re-seeding per added anchor would re-layer the
-          // graph the user already arranged — every add would reshuffle the
-          // picture it was meant to extend. The next focus or session ingest
-          // seats everything at once; until then the flow skin parks the added
-          // anchor in its trailing column, which is the honest place for it.
+          // 不重新分层：分层是整图的事，每加一个 anchor 就重排会把用户已经摆好
+          // 的图重洗一遍——那正是「加一个却全变了」的来源。下次 focus 或会话
+          // ingest 会一起摆；在那之前按当前图重画即可。
           addNode(shared.graph, anchor)
           if (shared.graph.rootId === null) shared.graph.rootId = anchor.id
           shared.selected = anchor.id
@@ -1093,90 +1348,190 @@ window.__ModuleLoader__.load({
           return engine.source(anchor.id)
         },
         /**
-         * 展开一个方向。
+         * 展开一个关系的一个方向。
+         *
+         * 按钮是**按关系分开**的：一个 anchor 有几个关系就挂几个按钮，各带各的
+         * 数字、各是各的颜色（见规则文档 §2.3）。所以状态也按关系分开存：
+         * `ui.open['down:call']`、`ui.open['up:inherit']`，互不影响——点开 call
+         * 的 ↓ 不会把 inherit 的 ↓ 也点亮。
          *
          * `auto` 是 gather 在选中节点时替你把邻居拉进来的那条路。它**不许**写
-         * `node.up` / `node.down`——那是按钮的状态。以前它写了，于是你点中一个
-         * 节点，两个按钮就已经是"按下"的样子、标题写着"收起"；你第一次按 ↓ 其实
-         * 是在把它**收起来**（63 个节点掉到 38 个），数字和看到的东西当然对不上。
+         * `ui.open`——那是按钮的状态。以前它写了，于是你点中一个节点，按钮就已经
+         * 是"按下"的样子、标题写着"收起"；你第一次按 ↓ 其实是在把它**收起来**。
+         * 自动拉进来的东西仍然要画出来，所以走独立的 `autoDown`/`autoUp` 标记。
          *
-         * 自动拉进来的东西仍然要画出来，所以走一个独立的标记 `autoUp`/`autoDown`，
-         * 只有 visible() 认它。你亲手按的那一下才把 `up`/`down` 打开，按钮从此
-         * 反映的是你自己的动作。
+         * @param direction - 'up' | 'down'。
+         * @param auto - true 表示这次不是用户按的。
+         * @param relation - 'call' | 'dataflow' | 'inherit' | 'dispatch' | 'impact'。
          */
-        expand: function (id, direction, auto) {
+        expand: function (id, direction, auto, relation) {
+          var rel = relation || 'call'
+          var t0 = Date.now()
           var node = shared.graph.nodes[id]
-          if (node === undefined) return Promise.resolve()
+          var ui = uiOf(shared.graph, id)
+          note('expand', 'start ' + direction + ':' + rel + ' 节点=' + String(id).split('::').pop()
+            + ' 存在=' + (node !== undefined) + ' ui=' + (ui !== null))
+          if (node === undefined || ui === null) {
+            note('expand', 'ABORT 节点或 ui 不存在 —— 按钮指向了一个已经不在图上的 anchor')
+            return Promise.resolve()
+          }
+          var slot = direction + ':' + rel
+          var autoSlot = 'auto' + direction + ':' + rel
           if (!auto) {
             shared.selected = id
-            requestViewport(id, 'center')
-            node['manual' + direction] = false
+            // 展开锁定：只在被展开的节点已经不在视野里时才挪视口。
+            requestViewport(id, 'ensure')
           }
-          if (node[direction] || node['auto' + direction]) return Promise.resolve()
-          node.loading = direction
+          if (ui.open[slot] === true || ui.open[autoSlot] === true) {
+            note('expand', 'SKIP 这个方向已经开着（' + slot + '）')
+            return Promise.resolve()
+          }
+          // 桥接点只解释连接，不参与继续展开：它是布局借来的中间点，
+          // 不是 agent 打开过的 anchor，展开它等于替用户往下走。
+          if (ui.synthetic === true || ui.bridge === true) {
+            note('expand', 'SKIP 桥接点不许展开')
+            return Promise.resolve()
+          }
+          ui.loading = slot
           publish()
-          return api('/neighbors', params({ id: id, dir: direction })).then(function (body) {
+          note('expand', '请求 /expand ' + direction + ':' + rel)
+          return api('/expand', params({ id: id, dir: direction, rel: rel })).then(function (body) {
+            note('expand', '返回 peers=' + ((body.peers || []).length) + ' (' + (Date.now() - t0) + 'ms)')
+            var fresh = 0, wired = 0
             body.peers.forEach(function (peer) {
+              var known = shared.graph.nodes[peer.id] !== undefined
               addNode(shared.graph, peer)
-              shared.graph.nodes[peer.id].explored = true
-              if (direction === 'down') addEdge(shared.graph, id, peer.id, peer.types)
-              else addEdge(shared.graph, peer.id, id, peer.types)
+              if (!known) fresh += 1
+              var peerUI = uiOf(shared.graph, peer.id)
+              if (peerUI !== null) peerUI.explored = true
+              var types = [rel]
+              if (direction === 'down') addEdge(shared.graph, id, peer.id, types)
+              else addEdge(shared.graph, peer.id, id, types)
+              wired += 1
             })
-            if (auto) node['auto' + direction] = true
-            else node[direction] = true
-            node.loading = null
+            ui.open[auto ? autoSlot : slot] = true
+            ui.loading = null
+            // 点亮刚展开的这一团：哪些是刚出来的，一眼能看清。
+            lightNeighbourhood(id)
             publish()
-            // Expand assigns no layer: a layer is a whole-graph fact and only
-            // /chain computes it. What expand DOES owe the drawing is accuracy —
-            // if the index moved since this graph was seated, every node on it
-            // is re-checked against the rebuilt tables before anything else.
+            note('expand', '完成 新增节点=' + fresh + ' 建边=' + wired
+              + ' 图上 nodes=' + Object.keys(shared.graph.nodes).length
+              + ' edges=' + shared.graph.edges.length
+              + ' 高亮 nodes=' + Object.keys(shared.lit.nodes).length
+              + ' wires=' + Object.keys(shared.lit.wires).length
+              + ' 共' + (Date.now() - t0) + 'ms')
+            // 索引在图画出来之后动过，就先把每个节点对着新表核一遍。
             if (body.stamp !== undefined && shared.graphStamp !== undefined && body.stamp !== shared.graphStamp) {
               return engine.revalidate()
             }
           }).catch(function (error) {
-            node.loading = null
-            node.error = String(error.message)
+            ui.loading = null
+            ui.error = String(error.message)
+            publish()
+            note('expand', 'FAILED ' + direction + ':' + rel + ' -> ' + String(error && error.message))
+          })
+        },
+        /** 收起一个「方向:关系」，不删缓存的节点和边。 */
+        collapse: function (id, direction, relation) {
+          var rel = relation || 'call'
+          var ui = uiOf(shared.graph, id)
+          if (ui === null) return
+          shared.selected = id
+          ui.open[direction + ':' + rel] = false
+          // 用户亲手收起就是真的收起：gather 自动拉进来的那一批也一起收掉，
+          // 否则 visible() 还认着 auto 标记，节点赖在图上不走。
+          ui.open['auto' + direction + ':' + rel] = false
+          if (shared.lit !== null && shared.lit.key === id) shared.lit = null
+          requestViewport(id, 'ensure')
+          publish()
+        },
+        /**
+         * 链式展开：`a → b → c → d` 一路走，一次请求拿整条链。
+         *
+         * 服务端 BFS 到底（见 worker 的 walk），回来的是节点表 + 边表，直接并进图。
+         * 中间那些层不需要用户再点一次。
+         *
+         * @param depth - 最多走几跳，1..8。
+         */
+        walk: function (id, direction, relation, depth) {
+          var rel = relation || 'call'
+          var ui = uiOf(shared.graph, id)
+          if (shared.graph.nodes[id] === undefined || ui === null) return Promise.resolve()
+          ui.loading = 'walk:' + direction + ':' + rel
+          publish()
+          note('walk', '请求 /walk ' + direction + ':' + rel + ' depth=' + (depth || 4))
+          return api('/walk', params({
+            id: id, dir: direction, rel: rel, depth: String(depth || 4),
+          })).then(function (body) {
+            body.nodes.forEach(function (n) {
+              var known = shared.graph.nodes[n.id] !== undefined
+              addNode(shared.graph, n)
+              if (!known) {
+                var nui = uiOf(shared.graph, n.id)
+                if (nui !== null) nui.explored = true
+              }
+            })
+            body.edges.forEach(function (e) { addEdge(shared.graph, e.from, e.to, e.types || [rel]) })
+            ui.open[direction + ':' + rel] = true
+            ui.loading = null
+            lightNeighbourhood(id)
+            publish()
+            note('walk', '完成 nodes=' + body.nodes.length + ' edges=' + body.edges.length
+              + ' 图上 nodes=' + Object.keys(shared.graph.nodes).length)
+            return body
+          }).catch(function (error) {
+            ui.loading = null
+            ui.error = String(error.message)
             publish()
           })
         },
-        /** Hide one explored direction without deleting its cached nodes or edges. */
-        collapse: function (id, direction) {
-          var node = shared.graph.nodes[id]
-          if (node === undefined) return
-          shared.selected = id
-          node[direction] = false
-          // 用户亲手收起就是真的收起：gather 自动拉进来的那一批也一起收掉，
-          // 否则 visible() 还认着 autoDown，节点赖在图上不走。
-          node['auto' + direction] = false
-          node['manual' + direction] = true
-          requestViewport(id, 'center')
-          publish()
-        },
         members: function (id) {
           var node = shared.graph.nodes[id]
-          if (node === undefined) return Promise.resolve()
-          if (node.members) { node.members = false; publish(); return Promise.resolve() }
-          if (node.memberList !== undefined) { node.members = true; publish(); return Promise.resolve() }
-          node.loading = 'members'
+          var ui = uiOf(shared.graph, id)
+          if (node === undefined || ui === null) return Promise.resolve()
+          if (ui.members) { ui.members = false; publish(); return Promise.resolve() }
+          if (ui.memberList !== undefined) { ui.members = true; publish(); return Promise.resolve() }
+          ui.loading = 'members'
           publish()
           return api('/members', params({ id: id })).then(function (body) {
-            node.memberList = body.members
-            node.members = true
-            node.loading = null
+            ui.memberList = body.members
+            ui.members = true
+            ui.loading = null
             publish()
           }).catch(function (error) {
-            node.loading = null
-            node.error = String(error.message)
+            ui.loading = null
+            ui.error = String(error.message)
             publish()
           })
         },
         pin: function (id) {
-          var node = shared.graph.nodes[id]
-          if (node === undefined) return
-          node.pinned = !node.pinned
+          var ui = uiOf(shared.graph, id)
+          if (ui === null) return
+          ui.pinned = !ui.pinned
           publish()
         },
       }
+    }
+
+        /**
+     * 点亮「刚展开的这个节点 + 它的直接邻居」。
+     *
+     * 展开之后图上多了东西，不加高亮就看不清哪一块是刚出来的。这里把这一团
+     * （节点 + 它们之间的边）标成 lit，其余变暗——一眼能看出刚展开的是哪一块。
+     */
+    function lightNeighbourhood(id) {
+      var nodes = {}
+      var wires = {}
+      nodes[id] = true
+      shared.graph.edges.forEach(function (e) {
+        if (e.from !== id && e.to !== id) return
+        nodes[e.from] = true
+        nodes[e.to] = true
+        ;(e.types || ['call']).forEach(function (type) {
+          wires[e.from + '\u2192' + e.to + ':' + type] = true
+        })
+      })
+      shared.lit = { key: id, type: null, nodes: nodes, wires: wires }
     }
 
     module.exports = { exploreMethods }
@@ -1199,6 +1554,8 @@ window.__ModuleLoader__.load({
     var shared = __state_store.shared
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var saveNodePosition = __state_persist.saveNodePosition
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     /**
      * What is selected, focused, or being dragged.
@@ -1217,6 +1574,10 @@ window.__ModuleLoader__.load({
           shared.focused = id
           shared.edgeFocus = null
           shared.lit = null
+          // 记下「这一轮看过它」：看过的节点按轮次变旧、过期撤下；
+          // edit 过的不受影响，一直留着（见 graph/visible.fadedOut）。
+          var ui = uiOf(shared.graph, id)
+          if (ui !== null) ui.viewedAt = shared.turn
           requestViewport(id, 'center')
           publish()
           return engine.source(id)
@@ -1357,6 +1718,10 @@ window.__ModuleLoader__.load({
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var addEdge = __graph_model.addEdge
     var addNode = __graph_model.addNode
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+    var fact = __runtime_debug.fact
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
@@ -1483,9 +1848,22 @@ window.__ModuleLoader__.load({
               // One surviving verbatim read is enough to say the model still knows it.
               record.remembered = record.events.some(function (e) { return e.onSurface })
               record.approx = record.events.every(function (e) { return e.approx })
+              // 把「这次会话改过它」同时写到节点上：edit 的节点一直留在图上，图那一边
+              // 不必每次去翻 trace。也记下最近一次被碰是哪一轮——看过的节点按轮次
+              // 变旧、过期撤下（见 graph/visible.fadedOut）。
+              var ui = uiOf(shared.graph, record.id)
+              if (ui !== null) {
+                if (edited || working) ui.edited = true
+                ui.viewedAt = record.lastTurn
+              }
             })
             shared.trace = byAnchor
             shared.unresolved = Object.keys(unresolved).map(function (k) { return unresolved[k] })
+            note('graph', 'anchors=' + Object.keys(byAnchor).length
+              + ' unresolved=' + shared.unresolved.length + ' graphNodes=' + Object.keys(shared.graph.nodes).length
+              + ' graphEdges=' + shared.graph.edges.length)
+            fact('trace', Object.keys(byAnchor).length)
+            fact('unresolved', shared.unresolved.length)
             // Rank by the seq of the first call that reached each anchor: the
             // order the agent actually walked, which is what the graph is for.
             var firstSeq = {}
@@ -1521,16 +1899,16 @@ window.__ModuleLoader__.load({
             ids.forEach(function (id) {
               if (shared.graph.nodes[id] === undefined) {
                 addNode(shared.graph, byAnchor[id].anchor)
-                shared.graph.nodes[id].island = true
+                uiOf(shared.graph, id).island = true
                 fresh.push(id)
               }
-              shared.graph.nodes[id].session = true
+              uiOf(shared.graph, id).session = true
             })
             if (shared.graph.rootId === null) {
               var newest = ids.map(function (id) { return byAnchor[id] })
                 .sort(function (l, r) { return r.lastTurn - l.lastTurn })[0]
               shared.graph.rootId = newest.id
-              shared.graph.nodes[newest.id].island = false
+              uiOf(shared.graph, newest.id).island = false
               if (shared.selected === null) {
                 shared.selected = newest.id
                 requestViewport(newest.id, 'fit')
@@ -1555,8 +1933,8 @@ window.__ModuleLoader__.load({
               (link.bridges || []).forEach(function (anchor) {
                 if (shared.graph.nodes[anchor.id] === undefined) {
                   addNode(shared.graph, anchor)
-                  shared.graph.nodes[anchor.id].bridge = true
-                  shared.graph.nodes[anchor.id].synthetic = true
+                  uiOf(shared.graph, anchor.id).bridge = true
+                  uiOf(shared.graph, anchor.id).synthetic = true
                 }
               })
               link.edges.forEach(function (e) {
@@ -1567,10 +1945,10 @@ window.__ModuleLoader__.load({
                 var edge = addEdge(shared.graph, e.from, e.to, [e.type])
                 if (edge !== undefined) edge.always = true
                 if (shared.graph.nodes[e.from] !== undefined) {
-                  shared.graph.nodes[e.from].island = false
+                  uiOf(shared.graph, e.from).island = false
                 }
                 if (shared.graph.nodes[e.to] !== undefined) {
-                  shared.graph.nodes[e.to].island = false
+                  uiOf(shared.graph, e.to).island = false
                 }
               })
               publish()
@@ -1580,26 +1958,26 @@ window.__ModuleLoader__.load({
 
           // What the picture is about is what was changed. The edits are the
           // seeds; `chain` pushes each of them out and back and reports the
-          // trees they land in, so a node arrives already knowing its layer
-          // instead of the view having to invent one from file names.
+          // 这里以前调 engine.chain(edits, 1) 让服务端把图分层、把树长出来。
+          //
+          // /chain 已经删了——分层现在由布局自己算（layout/sugiyama 的第 2 步），
+          // 子节点由按关系的展开按钮（/expand、/walk）拉进来。这一次会话 ingest
+          // 只负责把「碰过的 anchor」放上屏幕并连上它们之间的边，够布局画第一版。
+          //
+          // 留着这个调用的话，engine.chain 不存在会当场抛错，整张图建不出来——
+          // 表现就是「面板说还没有起点」，而画布空白。
           var grow = function () {
-            var edits = Object.keys(shared.trace || {}).filter(function (id) {
-              var record = shared.trace[id]
-              var node = shared.graph.nodes[id]
-              return (record.state === 'edited' || record.state === 'working')
-                && node !== undefined && node.synthetic !== true && node.bridge !== true
-            })
-            // Nothing was edited yet — a session that has only read so far still
-            // deserves a picture, so the reads stand in as seeds.
-            if (edits.length === 0) {
-              edits = Object.keys(shared.trace || {}).filter(function (id) {
-                var node = shared.graph.nodes[id]
-                return node !== undefined && node.synthetic !== true && node.bridge !== true
-              })
-            }
-            return engine.chain(edits, 1)
+            fact('graphNodes', Object.keys(shared.graph.nodes).length)
+            fact('graphEdges', shared.graph.edges.length)
+            fact('root', shared.graph.rootId === null ? 'null' : String(shared.graph.rootId).split('::').pop())
+            note('graph', '图就绪 nodes=' + Object.keys(shared.graph.nodes).length
+              + ' edges=' + shared.graph.edges.length + ' root=' + shared.graph.rootId)
+            publish()
+            return Promise.resolve()
           }
 
+          note('graph', 'ingest calls=' + snap.calls.length + ' pending=' + pending.length
+            + ' resolved=' + Object.keys(shared.resolved).length)
           if (window.__cddLens !== undefined) window.__cddLens.pending = pending.length
           if (pending.length === 0) { after(); return Promise.resolve() }
           return fetch(ROUTE + '/resolve?' + new URLSearchParams(params()).toString(), {
@@ -1634,6 +2012,8 @@ window.__ModuleLoader__.load({
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
     var shared = __state_store.shared
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     // Must match the .cddl-gathering transition in styles/graph.js — the CSS
     // owns how the flight looks, this owns how long the class stays on.
@@ -1674,7 +2054,8 @@ window.__ModuleLoader__.load({
       return {
         gather: function (id) {
           var node = shared.graph.nodes[id]
-          if (node === undefined) return Promise.resolve()
+          var ui = uiOf(shared.graph, id)
+          if (node === undefined || ui === null) return Promise.resolve()
           if (shared.gather !== null && shared.gather !== undefined && shared.gather.focus === id) {
             return Promise.resolve()
           }
@@ -1684,12 +2065,22 @@ window.__ModuleLoader__.load({
           stampFlight()
           publish()
           var loads = []
-          var anchor = node.anchor || {}
+          // node 就是 anchor：`up`/`down` 是索引给的计数，直接读。
           // `auto=true`：拉邻居，但不碰按钮状态。选中一个节点不等于替用户按了
           // 上下键——以前它直接写 node.up/node.down，于是你点中节点时两个按钮
           // 已经是"收起"态，你按的第一下其实是在收起来。
-          if (node.up !== true && node.autoUp !== true && anchor.up !== 0) loads.push(engine.expand(id, 'up', true))
-          if (node.down !== true && node.autoDown !== true && anchor.down !== 0) loads.push(engine.expand(id, 'down', true))
+          // 有哪几个关系就自动拉哪几个；只拉 call，避免选中一个节点就把
+          // dataflow / inherit 的邻居全倒进来（那是用户按按钮才该发生的事）。
+          var counts = node.peerCounts || {}
+          var call = counts.call
+          if (call !== undefined) {
+            if (ui.open['up:call'] !== true && ui.open['autoup:call'] !== true && call.up > 0) {
+              loads.push(engine.expand(id, 'up', true, 'call'))
+            }
+            if (ui.open['down:call'] !== true && ui.open['autodown:call'] !== true && call.down > 0) {
+              loads.push(engine.expand(id, 'down', true, 'call'))
+            }
+          }
           if (loads.length === 0) return Promise.resolve()
           return Promise.all(loads).then(function () {
             // The selection may have moved on while the neighbours loaded;
@@ -2026,6 +2417,8 @@ window.__ModuleLoader__.load({
     var short = __view_record.short
     var stateOf = __view_record.stateOf
     var turnLabel = __view_record.turnLabel
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     // ---- the vertical tree (floating panel) --------------------------------
 
@@ -2049,23 +2442,30 @@ window.__ModuleLoader__.load({
         if (seen[id] || !shown[id]) return
         seen[id] = true
         var node = graph.nodes[id]
+        var ui = uiOf(graph, id) || {}
         if (node === undefined) return
         // Callers of an expanded node render ABOVE it at the same depth,
         // whichever direction the walk arrived from. Gating this on the arrival
         // direction meant pressing ↑ on anything below the root added the nodes
         // and drew none of them — the button looked dead.
-        if (node.up) {
+        var openUp = Object.keys(ui.open).some(function (k) {
+          return k.indexOf('up:') === 0 && ui.open[k] === true
+        })
+        if (openUp) {
           graph.edges.forEach(function (e) {
             if (e.to === id) walk(e.from, depth, 'up')
           })
         }
         rows.push({ id: id, depth: depth, node: node })
-        if (node.members && node.memberList !== undefined) {
-          node.memberList.forEach(function (member) {
+        if (ui.members && ui.memberList !== undefined) {
+          ui.memberList.forEach(function (member) {
             rows.push({ id: member.id, depth: depth + 1, member: true, anchor: member })
           })
         }
-        if (node.down) {
+        var openDown = Object.keys(ui.open).some(function (k) {
+          return k.indexOf('down:') === 0 && ui.open[k] === true
+        })
+        if (openDown) {
           graph.edges.forEach(function (e) {
             if (e.from === id) walk(e.to, depth + 1, 'down')
           })
@@ -2105,15 +2505,16 @@ window.__ModuleLoader__.load({
           h('i', { key: 'l' }), '碰过但代码里没有边 · 不连', h('i', { key: 'r' }),
         ])
       }
-      var anchor = row.member ? row.anchor : row.node.anchor
+      var anchor = row.member ? row.anchor : row.node
       var record = stateOf(row.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === row.id
-      var synthetic = row.node !== undefined && (row.node.synthetic === true || row.node.bridge === true)
+      var ui = row.node !== undefined ? (uiOf(shared.graph, row.id) || {}) : {}
+      var synthetic = row.node !== undefined && (ui.synthetic === true || ui.bridge === true)
       var cls = 'cddl-node'
         + (selected ? ' cddl-sel' : '')
         + (faded ? ' cddl-faded' : '')
-        + (row.node !== undefined && row.node.bridge === true ? ' cddl-bridge' : '')
+        + (row.node !== undefined && ui.bridge === true ? ' cddl-bridge' : '')
         + (row.islandRow ? ' cddl-island' : '')
 
       var kids = [
@@ -2123,7 +2524,7 @@ window.__ModuleLoader__.load({
         kids.push(h('button', {
           key: 't', className: 'cddl-twist', title: anchor.members + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(row.id) },
-        }, row.node.members ? '▾' : '▸'))
+        }, ui.members ? '▾' : '▸'))
       } else {
         kids.push(h('span', { key: 't', className: 'cddl-twist' }, row.member ? '·' : ''))
       }
@@ -2136,7 +2537,7 @@ window.__ModuleLoader__.load({
       if (!row.member && !synthetic && anchor.members > 0) {
         kids.push(h('span', { key: 'k', className: 'cddl-kind' }, '类 ' + anchor.members))
       }
-      if (row.node !== undefined && row.node.bridge === true) {
+      if (row.node !== undefined && ui.bridge === true) {
         kids.push(h('span', {
           key: 'br', className: 'cddl-kind cddl-bridgetag',
           title: 'agent 没打开过它。它出现在这里，是因为代码里它把上下两个碰过的 anchor 连起来了。',
@@ -2145,40 +2546,46 @@ window.__ModuleLoader__.load({
       var badge = turnLabel(record)
       if (badge !== null) kids.push(React.cloneElement(badge, { key: 'b' }))
       if (faded) kids.push(h('span', { key: 'f', className: 'cddl-kind' }, '压缩'))
-      var hop = function (dir, count, label) {
-        var disabled = count === 0 || synthetic
-        // A zero count is a fact about the index, not a button. Leaving it
-        // clickable makes every press look broken; disabling it says the index
-        // has no such edge, which is the actual answer.
+      var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+      var hop = function (direction, rel, count) {
+        var slot = direction + ':' + rel
+        var open = ui.open[slot] === true
+        // 桥接点不许继续展开：它是布局借来的中间点，不是 agent 打开过的 anchor。
+        var disabled = synthetic
         return h('button', {
-          key: dir,
+          key: slot,
           disabled: disabled,
+          'data-relation': rel,
+          'data-count': count,
           title: synthetic
             ? '桥接节点只解释连接，不继续展开'
-            : count === 0
-            ? (dir === 'u' ? '索引里没有谁用它' : '索引里它没用任何东西')
-            : ((row.node && row.node[dir === 'u' ? 'up' : 'down'] ? '收起' : '展开')
-              + (dir === 'u' ? '：谁在用它（' : '：它在用谁（') + count + '）'),
-          className: (row.node && row.node[dir === 'u' ? 'up' : 'down'] ? 'on' : '')
-            + (disabled ? ' cddl-off' : ''),
+            : ((open ? '收起' : '展开') + (direction === 'up' ? '：谁在用它（' : '：它在用谁（') + count + '）'
+              + ' · ' + rel + '\n按住 Shift 点：一路展开到底'),
+          className: 'cddl-rel-' + rel + (open ? ' on' : '') + (disabled ? ' cddl-off' : ''),
           onClick: function (e) {
             e.stopPropagation()
             if (disabled) return
-            var direction = dir === 'u' ? 'up' : 'down'
-            if (row.node && row.node[direction]) engine.collapse(row.id, direction)
-            else engine.expand(row.id, direction)
+            if (open) { engine.collapse(row.id, direction, rel); return }
+            if (e.shiftKey) engine.walk(row.id, direction, rel, 4)
+            else engine.expand(row.id, direction, null, rel)
           },
-        }, label + count)
+        }, (direction === 'up' ? '↑' : '↓') + count)
       }
-      kids.push(h('span', { key: 'h', className: 'cddl-hop' }, [
-        hop('u', anchor.up, '↑'),
-        hop('d', anchor.down, '↓'),
+      var hopButtons = []
+      REL_ORDER.forEach(function (rel) {
+        var c = (anchor.peerCounts || {})[rel]
+        // 没有数据的关系不出现——不画箭头、不写 0。
+        if (c === undefined) return
+        if (c.up > 0) hopButtons.push(hop('up', rel, c.up))
+        if (c.down > 0) hopButtons.push(hop('down', rel, c.down))
+      })
+      kids.push(h('span', { key: 'h', className: 'cddl-hop' }, hopButtons.concat([
         h('button', {
           key: 'p', title: '固定',
-          className: row.node && row.node.pinned ? 'on' : '',
+          className: ui.pinned ? 'on' : '',
           onClick: function (e) { e.stopPropagation(); engine.pin(row.id) },
-        }, row.node && row.node.pinned ? '●' : '○'),
-      ]))
+        }, ui.pinned ? '●' : '○'),
+      ])))
 
       return h('div', {
         className: cls,
@@ -2197,7 +2604,7 @@ window.__ModuleLoader__.load({
       var lastFile = null
       rows.forEach(function (row, i) {
         if (row.gap) { out.push(h(TreeRow, { key: 'gap' + i, row: row, engine: engine })); lastFile = null; return }
-        var anchor = row.member ? row.anchor : row.node.anchor
+        var anchor = row.member ? row.anchor : row.node
         if (anchor.file !== lastFile) {
           lastFile = anchor.file
           out.push(h('div', {
@@ -2429,15 +2836,36 @@ window.__ModuleLoader__.load({
 
     // ---- source ------------------------------------------------------------
 
+    function sourceLineCount(source) {
+      if (source === null || source === undefined) return 0
+      if (Number.isFinite(source.lineCount)) return source.lineCount
+      return Math.max(0, Number(source.end) - Number(source.start) + 1)
+    }
+
+    function SourceMissing(props) {
+      return h('div', { className: 'cddl-src' }, [
+        h('div', { key: 'h', className: 'cddl-srch' }, [
+          h('span', { key: 't' }, props.id + ' · 源码范围读不出来'),
+          h('button', {
+            key: 'x', className: 'cddl-src-close', title: '关闭源码详情',
+            onClick: function () { props.engine.blur() },
+          }, '×'),
+        ]),
+      ])
+    }
+
     function Source(props) {
       var id = shared.selected
       if (id === null || id === undefined) return null
       var source = (shared.sourceCache || {})[id]
       var node = shared.graph.nodes[id]
-      var anchor = node !== undefined ? node.anchor : null
+      var record = stateOf(id)
+      var anchor = node !== undefined ? node : (record && record.anchor ? record.anchor : null)
       if (source === undefined) {
         return h('div', { className: 'cddl-src' }, h('div', { className: 'cddl-srch' }, '读源码…'))
       }
+      if (source === null || source.lines === undefined) return h(SourceMissing, { id: id, engine: props.engine })
+      var count = sourceLineCount(source)
       var lines = source.lines.map(function (text, i) {
         var no = source.from + i
         var inside = no >= source.start && no <= source.end
@@ -2448,13 +2876,19 @@ window.__ModuleLoader__.load({
       })
       return h('div', { className: 'cddl-src' }, [
         h('div', { className: 'cddl-srch', key: 'h' }, [
-          h('span', { key: 't' }, source.file + ' · ' + (anchor ? anchor.symbol : '') + ' · ' + source.start + '–' + source.end),
+          h('span', { key: 't' }, source.file + ' · ' + (anchor ? anchor.symbol : '') + ' · ' + source.start + '–' + source.end + ' · ' + count + ' 行'),
           h('button', {
             key: 'x', className: 'cddl-src-close', title: '关闭源码详情',
             onClick: function () { props.engine.blur() },
           }, '×'),
         ]),
-        h('pre', { key: 'p' }, lines),
+        h('pre', {
+          key: 'p',
+          'data-cdd-source-id': source.id || id,
+          'data-cdd-source-start': source.start,
+          'data-cdd-source-end': source.end,
+          'data-cdd-source-lines': count,
+        }, lines),
       ])
     }
 
@@ -2518,13 +2952,6 @@ window.__ModuleLoader__.load({
         h('b', { key: 'v' }, [h('i', { key: 'd', className: 'cddl-dot cddl-v' }), '看过']),
         h('b', { key: 'e' }, [h('i', { key: 'd', className: 'cddl-dot cddl-e' }), '改过']),
         h('b', { key: 'w' }, [h('i', { key: 'd', className: 'cddl-dot cddl-w' }), '正在改']),
-        h('b', { key: 'call' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-call' }), 'call']),
-        h('b', { key: 'data' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-dataflow' }), 'dataflow']),
-        h('b', { key: 'inherit' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-inherit' }), 'inherit']),
-        h('b', { key: 'impact' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-impact' }), 'impact']),
-        h('b', { key: 'dispatch' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-dispatch' }), 'dispatch']),
-        h('b', { key: 'plus', className: 'cddl-action-help cddl-action-help-plus' }, '＋N 显示 N 个下游'),
-        h('b', { key: 'minus', className: 'cddl-action-help cddl-action-help-minus' }, '−N 隐藏 N 个下游'),
         h('b', { key: 'f', style: { opacity: .45 } }, '变淡 = 被 compaction 压缩，模型记不清了'),
       ])
     }
@@ -2652,17 +3079,23 @@ window.__ModuleLoader__.load({
     var dotClass = __view_record.dotClass
     var stateOf = __view_record.stateOf
     var turnLabel = __view_record.turnLabel
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
 
     function GraphNode(props) {
       var engine = props.engine
       var p = props.p
       var zoom = props.zoom || 1
       var drag = useRef(null)
-      var anchor = p.node.anchor
+      // node 就是 anchor：不用再走 `.anchor` 那一跳。
+      var anchor = p.node
+      var ui = uiOf(shared.graph, p.id) || {}
       var record = stateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
-      var synthetic = p.node.synthetic === true || p.node.bridge === true || anchor.hidden === true
+      var synthetic = ui.synthetic === true || ui.bridge === true || anchor.hidden === true
       var isClass = !synthetic && (anchor.kind === 'class' || anchor.members > 0)
       // A class and a function are two different things, and the card has to say
       // so in colour rather than in a 1.5px border nobody can see. `kind` rides
@@ -2678,17 +3111,60 @@ window.__ModuleLoader__.load({
           key: 'c', className: 'cddl-count',
           title: anchor.members + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(p.id) },
-        }, (p.node.members ? '▾ ' : '▸ ') + anchor.members)
-          : h('span', { key: 'l', className: 'cddl-lines' }, anchor.start + '–' + anchor.end),
+        }, (ui.members ? '▾ ' : '▸ ') + anchor.members)
+          : h('span', { key: 'l', className: 'cddl-lines' }, anchor.line_start + '–' + anchor.line_end),
         isClass ? h('span', { key: 'k', className: 'cddl-kind' }, '类') : null,
       ])
 
-      // Read before the buttons are built, not after. `var` hoisting made
-      // these undefined inside the action row when it moved into the card,
-      // so the button never lit up and its tooltip said the wrong thing
-      // while the expansion itself worked fine.
-      var upOpen = p.node.up === true
-      var downOpen = p.node.down === true
+      // 展开按钮按关系挂：anchor.peerCounts 是 worker 给的
+      //   { call: {up, down}, inherit: {up, down}, … }
+      // 只列出**有数据**的关系——某个关系是 0 就不在这里出现，不画箭头也不写数字。
+      var REL_LABEL = {
+        call: '调用', dataflow: '数据流', inherit: '继承',
+        dispatch: '分派', impact: '影响',
+      }
+      var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+      var counts = anchor.peerCounts || {}
+
+      function hopButton(direction, rel) {
+        var n = counts[rel][direction]
+        var slot = direction + ':' + rel
+        var open = ui.open[slot] === true
+        var arrow = direction === 'up' ? '↑' : '↓'
+        var verb = direction === 'up' ? '谁在用它' : '它在用谁'
+        return h('button', {
+          key: slot,
+          title: REL_LABEL[rel] + ' · ' + verb + '（' + n + '）'
+            + '\n点一下：展开/收起一层'
+            + '\n按住 Shift 点：一路展开到底（链式）',
+          className: 'cddl-action-' + direction + ' cddl-rel-' + rel + (open ? ' on' : ''),
+          'data-action': direction === 'up' ? 'expand-callers' : 'expand-callees',
+          'data-relation': rel,
+          'data-count': n,
+          onClick: function (e) {
+            e.stopPropagation()
+            note('btn', '按下 ' + (direction === 'up' ? '↑' : '↓') + rel
+              + ' count=' + n + (open ? ' [收起]' : '')
+              + ' 节点=' + String(p.id).split('::').pop())
+            if (open) { engine.collapse(p.id, direction, rel); return }
+            if (e.shiftKey) engine.walk(p.id, direction, rel, 4)
+            else engine.expand(p.id, direction, null, rel)
+          },
+        }, [
+          h('span', { key: 'a', className: 'cddl-rel-arrow' }, arrow),
+          h('span', { key: 'n', className: 'cddl-rel-count' }, n),
+          h('span', { key: 'r', className: 'cddl-rel-name' }, rel),
+        ])
+      }
+
+      var hopButtons = []
+      REL_ORDER.forEach(function (rel) {
+        var c = counts[rel]
+        if (c === undefined) return
+        // 上行在左、下行在右，同一关系两个方向挨着，颜色一致。
+        if (c.up > 0) hopButtons.push(hopButton('up', rel))
+        if (c.down > 0) hopButtons.push(hopButton('down', rel))
+      })
 
       var actions = synthetic
         ? h('div', { key: 'h', className: 'cddl-node-actions cddl-node-actions-bridge' }, [
@@ -2698,52 +3174,24 @@ window.__ModuleLoader__.load({
           }, '桥'),
         ])
         :
-        h('div', { key: 'h', className: 'cddl-node-actions' }, [
-          h('button', {
-            key: 'u',
-            title: anchor.up === 0
-              ? '索引里没有谁用它'
-              : (upOpen ? '收起：谁在用它（' + anchor.up + '）' : '展开：谁在用它（' + anchor.up + '）'),
-            disabled: anchor.up === 0,
-            className: 'cddl-action-up' + (upOpen ? ' on' : ''),
-            'data-action': 'expand-callers',
-            onClick: function (e) {
-              e.stopPropagation()
-              if (upOpen) engine.collapse(p.id, 'up')
-              else engine.expand(p.id, 'up')
-            },
-          }, '↑' + anchor.up),
-          h('button', {
-            key: 'd',
-            title: anchor.down === 0
-              ? '索引里它没用任何东西'
-              : (downOpen ? '收起：它在用谁（' + anchor.down + '）' : '展开：它在用谁（' + anchor.down + '）'),
-            disabled: anchor.down === 0,
-            className: 'cddl-action-down' + (downOpen ? ' on' : ''),
-            'data-action': 'expand-callees',
-            onClick: function (e) {
-              e.stopPropagation()
-              if (downOpen) engine.collapse(p.id, 'down')
-              else engine.expand(p.id, 'down')
-            },
-          }, '↓' + anchor.down),
+        h('div', { key: 'h', className: 'cddl-node-actions' }, hopButtons.concat([
           h('button', {
             key: 'p',
-            title: p.node.pinned
+            title: ui.pinned
               ? '取消固定'
               : (stickyByRecency(p.id)
                 ? '最近碰过，自动保留三轮；点一下改为永久固定'
                 : '固定：折叠上级时也留在图上'),
-            className: 'cddl-action-pin' + (p.node.pinned ? ' on' : (stickyByRecency(p.id) ? ' auto' : '')),
+            className: 'cddl-action-pin' + (ui.pinned ? ' on' : (stickyByRecency(p.id) ? ' auto' : '')),
             'data-action': 'pin-anchor',
             onClick: function (e) { e.stopPropagation(); engine.pin(p.id) },
           }, 'pin'),
-        ])
+        ]))
 
       var members = null
-      if (!synthetic && p.node.members && p.node.memberList !== undefined) {
+      if (!synthetic && ui.members && ui.memberList !== undefined) {
         members = h('div', { className: 'cddl-members', key: 'm' },
-          p.node.memberList.map(function (member) {
+          ui.memberList.map(function (member) {
             var mrec = stateOf(member.id)
             return h('div', {
               key: member.id,
@@ -2757,27 +3205,32 @@ window.__ModuleLoader__.load({
               turnLabel(mrec) === null ? null : React.cloneElement(turnLabel(mrec), { key: 'b' }),
               h('span', { key: 'l', className: 'cddl-lines' }, member.start + '–' + member.end),
             ])
-          }).concat([h('div', { key: 'more', className: 'cddl-more' }, '共 ' + p.node.memberList.length + ' 个方法')]))
+          }).concat([h('div', { key: 'more', className: 'cddl-more' }, '共 ' + ui.memberList.length + ' 个方法')]))
       }
 
-      // The same card is used twice: positioned on the canvas, and standing in
-      // the flow of the stream rail. Only where it sits differs, so only that
-      // is switched — a second component would drift from this one.
+      // 同一张卡片用在两处：画布上定位的，和轨迹栏里顺着流排的。只有位置不同，
+      // 所以只切这一个标记——另写一个组件迟早会和这个跑偏。
       var flow = props.flow === true
+      // 出入口各一个小圈：**入在左、出在右，不同口**。线从左边的小圈进、
+      // 从右边的小圈出，两头都停在圈上——线必须明显连到圈上，不许悬空。
+      //
+      // 以前这里是 24×20 的方块角标，里面写「入」「出」两个字，而且入出可以
+      // 落在同一条边（role='both'）上；那样两个方向挤在一个口，看不出谁进谁出。
       var vertical = p.flowAxis === 'vertical'
-      var ports = p.routingPorts
-      if (!ports || !ports.length) ports = [
-        {side:vertical?'top':'left',in:true,out:false},
-        {side:vertical?'bottom':'right',in:false,out:true},
+      var portViews = [
+        h('span', {
+          key: 'port-in',
+          className: 'cddl-port cddl-port-in' + (vertical ? ' cddl-port-vtop' : ''),
+          'data-port': 'in',
+          title: '关系进入此 Anchor',
+        }),
+        h('span', {
+          key: 'port-out',
+          className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''),
+          'data-port': 'out',
+          title: '关系离开此 Anchor',
+        }),
       ]
-      var portViews = ports.map(function (port) {
-        var role=port.in && port.out?'both':port.in?'in':'out'
-        return h('span', {key:'port-'+port.side,
-          className:'cddl-port cddl-port-'+role+' cddl-port-'+port.side,
-          'data-port':role, 'data-port-side':port.side,
-          title:role==='both'?'此处有进入和离开此 Anchor 的关系':port.in?'关系进入此 Anchor':'关系离开此 Anchor',
-        }, role==='both'?'入出':port.in?'入':'出')
-      })
       return h('div', {
         className: 'cddl-node-shell' + (p.island ? ' cddl-shell-island' : '')
           + (flow ? ' cddl-node-flow' : ''),
@@ -2789,7 +3242,11 @@ window.__ModuleLoader__.load({
         // button that does not light up after it worked is indistinguishable
         // from one that did nothing, and guessing which was costing more than
         // the attribute does.
-        'data-open': (upOpen ? 'up' : '') + (downOpen ? 'down' : '') || 'none',
+        // 有哪些「方向:关系」开着，供外部测试读。以前只报 up/down 两个方向，
+        // 现在每个关系各开各的，所以按 key 全列出来。
+        'data-open': Object.keys(ui.open).filter(function (k) {
+          return ui.open[k] === true && k.indexOf('auto') !== 0
+        }).sort().join(' ') || 'none',
       }, [
         portViews,
         h('div', {
@@ -2799,7 +3256,7 @@ window.__ModuleLoader__.load({
               : (shared.lit.nodes[p.id] === true ? ' cddl-lit' : ' cddl-unlit'))
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
-            + (p.node.island ? ' cddl-island' : '')
+            + (ui.island ? ' cddl-island' : '')
             + (synthetic ? ' cddl-bridge' : '')
             + (isClass ? ' cddl-cls cddl-class' : '')
             + (isFn ? ' cddl-fn' : ''),
@@ -3159,6 +3616,8 @@ window.__ModuleLoader__.load({
     var visible = __graph_visible.visible
     var __layout_camera = require('dsh-cdd-lens/layout/camera')
     var edgeFocusOf = __layout_camera.edgeFocusOf
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     /**
      * What is on screen at all, and which file each anchor belongs to.
@@ -3172,8 +3631,9 @@ window.__ModuleLoader__.load({
       // new file box, while bridge-only implementation details stay hidden.
       var included = graph.order.filter(function (id) {
         var node = graph.nodes[id]
-        return shown[id] && node !== undefined
-          && (node.session || node.explored || node.pinned || id === shared.selected || id === graph.rootId)
+        var ui = uiOf(graph, id)
+        return shown[id] && node !== undefined && ui !== null
+          && (ui.session || ui.explored || ui.pinned || id === shared.selected || id === graph.rootId)
       })
       if (included.length === 0 && graph.nodes[graph.rootId]) included.push(graph.rootId)
       var activeFocus = edgeFocusOf(graph)
@@ -3185,7 +3645,7 @@ window.__ModuleLoader__.load({
       var byFile = {}
       var fileOrder = []
       included.forEach(function (id) {
-        var file = graph.nodes[id].anchor.file
+        var file = graph.nodes[id].file
         if (byFile[file] === undefined) { byFile[file] = []; fileOrder.push(file) }
         byFile[file].push(id)
       })
@@ -3237,7 +3697,7 @@ window.__ModuleLoader__.load({
         nextComponentRank = Math.max.apply(Math, Object.keys(relationRank).map(function (id) { return relationRank[id] })) + 2
       }
       included.filter(function (id) {
-        return graph.nodes[id].anchor.symbol.split && graph.nodes[id].anchor.symbol.split('.').pop() === 'main'
+        return graph.nodes[id].symbol.split && graph.nodes[id].symbol.split('.').pop() === 'main'
       }).forEach(rankFrom)
       rankFrom(graph.rootId)
       included.filter(function (id) { return indegree[id] === 0 }).forEach(rankFrom)
@@ -3256,12 +3716,12 @@ window.__ModuleLoader__.load({
 
       fileOrder.forEach(function (file) {
         byFile[file].sort(function (l, r) {
-          var la = graph.nodes[l].anchor
-          var ra = graph.nodes[r].anchor
+          var la = graph.nodes[l]
+          var ra = graph.nodes[r]
           var lm = la.symbol.split('.').pop() === 'main' ? 0 : 1
           var rm = ra.symbol.split('.').pop() === 'main' ? 0 : 1
           return relationRank[l] - relationRank[r] || lm - rm
-            || (la.start || 0) - (ra.start || 0) || la.symbol.localeCompare(ra.symbol)
+            || (la.line_start || 0) - (ra.line_start || 0) || la.symbol.localeCompare(ra.symbol)
         })
       })
 
@@ -3426,6 +3886,7 @@ window.__ModuleLoader__.load({
       '.cddl-trace-source pre div{display:grid;grid-template-columns:31px minmax(0,1fr);gap:7px}',
       '.cddl-trace-source pre span{text-align:right;color:var(--dsw-alias-label-dimmed);user-select:none}',
       '.cddl-trace-source pre code{white-space:pre;color:var(--dsw-alias-label-secondary)}',
+      '.cddl-trace-missing{padding:7px;color:var(--dsw-alias-label-tertiary);font-size:10px}',
       '.cddl-trace-loading{padding:8px;color:var(--dsw-alias-label-caption);font-size:10px}',
       '.cddl-trace-locate,.cddl-trace-unresolved button{margin-top:6px;border:1px solid var(--dsw-alias-border-l3);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:10px inherit;padding:3px 7px;cursor:pointer}',
       '.cddl-trace-unresolved{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--dsw-alias-label-caption)}',
@@ -3461,17 +3922,24 @@ window.__ModuleLoader__.load({
       '.cddl-node-shell{position:absolute}',
       // Gather flights only. Scoped to the window so panning or dragging a
       // settled drawing never lags; 260ms matches GATHER_MS in engine/gather.
-      '.cddl-gathering .cddl-node-shell{transition:left .26s ease,top .26s ease}',
+      // 节点位移**不做过渡**：线是由布局一次算出来的绝对坐标路径，节点却用
+      // CSS 慢慢飘过去，两边就永远差一截——看着就是「线没锁死在节点上，节点
+      // 挪走了线慢一点」。
+      //
+      // 想两个都动只有一个稳的办法：在 JS 里逐帧把节点和线一起插值。SVG 的
+      // d 属性做 CSS 过渡在不同浏览器上不可靠（命令序列一不一样就跳变），
+      // 而重算布局逐帧画在几百个节点上太贵。所以选择两边都**瞬间到位**：
+      // 同一帧里节点和线一起落地，端点永远钉在端口小圈上。
+      '.cddl-gathering .cddl-node-shell{transition:none}',
       '.cddl-node-flow{position:static;flex:none}',
       '.cddl-node-flow .cddl-port{display:none}',
-      '.cddl-port{position:absolute;top:50%;z-index:4;width:24px;height:20px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;transform:translateY(-50%);border-radius:4px;font:800 10px var(--ds-font-family-code,monospace);background:var(--dsw-alias-bg-layer-3);box-shadow:0 0 0 2px var(--dsw-alias-bg-base)}',
-      '.cddl-port-left{left:-29px}',
-      '.cddl-port-right{right:-29px}',
-      '.cddl-port-top{left:50%;top:-25px;transform:translateX(-50%)}',
-      '.cddl-port-bottom{left:50%;top:auto;bottom:-25px;transform:translateX(-50%)}',
-      '.cddl-port-in{color:var(--dsw-alias-state-business-primary);border:1px solid var(--dsw-alias-state-business-primary)}',
-      '.cddl-port-both{color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l3)}',
-      '.cddl-port-out{color:var(--dsw-alias-state-warn-primary);border:1px solid var(--dsw-alias-state-warn-primary)}',
+      // 出入口的小圈：入在左、出在右，各是一个实心小圆，外面一圈底色把它
+      // 从卡片边上"抠"出来。线两头就停在这个圈上，所以它必须看得见。
+      '.cddl-port{position:absolute;top:50%;z-index:4;width:11px;height:11px;box-sizing:border-box;border-radius:50%;transform:translateY(-50%);box-shadow:0 0 0 2px var(--dsw-alias-bg-layer-2)}',
+      '.cddl-port-in{left:-6px;background:var(--dsw-alias-state-business-primary)}',
+      '.cddl-port-out{right:-6px;background:var(--dsw-alias-state-warn-primary)}',
+      '.cddl-port-vtop{left:50%;top:-6px;transform:translateX(-50%)}',
+      '.cddl-port-vbottom{left:50%;top:auto;bottom:-6px;transform:translateX(-50%)}',
       '.cddl-node-actions{display:flex;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
@@ -3479,6 +3947,19 @@ window.__ModuleLoader__.load({
       '.cddl-node-actions .cddl-action-collapse:not(:disabled){color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-tertiary)}',
       '.cddl-node-actions button:hover:not(:disabled),.cddl-node-actions button.on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}',
       '.cddl-node-actions button:disabled{opacity:.34;cursor:default}',
+      // 展开按钮按关系挂：一个关系一种颜色，箭头、数字、线同色。
+      // 没有数据的关系不出现，所以这里不需要 :disabled 的灰样式。
+      '.cddl-node-actions .cddl-rel-arrow{font-weight:700}',
+      '.cddl-node-actions .cddl-rel-count{margin-left:2px;font-weight:700}',
+      '.cddl-node-actions .cddl-rel-name{margin-left:3px;font-size:8px;opacity:.6;letter-spacing:.02em}',
+      '.cddl-node-actions .cddl-rel-call{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-tertiary)}',
+      '.cddl-node-actions .cddl-rel-dataflow{color:var(--dsw-alias-state-warn-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
+      '.cddl-node-actions .cddl-rel-inherit{color:var(--dsw-alias-label-tertiary);border-color:var(--dsw-alias-border-l3)}',
+      '.cddl-node-actions .cddl-rel-dispatch{color:var(--dsw-alias-state-success-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary) 45%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-call.on{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 22%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-dataflow.on{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 22%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-inherit.on{background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 22%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-dispatch.on{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 22%,transparent)}',
       '.cddl-action-help{font-family:var(--ds-font-family-code,monospace);font-weight:600!important}',
       '.cddl-action-help-plus{color:var(--dsw-alias-state-business-primary)!important}',
       '.cddl-action-help-minus{color:var(--dsw-alias-state-warn-primary)!important}',
@@ -3612,6 +4093,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __layout_cardBox = require('dsh-cdd-lens/layout/cardBox')
     var cardBox = __layout_cardBox.cardBox
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     var SYMBOL_FONT = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace'
     var measurer = null
@@ -3666,7 +4149,7 @@ window.__ModuleLoader__.load({
       included.forEach(function (id) {
         var node = graph.nodes[id]
         if (node === undefined) return
-        var name = shortSymbol(node.anchor.symbol)
+        var name = shortSymbol(node.symbol)
         if (byShort[name] === undefined) byShort[name] = []
         byShort[name].push(id)
       })
@@ -3674,7 +4157,7 @@ window.__ModuleLoader__.load({
       Object.keys(byShort).forEach(function (name) {
         var group = byShort[name]
         group.forEach(function (id) {
-          out[id] = group.length === 1 ? name : graph.nodes[id].anchor.symbol
+          out[id] = group.length === 1 ? name : graph.nodes[id].symbol
         })
       })
       return out
@@ -3708,11 +4191,12 @@ window.__ModuleLoader__.load({
       var BADGES = em(17.3)
       var longest = 0
       included.forEach(function (id) {
-        var anchor = graph.nodes[id].anchor
-        var chars = anchor.symbol.length
+        var node = graph.nodes[id]
+        var chars = node.symbol.length
         if (chars > longest) longest = chars
-        if (graph.nodes[id].memberList !== undefined) {
-          graph.nodes[id].memberList.forEach(function (m) {
+        var ui = uiOf(graph, id)
+        if (ui !== null && ui.memberList !== undefined) {
+          ui.memberList.forEach(function (m) {
             var own = m.symbol.split('.').pop().length + 2
             if (own > longest) longest = own
           })
@@ -3795,7 +4279,8 @@ window.__ModuleLoader__.load({
       var label = labelsFor(graph, included)
       var sizeOf = function (id, widthLimit) {
         var node = graph.nodes[id]
-        var text = label[id] === undefined ? shortSymbol(node.anchor.symbol) : label[id]
+        var ui = uiOf(graph, id) || {}
+        var text = label[id] === undefined ? shortSymbol(node.symbol) : label[id]
         var badge = 46
         var chrome = 22 + 14 + 16
         // Keep one small readability gutter between the symbol and its badges;
@@ -3805,7 +4290,7 @@ window.__ModuleLoader__.load({
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.anchor.kind === 'class' || node.anchor.members > 0 ? 142 : 96
+        var reserved = node.kind === 'class' || node.members > 0 ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
         var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
         var wrapped = (lines - 1) * CARD.symLine
@@ -3818,8 +4303,8 @@ window.__ModuleLoader__.load({
           // was a flat 70 for a plain card that actually draws 55. Every row in
           // every box carried fifteen pixels of slack that nothing was in, and
           // the boxes were that much taller than their contents.
-          h: node.members && node.memberList !== undefined
-            ? CARD_BASE + MEMBERS_CHROME + node.memberList.length * MEMBER_ROW + MORE_ROW + wrapped
+          h: ui.members && ui.memberList !== undefined
+            ? CARD_BASE + MEMBERS_CHROME + ui.memberList.length * MEMBER_ROW + MORE_ROW + wrapped
             : CARD_BASE + wrapped,
         }
       }
@@ -3834,555 +4319,6 @@ window.__ModuleLoader__.load({
     }
 
     module.exports = { boxMetrics, textWidth, shortSymbol, labelsFor }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — One grid of boxes, whatever the boxes are grouped by.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/layout/grid',
-  factory: (require) => {
-    var module = { exports: {} }
-
-    /**
-     * Boxes in rows, anchors down each box.
-     *
-     * The board drawing had this and the layered one did not: equal-width
-     * boxes, as many across as the canvas allows, each row as tall as its
-     * tallest box, a gutter between them for the traces. The layered drawing
-     * packed its own way instead — blocks of varying width shelved left to
-     * right — and the result was a field of cards at irregular spacing that
-     * read as clutter no matter how well the wires were routed.
-     *
-     * So both now come through here. What differs between them is only what a
-     * box means: one file, or one layer of one tree.
-     *
-     * @param graph - source of the node records.
-     * @param groups - ordered [{ key, label, ids }]; one box each.
-     * @param metrics - box metrics.
-     * @returns placed anchors, the boxes around them, the row bands the
-     *   gutters sit between, and how far down the drawing reaches.
-     */
-    function placeGroups(graph, groups, metrics) {
-      var PAD = metrics.PAD
-      var BOX_GAP_X = metrics.BOX_GAP_X
-      var BOX_GAP_Y = metrics.BOX_GAP_Y
-      var BOX_PAD = metrics.BOX_PAD
-      var BOX_HEAD = metrics.BOX_HEAD
-      var BOX_W = metrics.BOX_W
-      var BOX_COLS = metrics.BOX_COLS
-      var INNER_GAP_Y = metrics.INNER_GAP_Y
-      var sizeOf = metrics.sizeOf
-
-      var placed = []
-      var boxes = []
-      var rowBands = []
-      var canvasY = PAD
-
-      // Each box is as wide as the longest name it holds, and every anchor in
-      // it is drawn to that width. Sized one by one they came out ragged: seven
-      // different right edges in one box, and the exit badges that follow those
-      // edges strung out in a zigzag instead of a column. Sized from the longest
-      // name on the whole screen — which is what the board plugin does — a box
-      // of short names is padded out to match some other box's longest.
-      var innerOf = {}
-      groups.forEach(function (group) {
-        innerOf[group.key] = Math.max.apply(Math, group.ids.map(function (id) {
-          return sizeOf(id).w
-        }))
-      })
-      // Spaced by the widest box, so no box can reach into the next column
-      // however long its own names are — and by that alone. Spreading the
-      // columns to the full width of the canvas left two boxes marooned at
-      // opposite edges with a screen of nothing between them; the gutter only
-      // has to hold the exit badge of one column, the entry badge of the next,
-      // and the wire that joins them, which is what LAYER_GAP_X measures.
-      var widest = Math.max.apply(Math, groups.map(function (group) {
-        return innerOf[group.key] + BOX_PAD * 2
-      }))
-      var stride = widest + metrics.LAYER_GAP_X
-
-      for (var start = 0; start < groups.length; start += BOX_COLS) {
-        var inRow = groups.slice(start, start + BOX_COLS)
-        var layouts = inRow.map(function (group, col) {
-          var inner = innerOf[group.key]
-          // One anchor per row. Two columns made every box twice as wide, which
-          // pushed the boxes apart, which made every wire longer — the width
-          // was spent on emptiness and paid for in travel.
-          var height = 0
-          group.ids.forEach(function (id, i) {
-            height += sizeOf(id, inner).h + (i === group.ids.length - 1 ? 0 : INNER_GAP_Y)
-          })
-          return {
-            group: group, inner: inner,
-            x: PAD + col * stride,
-            w: inner + BOX_PAD * 2,
-            h: BOX_HEAD + BOX_PAD + height + BOX_PAD,
-          }
-        })
-        var rowHeight = Math.max.apply(Math, layouts.map(function (box) { return box.h }))
-        layouts.forEach(function (box) {
-          boxes.push({
-            file: box.group.label, key: box.group.key,
-            x: box.x, y: canvasY, w: box.w, h: box.h, count: box.group.ids.length,
-          })
-          var nodeY = canvasY + BOX_HEAD + BOX_PAD
-          box.group.ids.forEach(function (id, localRow) {
-            var size = sizeOf(id, box.inner)
-            var node = graph.nodes[id]
-            placed.push({
-              id: id, node: node, anchor: node.anchor,
-              x: box.x + BOX_PAD, y: nodeY, w: box.inner, h: size.h,
-              rowIndex: start + localRow, innerRow: localRow,
-              file: node.anchor.file, island: false,
-              // Which frame this anchor belongs to, so the frame can follow it.
-              boxKey: box.group.key,
-              layer: node.layer, tree: node.tree,
-              label: metrics.label[id],
-            })
-            nodeY += size.h + INNER_GAP_Y
-          })
-        })
-        rowBands.push({ top: canvasY, bottom: canvasY + rowHeight })
-        canvasY += rowHeight + BOX_GAP_Y
-      }
-
-      return { placed: placed, boxes: boxes, rowBands: rowBands, canvasY: canvasY }
-    }
-
-    module.exports = { placeGroups }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The board skin: what belongs in a box.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/skins/pcb/group',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __layout_grid = require('dsh-cdd-lens/layout/grid')
-    var placeGroups = __layout_grid.placeGroups
-
-    /**
-     * One box per file, in the order the ranking put the files.
-     *
-     * The grid is shared with the layered skin; only this — what a box holds —
-     * is the board skin's own. A file is the unit here because a trace between
-     * two files is the thing worth seeing on a board.
-     */
-    function placeBoxes(graph, scope, metrics) {
-      var byFile = scope.byFile
-      var groups = scope.fileOrder.map(function (file) {
-        return { key: file, label: file, ids: byFile[file] }
-      })
-      var laid = placeGroups(graph, groups, metrics)
-      return {
-        placed: laid.placed, fileBoxes: laid.boxes,
-        rowBands: laid.rowBands, canvasY: laid.canvasY,
-      }
-    }
-
-    module.exports = { placeBoxes }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The layered skin: what belongs in a box.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/skins/tiers/group',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __layout_grid = require('dsh-cdd-lens/layout/grid')
-    var placeGroups = __layout_grid.placeGroups
-
-    /**
-     * Whether this drawing can be laid out by layer at all.
-     *
-     * `/chain` puts a layer on every node it reached. If it has not answered
-     * yet, or answered for a different exploration than the one on screen, the
-     * old file-box placement still has to be able to take over — a half-layered
-     * picture would be worse than either.
-     * @param graph - the graph being drawn.
-     * @param included - the ids that will be drawn.
-     * @returns true when every included node knows its layer.
-     */
-    function tiered(graph, included) {
-      if (included.length === 0) return false
-      return included.every(function (id) {
-        var node = graph.nodes[id]
-        return node !== undefined && typeof node.layer === 'number'
-      })
-    }
-
-    /**
-     * One vertical band per layer, trees stacked in the order `/chain` ranked
-     * them.
-     *
-     * No file boxes. Grouping by file is what turned this view into the
-     * directory listing next to it: a file is where an anchor is stored, not
-     * what it has to do with anything else. The row an anchor sits in is its
-     * distance from the thing that was edited, which is the question the
-     * picture exists to answer.
-     * @param graph - the graph being drawn.
-     * @param scope - what is on screen.
-     * @param metrics - box metrics for this canvas.
-     * @returns placed nodes, the row bands wires travel between, the labelled
-     *   rows, and how far down the drawing reaches.
-     */
-    function placeTiers(graph, scope, metrics) {
-      var included = scope.included
-
-      // One box per layer of one tree — the same grid the board drawing uses,
-      // grouped by a different thing. Packing blocks of varying width onto
-      // shelves instead gave irregular spacing that read as clutter however
-      // well the wires were routed, so there is now one placement and two ways
-      // of deciding what belongs in a box.
-      var bands = {}
-      var order = []
-      included.forEach(function (id) {
-        var node = graph.nodes[id]
-        var tree = typeof node.tree === 'number' ? node.tree : 0
-        var key = tree + ':' + node.layer
-        if (bands[key] === undefined) {
-          bands[key] = { tree: tree, layer: node.layer, ids: [] }
-          order.push(key)
-        }
-        bands[key].ids.push(id)
-      })
-      order.sort(function (l, r) {
-        return bands[l].tree - bands[r].tree || bands[l].layer - bands[r].layer
-      })
-
-      var groups = order.map(function (key) {
-        var band = bands[key]
-        // Anchors the session touched lead their box: they are why the rest of
-        // it is on screen at all.
-        band.ids.sort(function (l, r) {
-          var ln = graph.nodes[l], rn = graph.nodes[r]
-          return (ln.seed === true ? 0 : 1) - (rn.seed === true ? 0 : 1)
-            || ln.anchor.symbol.localeCompare(rn.anchor.symbol)
-        })
-        return {
-          key: key,
-          label: 'T' + (band.tree + 1) + ' · L' + band.layer + ' · ' + band.ids.length,
-          ids: band.ids,
-        }
-      })
-
-      var laid = placeGroups(graph, groups, metrics)
-      return {
-        placed: laid.placed, fileBoxes: laid.boxes, rowBands: laid.rowBands,
-        // The box header carries the layer's name, so there is no separate
-        // row label to draw beside it any more.
-        rows: [], canvasY: laid.canvasY,
-      }
-    }
-
-    module.exports = { tiered, placeTiers }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The flow skin: one column per layer the index assigned.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/skins/flow/group',
-  factory: (require) => {
-    var module = { exports: {} }
-
-    /**
-     * One column per layer, callers left of callees, with the corridor
-     * between two columns reserved for the wires at placement time.
-     *
-     * The layer is not computed here. The host side derives it from the edge
-     * tables — DFS finish order, then longest-path relaxation — and sends it
-     * down on every node as `node.layer` (engine/fetch seats it there), which
-     * is also what the tiers skin reads. Recomputing it client-side from the
-     * edges that happen to be visible answered a different question: how the
-     * drawing is wired, not how deep into the data a node sits.
-     *
-     * A node without a layer — or with no edge on screen at all, which is the
-     * shape an island arrives in — shares one trailing column rather than
-     * forcing the whole drawing to fall back. The corridor between two columns
-     * is metrics.LAYER_GAP_X wide, reserved at placement time the way elk's
-     * layered layout reserves it: room for an exit badge, an entry badge, and
-     * the lanes between them. skins/flow/route is written against that
-     * reservation.
-     *
-     * @param graph - the graph being drawn.
-     * @param scope - what is on screen.
-     * @param metrics - box metrics for this canvas.
-     * @returns placed nodes, one labelled frame per column, and how far down
-     *   the drawing reaches — the same shape the other two skins return.
-     */
-    function placeFlow(graph, scope, metrics) {
-      var included = scope.included
-      var PAD = metrics.PAD
-      var NODE_W = metrics.NODE_W
-      var LAYER_GAP_X = metrics.LAYER_GAP_X
-      var BOX_PAD = metrics.BOX_PAD
-      var BOX_HEAD = metrics.BOX_HEAD
-      var INNER_GAP_Y = metrics.INNER_GAP_Y
-      var sizeOf = metrics.sizeOf
-      // A shallow margin above the columns so a wire crossing a column over
-      // its first node has room that belongs to no node.
-      var TOP_BAND = BOX_HEAD
-
-      // Which nodes carry a layer at all — the same typeof check the layered
-      // skin's `tiered` makes — and which of those the visible edges actually
-      // touch. A node with neither goes to the trailing column.
-      var includedSet = {}
-      included.forEach(function (id) { includedSet[id] = true })
-      var linked = {}
-      graph.edges.forEach(function (edge) {
-        if (includedSet[edge.from]) linked[edge.from] = true
-        if (includedSet[edge.to]) linked[edge.to] = true
-      })
-      var seated = {}
-      var maxLayer = -1
-      included.forEach(function (id) {
-        var node = graph.nodes[id]
-        if (typeof node.layer !== 'number' || linked[id] !== true) return
-        seated[id] = true
-        if (node.layer > maxLayer) maxLayer = node.layer
-      })
-      var restLayer = maxLayer + 1
-      var flowLayerOf = function (id) {
-        return seated[id] === true ? graph.nodes[id].layer : restLayer
-      }
-
-      var byLayer = {}
-      var columns = []
-      included.forEach(function (id) {
-        var L = flowLayerOf(id)
-        if (byLayer[L] === undefined) { byLayer[L] = []; columns.push(L) }
-        byLayer[L].push(id)
-      })
-      columns.sort(function (l, r) { return l - r })
-      var colIndex = {}
-      columns.forEach(function (L, i) { colIndex[L] = i })
-
-      // One chain's nodes keep together: tree first, then the name. The
-      // trailing column holds whatever the layering did not seat, in plain
-      // symbol order — and stays in it; nothing routes to it, so ordering it
-      // by wires would be noise.
-      columns.forEach(function (L) {
-        byLayer[L].sort(function (l, r) {
-          var ln = graph.nodes[l]
-          var rn = graph.nodes[r]
-          var lt = L === restLayer ? 0 : (typeof ln.tree === 'number' ? ln.tree : 0)
-          var rt = L === restLayer ? 0 : (typeof rn.tree === 'number' ? rn.tree : 0)
-          return lt - rt || ln.anchor.symbol.localeCompare(rn.anchor.symbol)
-        })
-      })
-
-      var size = {}
-      included.forEach(function (id) { size[id] = sizeOf(id) })
-
-      // ---- barycenter sweep -------------------------------------------------
-      //
-      // The order inside a column decides how often the wires cross: the
-      // corridor router gives every wire its own lane, but a lane change still
-      // costs a bend, and a fan of inverted pairs crosses however it is laned.
-      // Which is to say the wiring has to participate in the placement — the
-      // thing dagre and elk's layered layout both do and this column order did
-      // not. So after the data order above, each column is re-sorted by where
-      // its neighbours in the adjacent columns actually stand: a node sinks or
-      // rises to the mean height of the anchors its edges lead to and come
-      // from. A node with no edge into a neighbouring column, and any tie,
-      // keeps the seat it had — the sweep may settle the picture, never
-      // shuffle it.
-      var adj = {}
-      included.forEach(function (id) { adj[id] = [] })
-      graph.edges.forEach(function (edge) {
-        if (!includedSet[edge.from] || !includedSet[edge.to]) return
-        if (Math.abs(colIndex[flowLayerOf(edge.from)] - colIndex[flowLayerOf(edge.to)]) !== 1) return
-        adj[edge.from].push(edge.to)
-        adj[edge.to].push(edge.from)
-      })
-      var yOf = {}
-      var layColumn = function (ids) {
-        var y = PAD + TOP_BAND
-        ids.forEach(function (id) {
-          yOf[id] = y
-          y += size[id].h + INNER_GAP_Y
-        })
-      }
-      columns.forEach(function (L) { layColumn(byLayer[L]) })
-      var sweepColumn = function (L) {
-        if (L === restLayer) return
-        var keyed = byLayer[L].map(function (id, at) {
-          var ns = adj[id]
-          var key = yOf[id] + size[id].h / 2
-          if (ns.length > 0) {
-            var sum = 0
-            ns.forEach(function (n) { sum += yOf[n] + size[n].h / 2 })
-            key = sum / ns.length
-          }
-          return { id: id, key: key, at: at }
-        })
-        keyed.sort(function (l, r) { return l.key - r.key || l.at - r.at })
-        byLayer[L] = keyed.map(function (k) { return k.id })
-        layColumn(byLayer[L])
-      }
-      // One direction at a time, each column seated before the next is read.
-      // Sweeping every column from one shared snapshot settles nothing: both
-      // sides of a crossed fan flip together and the crossings survive the
-      // flip. Left to right and back is one round; two rounds settle the fans
-      // this drawing actually grows.
-      var SWEEPS = 2
-      for (var sweep = 0; sweep < SWEEPS; sweep += 1) {
-        columns.forEach(sweepColumn)
-        columns.slice().reverse().forEach(sweepColumn)
-      }
-
-      var placed = []
-      var boxes = []
-      var canvasY = PAD
-      columns.forEach(function (L) {
-        var ids = byLayer[L]
-        var col = colIndex[L]
-        var x = PAD + col * (NODE_W + LAYER_GAP_X)
-        var y = PAD + TOP_BAND
-        ids.forEach(function (id, row) {
-          var node = graph.nodes[id]
-          placed.push({
-            id: id, node: node, anchor: node.anchor,
-            // One width for every node, whatever its name measures at: equal
-            // cells are what keep the corridors between the columns straight,
-            // and the corridors are what the router promises are empty.
-            x: x, y: y, w: NODE_W, h: size[id].h,
-            rowIndex: row, innerRow: row,
-            file: node.anchor.file, island: L === restLayer,
-            // Which frame this anchor belongs to, so the frame can follow it.
-            boxKey: 'L' + L,
-            layer: node.layer, tree: node.tree,
-            // The column this skin put it in. The router reads this rather
-            // than the x coordinate, which a dragged node no longer agrees
-            // with.
-            flowLayer: L,
-            label: metrics.label[id],
-          })
-          y += size[id].h + INNER_GAP_Y
-        })
-        boxes.push({
-          file: L === restLayer ? '未入链 · ' + ids.length : 'L' + L + ' · ' + ids.length,
-          key: 'L' + L,
-          // Marked, so the canvas can draw a column guide rather than a box:
-          // the flow frame is a reading aid, not a container.
-          frame: 'flow',
-          x: x - BOX_PAD, y: PAD + TOP_BAND - BOX_HEAD,
-          w: NODE_W + BOX_PAD * 2,
-          h: (y - INNER_GAP_Y) - (PAD + TOP_BAND) + BOX_HEAD + BOX_PAD,
-          count: ids.length,
-        })
-        var bottom = y - INNER_GAP_Y + BOX_PAD
-        if (bottom > canvasY) canvasY = bottom
-      })
-
-      // No rowBands: the channels this skin routes through run between the
-      // columns, and layout/channels derives horizontal bands from rows this
-      // drawing does not have.
-      return { placed: placed, fileBoxes: boxes, rowBands: [], rows: [], canvasY: canvasY }
-    }
-
-    module.exports = { placeFlow }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Corridors between the boxes.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/layout/channels',
-  factory: (require) => {
-    var module = { exports: {} }
-
-    /**
-     * The gaps between box rows and columns, which is where wires travel.
-     */
-    function buildChannels(place, metrics) {
-      var rowBands = place.rowBands
-      var PAD = metrics.PAD
-      var BOX_GAP_X = metrics.BOX_GAP_X
-      var BOX_GAP_Y = metrics.BOX_GAP_Y
-      var BOX_W = metrics.BOX_W
-      var BOX_COLS = metrics.BOX_COLS
-
-      // ---- channels --------------------------------------------------------
-      //
-      // A wire that cuts through a file box reads as if it connects to that
-      // box's anchors. Measured on this graph, 57 of 123 segments crossed a box
-      // they had nothing to do with — 46% of the drawing was lying about what
-      // is related to what, and no amount of colour fixes that because the line
-      // is genuinely on top of those nodes.
-      //
-      // So cross-box wires are confined to the gaps: a horizontal channel is the
-      // space between two box rows, a vertical channel the space between two box
-      // columns. A wire leaves its own box, travels only in channels, and enters
-      // the target box. Inside a box you then see only that box's own wires.
-      var hChannels = []
-      for (var band = 0; band <= rowBands.length; band += 1) {
-        if (band === 0) hChannels.push(rowBands.length === 0 ? PAD : rowBands[0].top - BOX_GAP_Y / 2)
-        else hChannels.push(rowBands[band - 1].bottom + BOX_GAP_Y / 2)
-      }
-      var vChannels = []
-      for (var col = 0; col <= BOX_COLS; col += 1) {
-        vChannels.push(PAD + col * (BOX_W + BOX_GAP_X) - BOX_GAP_X / 2)
-      }
-      var nearest = function (list, value) {
-        var best = list[0]
-        for (var i = 1; i < list.length; i += 1) {
-          if (Math.abs(list[i] - value) < Math.abs(best - value)) best = list[i]
-        }
-        return best
-      }
-      /**
-       * Where a wire leaves a node sideways, and the node-free lane it lands in.
-       *
-       * The box's interior is two node columns with a gap between them and a
-       * padding margin on each side; none of those three strips contains a
-       * node, so a vertical run inside one of them cannot pass beneath an
-       * anchor. The side is chosen by which way the wire is heading.
-       */
-      var innerLane = function (p, box, towards) {
-        var leftward = towards < p.x + p.w / 2
-        var port = leftward ? p.x : p.x + p.w
-        var lane = leftward
-          ? Math.max(box.x + 7, p.x - 10)
-          : Math.min(box.x + box.w - 7, p.x + p.w + 10)
-        return { port: port, lane: lane }
-      }
-
-      /** The channel just outside a box on the side facing `towards`. */
-      var exitChannel = function (box, towards) {
-        var below = towards > box.y + box.h / 2
-        return nearest(hChannels, below ? box.y + box.h + BOX_GAP_Y / 2 : box.y - BOX_GAP_Y / 2)
-      }
-
-      return { hChannels: hChannels, vChannels: vChannels, nearest: nearest,
-        innerLane: innerLane, exitChannel: exitChannel }
-    }
-
-    module.exports = { buildChannels }
     return module.exports
   },
 })
@@ -4468,6 +4404,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     /**
      * Which relations get a wire: a trunk by default, the rest on demand.
@@ -4492,9 +4430,22 @@ window.__ModuleLoader__.load({
       // ones. This is the flyline idea from board layout, where the same
       // problem has the same answer — except a router must connect every net
       // and we may simply not draw one.
+      // 一条边算不算「打开」：这条边自己的关系类型对应的那个按钮开没开。
+      // 展开状态按「方向:关系」存（ui.open['down:call']），所以必须看边的类型，
+      // 不能只看方向——点开 call 的 ↓ 不该把 inherit 的边也点亮。
+      var opened = function (ui, prefix, types) {
+        if (ui === null || ui === undefined || ui.open === undefined) return false
+        return types.some(function (t) {
+          return ui.open[prefix + ':' + t] === true
+        })
+      }
       var drawable = graph.edges.filter(function (e) {
-        return byId[e.from] !== undefined && byId[e.to] !== undefined
-          && (activeFocus !== null || e.always || graph.nodes[e.from].down || graph.nodes[e.to].up)
+        var fromUI = uiOf(graph, e.from)
+        var toUI = uiOf(graph, e.to)
+        if (byId[e.from] === undefined || byId[e.to] === undefined) return false
+        if (activeFocus !== null || e.always) return true
+        var types = e.types || ['call']
+        return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
       })
       var chosen = drawable
       var hiddenCount = 0
@@ -4554,504 +4505,94 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — Orthogonal routing through the channels.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/ortho',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __view_record = require('dsh-cdd-lens/view/record')
-    var stateOf = __view_record.stateOf
-
-    /**
-     * Wires as a schematic: out of a box, along channels, into the target.
-     */
-    function routeOrtho(edges, orient, relationFilter, channels, metrics) {
-      var chosen = edges.chosen
-      var byId = orient.byId
-      var boxOf = orient.boxOf
-      var vChannels = channels.vChannels
-      var nearest = channels.nearest
-      var innerLane = channels.innerLane
-      var exitChannel = channels.exitChannel
-
-      // ---- wires, drawn the way a schematic is -----------------------------
-      //
-      // Five rules, all of them things a circuit diagram settled long ago:
-      //
-      //   * a wire never runs under a module — it uses the channels between
-      //     boxes, so a line inside a box always belongs to that box;
-      //   * two wires travelling the same corridor get their own lane, because
-      //     drawn on top of each other they read as one wire;
-      //   * a crossing is drawn as a hop, so "crosses" and "joins" stop looking
-      //     the same;
-      //   * a real junction gets a filled dot, for the same reason;
-      //   * direction markers repeat along the path, because on a long wire with
-      //     four bends a single arrowhead at the far end tells you nothing about
-      //     the middle.
-      //
-      // Points are shared objects between neighbouring segments, so nudging a
-      // segment into its lane simply lengthens or shortens the two segments it
-      // joins — the polyline stays connected with no extra bookkeeping.
-      //
-      // One spacing for every skin: these used to be written here as pixels,
-      // and the flow skin carried its own copy, so a type-size change would
-      // have had to find them all. They live in layout/metrics now.
-      var LANE_STEP = metrics.LANE_STEP
-      var HOP = metrics.WIRE_HOP
-      var CORRIDOR_MIN = metrics.CORRIDOR_MIN
-      // One spacing for both skins. This module carried its own 68 while the
-      // layered one used 84, so the same wire got a different arrow density
-      // depending on which drawing you were looking at.
-      var ARROW_EVERY = metrics.ARROW_EVERY
-
-      var polylines = []
-      chosen.forEach(function (e) {
-        var a = byId[e.from]
-        var b = byId[e.to]
-        var types = e.types.filter(function (type) {
-          return relationFilter === undefined || relationFilter[type] !== false
-        })
-        types.forEach(function (type) {
-          var pts
-          if (a.file === b.file && a.innerRow === b.innerRow) {
-            // Neighbours on one row inside one box: a short dogleg, all of it
-            // inside the box it belongs to.
-            var forward = a.x <= b.x
-            var sx = forward ? a.x + a.w : a.x
-            var sy = a.y + a.h / 2
-            var tx = forward ? b.x : b.x + b.w
-            var ty = b.y + b.h / 2
-            var midX = sx + (tx - sx) / 2
-            pts = [{ x: sx, y: sy }, { x: midX, y: sy }, { x: midX, y: ty }, { x: tx, y: ty }]
-          } else if (a.file === b.file && boxOf[a.file] !== undefined) {
-            // Same file, different rows. With one anchor per row this is now the
-            // common case, and routing it through the channels OUTSIDE the box
-            // would send a wire out the bottom and back in the top of the very
-            // box it never leaves. It travels in the box's own side lane, which
-            // holds no anchors.
-            var boxS = boxOf[a.file]
-            var down = a.y < b.y
-            var sideL = boxS.x + CORRIDOR_MIN
-            var sideR = boxS.x + boxS.w - CORRIDOR_MIN
-            var ax = a.x + a.w / 2
-            var bx = b.x + b.w / 2
-            // When two anchors sit in the same column, putting every vertical
-            // same-file relation on the same margin makes one unreadable rail.
-            // Split upward and downward traffic, and use the target side when
-            // there is a real horizontal move between columns.
-            var useLeft = Math.abs(ax - bx) > CORRIDOR_MIN
-              ? bx < ax
-              : !down
-            var lane = useLeft ? sideL : sideR
-            var portA = useLeft ? a.x : a.x + a.w
-            var portB = useLeft ? b.x : b.x + b.w
-            pts = [
-              { x: portA, y: a.y + a.h / 2 },
-              { x: lane, y: a.y + a.h / 2 },
-              { x: lane, y: b.y + b.h / 2 },
-              { x: portB, y: b.y + b.h / 2 },
-            ]
-          } else {
-            var boxA = boxOf[a.file]
-            var boxB = boxOf[b.file]
-            var downward = a.y < b.y
-            var x1 = a.x + a.w / 2
-            var y1 = downward ? a.y + a.h : a.y
-            var x2 = b.x + b.w / 2
-            var y2 = downward ? b.y : b.y + b.h
-            if (boxA === undefined || boxB === undefined) {
-              var mid = y1 + (y2 - y1) / 2
-              pts = [{ x: x1, y: y1 }, { x: x1, y: mid }, { x: x2, y: mid }, { x: x2, y: y2 }]
-            } else {
-              // Leaving straight down from a node runs the wire through
-              // whichever sibling sits below it in the same box — and the node
-              // is painted on top, so the wire simply disappears under it. So a
-              // wire leaves SIDEWAYS first, into the gap beside its column,
-              // and only then travels vertically. Those inner gaps hold no
-              // nodes, which is what makes them safe.
-              var sideA = innerLane(a, boxA, b.x)
-              var sideB = innerLane(b, boxB, a.x)
-              var yOut = exitChannel(boxA, b.y)
-              var yIn = exitChannel(boxB, a.y)
-              var ayEdge = a.y + a.h / 2
-              var byEdge = b.y + b.h / 2
-              if (Math.abs(yOut - yIn) < 1) {
-                pts = [
-                  { x: sideA.port, y: ayEdge }, { x: sideA.lane, y: ayEdge },
-                  { x: sideA.lane, y: yOut }, { x: sideB.lane, y: yOut },
-                  { x: sideB.lane, y: byEdge }, { x: sideB.port, y: byEdge },
-                ]
-              } else {
-                var lane = nearest(vChannels, (sideA.lane + sideB.lane) / 2)
-                pts = [
-                  { x: sideA.port, y: ayEdge }, { x: sideA.lane, y: ayEdge },
-                  { x: sideA.lane, y: yOut }, { x: lane, y: yOut },
-                  { x: lane, y: yIn }, { x: sideB.lane, y: yIn },
-                  { x: sideB.lane, y: byEdge }, { x: sideB.port, y: byEdge },
-                ]
-              }
-            }
-          }
-          polylines.push({
-            id: e.from + '→' + e.to + ':' + type,
-            type: type, pts: pts, fromFile: a.file, toFile: b.file,
-            from: e.from, to: e.to,
-            faded: stateOf(e.to) !== null && stateOf(e.to) !== undefined && !stateOf(e.to).remembered,
-          })
-        })
-      })
-
-      return { polylines: polylines, LANE_STEP: LANE_STEP, HOP: HOP, ARROW_EVERY: ARROW_EVERY }
-    }
-
-    module.exports = { routeOrtho }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Collapsing parallel departures into a trunk.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/bus',
-  factory: (require) => {
-    var module = { exports: {} }
-
-    /**
-     * One trunk out of a node, branches off it.
-     */
-    function mergeBuses(route) {
-      var polylines = route.polylines
-
-      // ---- buses: one trunk out of a node, branches off it ------------------
-      //
-      // Forty-one wires each taking their own path put dozens of parallel lines
-      // in the same narrow channel. Crossings were low — parallel lines do not
-      // cross — and the picture was still unreadable, which is what made
-      // crossing count the wrong measure: side by side and indistinguishable is
-      // worse than crossing and traceable.
-      //
-      // A schematic answers this with a bus. Everything leaving one node in one
-      // direction shares a single trunk, and each destination leaves it at its
-      // own branch point, marked with a filled dot. N lines in a corridor become
-      // one line plus N short stubs, and the dot says "this is where that one
-      // goes" — a crossing, drawn as a hop, never means that.
-      var busGroups = {}
-      polylines.forEach(function (line) {
-        if (line.pts.length < 5) return
-        // Only the cross-box shape (port, lane, channel, …) can share a trunk;
-        // the short in-box routes have nothing to pool.
-        var key = [line.from,line.type,line.pts[0].x,line.pts[0].y,line.pts[1].x,
-          line.pts[2].y > line.pts[0].y ? 'down' : 'up'].join('|')
-        ;(busGroups[key] = busGroups[key] || []).push(line)
-      })
-      Object.keys(busGroups).forEach(function (key) {
-        var members = busGroups[key]
-        if (members.length < 2) return
-        // Every member already leaves through the same port and side lane; the
-        // trunk is that lane, run to the farthest branch.
-        var laneX = members[0].pts[1].x
-        var startY = members[0].pts[0].y
-        var branches = members.map(function (line) {
-          return { line: line, y: line.pts[2].y }
-        }).sort(function (l, r) {
-          return Math.abs(l.y - startY) - Math.abs(r.y - startY)
-        })
-        branches.forEach(function (branch) {
-          var line = branch.line
-          // Redraw as: stay on the trunk to my own branch point, then leave.
-          var tail = line.pts.slice(3)
-          line.pts = [
-            { x: line.pts[0].x, y: startY },
-            { x: laneX, y: startY },
-            { x: laneX, y: branch.y },
-          ].concat(tail)
-          // Remember WHERE in the polyline the branch is, not the coordinates
-          // it had at this moment. Lane assignment runs after this and nudges
-          // the points; a captured pair of numbers then marks the spot the wire
-          // used to be, which is how four of these dots ended up floating in
-          // empty canvas.
-          line.branchIndex = 2
-          line.busKey = key
-        })
-      })
-
-    }
-
-    module.exports = { mergeBuses }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Separating segments that would otherwise overlap.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/lanes',
-  factory: (require) => {
-    var module = { exports: {} }
-
-    /**
-     * Co-routed segments get their own track.
-     */
-    function spreadLanes(route, metrics) {
-      var polylines = route.polylines
-      var LANE_STEP = route.LANE_STEP
-      var BOX_GAP_X = metrics.BOX_GAP_X
-      var BOX_GAP_Y = metrics.BOX_GAP_Y
-
-      // ---- lanes: co-routed segments get their own track -------------------
-      var hGroups = {}
-      var vGroups = {}
-      polylines.forEach(function (line) {
-        for (var i = 1; i < line.pts.length; i += 1) {
-          var p = line.pts[i - 1]
-          var q = line.pts[i]
-          // Only interior segments may move; the first and last touch a node.
-          if (i - 1 === 0 || i === line.pts.length - 1) continue
-          // The run down a shared trunk is the ONE segment that must stay
-          // exactly where its siblings are. Laning treats those overlapping
-          // runs as co-routed wires and pushes each into its own track, which
-          // is how a bus of four became four parallel lines a few pixels
-          // apart, and how every branch point stopped being a place where
-          // anything actually met.
-          if (line.branchIndex !== undefined && i === line.branchIndex) continue
-          // A zero-length segment satisfies BOTH tests. Classified as
-          // horizontal it gets nudged into a lane, which drags a point off the
-          // line and collapses the dogleg — two identical points and a wire
-          // that no longer meets its own node.
-          if (Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) < 0.5) continue
-          if (Math.abs(p.y - q.y) < 0.5) {
-            var hk = String(Math.round(p.y))
-            ;(hGroups[hk] = hGroups[hk] || []).push({ p: p, q: q })
-          } else if (Math.abs(p.x - q.x) < 0.5) {
-            var vk = String(Math.round(p.x))
-            ;(vGroups[vk] = vGroups[vk] || []).push({ p: p, q: q })
-          }
-        }
-      })
-      var spread = function (groups, axis, budget) {
-        Object.keys(groups).forEach(function (key) {
-          var list = groups[key]
-          if (list.length < 2) return
-          // Order by where each segment starts so neighbouring lanes belong to
-          // wires heading the same way; interleaving them would add crossings.
-          list.sort(function (l, r) {
-            return (axis === 'y' ? Math.min(l.p.x, l.q.x) - Math.min(r.p.x, r.q.x)
-              : Math.min(l.p.y, l.q.y) - Math.min(r.p.y, r.q.y))
-          })
-          var step = Math.min(LANE_STEP, budget / Math.max(1, list.length - 1))
-          list.forEach(function (seg, i) {
-            var off = (i - (list.length - 1) / 2) * step
-            seg.p[axis] += off
-            seg.q[axis] += off
-          })
-        })
-      }
-      spread(hGroups, 'y', Math.max(10, BOX_GAP_Y - 14))
-      spread(vGroups, 'x', Math.max(10, BOX_GAP_X - 14))
-
-    }
-
-    module.exports = { spreadLanes }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Where one wire crosses another.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/hops',
-  factory: (require) => {
-    var module = { exports: {} }
-
-    /**
-     * A crossing is not a join.
-     */
-    function markHops(route) {
-      var polylines = route.polylines
-      var HOP = route.HOP
-
-      // ---- hops: a crossing is not a join ----------------------------------
-      var hSegs = []
-      var vSegs = []
-      polylines.forEach(function (line) {
-        if (line.status === 'blocked') return
-        for (var i = 1; i < line.pts.length; i += 1) {
-          var p = line.pts[i - 1]
-          var q = line.pts[i]
-          if (Math.abs(p.x - q.x) < 0.5 && Math.abs(p.y - q.y) < 0.5) continue
-          if (Math.abs(p.y - q.y) < 0.5) hSegs.push({ line: line, p: p, q: q })
-          else if (Math.abs(p.x - q.x) < 0.5) vSegs.push({ line: line, p: p, q: q })
-        }
-      })
-      // Horizontal wires hop over vertical ones — one convention, applied
-      // everywhere, so a hop always means the same thing.
-      //
-      // Only the verticals whose x falls inside this run are candidates, so the
-      // verticals are sorted by x once and each run walks the slice it spans.
-      // Comparing every horizontal against every vertical is the same count of
-      // comparisons as wires squared, which at a thousand anchors was almost
-      // half a second — on a layout that reruns on zoom and selection.
-      var sorted = vSegs.slice().sort(function (l, r) { return l.p.x - r.p.x })
-      var startAt = function (x) {
-        var lo = 0
-        var hi = sorted.length
-        while (lo < hi) {
-          var mid = (lo + hi) >> 1
-          if (sorted[mid].p.x < x) lo = mid + 1
-          else hi = mid
-        }
-        return lo
-      }
-      hSegs.forEach(function (h) {
-        var y = h.p.y
-        var lo = Math.min(h.p.x, h.q.x)
-        var hi = Math.max(h.p.x, h.q.x)
-        var xs = []
-        for (var i = startAt(lo + HOP); i < sorted.length; i += 1) {
-          var v = sorted[i]
-          var x = v.p.x
-          if (x >= hi - HOP) break
-          if (v.line === h.line || (h.line.busKey && h.line.busKey === v.line.busKey)) continue
-          var y0 = Math.min(v.p.y, v.q.y)
-          var y1 = Math.max(v.p.y, v.q.y)
-          if (y > y0 + 0.5 && y < y1 - 0.5) xs.push(x)
-        }
-        // Merge overlapping hop intervals, including repeated crossings at x.
-        var spans = []
-        xs.forEach(function (x) {
-          var last = spans[spans.length - 1]
-          if (last && x - HOP <= last.hi) last.hi = Math.max(last.hi, x + HOP)
-          else spans.push({ lo:x-HOP, hi:x+HOP, y:y, radius:HOP })
-        })
-        spans.forEach(function (span) {
-          var obstacles = route.obstacles || []
-          var collides = function (up) {
-            var top = up ? y-HOP : y, bottom = up ? y : y+HOP
-            return obstacles.some(function (b) {
-              return b.x < span.hi && b.x+b.w > span.lo && b.y < bottom && b.y+b.h > top
-            })
-          }
-          span.up = !collides(true)
-          span.gap = !span.up && collides(false)
-        })
-        h.hops = spans
-      })
-
-      return { hSegs: hSegs, vSegs: vSegs }
-    }
-
-    module.exports = { markHops }
-    return module.exports
-  },
-})
-
 // All skins emit from final geometry. No stage repairs SVG strings afterwards.
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/routing/emit',
   factory: (require) => {
     var geometry = require('dsh-cdd-lens/routing/geometry')
-    function pointAtCorner(from, corner, to, radius) {
-      var dx1 = corner.x - from.x
-      var dy1 = corner.y - from.y
-      var dx2 = to.x - corner.x
-      var dy2 = to.y - corner.y
-      var len1 = Math.abs(dx1) + Math.abs(dy1)
-      var len2 = Math.abs(dx2) + Math.abs(dy2)
-      if (len1 < 1 || len2 < 1) return null
-      var turn = Math.abs(dx1) < .5 ? Math.abs(dy2) < .5 : Math.abs(dx2) < .5
-      if (!turn) return null
-      var r = Math.min(radius, len1 / 2, len2 / 2)
-      if (r < 2) return null
-      return {
-        enter: { x: corner.x - Math.sign(dx1) * r, y: corner.y - Math.sign(dy1) * r },
-        leave: { x: corner.x + Math.sign(dx2) * r, y: corner.y + Math.sign(dy2) * r },
-      }
+    /**
+     * 两个端点之间的三次贝塞尔。
+     *
+     * 控制点沿水平方向外推，所以线离开出端口时是朝右的、进入入端口时是朝左的，
+     * 两头都正对着小圈。这就是 jsoncrack 那种观感，也是它比折线好看的原因：
+     * 没有硬折角，且起点方向明确告诉你是从哪里出来的。
+     */
+    function bezierPath(a, b) {
+      var dx = Math.max(36, Math.abs(b.x - a.x) * .5)
+      return 'M' + a.x + ',' + a.y
+        + ' C' + (a.x + dx) + ',' + a.y
+        + ' ' + (b.x - dx) + ',' + b.y
+        + ' ' + b.x + ',' + b.y
     }
 
-    function appendHorizontal(d, from, to, base, originalTo, segments, see, arcs) {
-      var seg = segments.get(base)
-      if (!seg || seg.q !== originalTo || !seg.hops.length) return d + ' L' + to.x + ',' + to.y
-      var forward = to.x > from.x
-      var start = Math.min(from.x, to.x)
-      var end = Math.max(from.x, to.x)
-      var order = forward ? seg.hops : seg.hops.slice().reverse()
-      order.forEach(function (span) {
-        var spanLo = Math.max(span.lo, start)
-        var spanHi = Math.min(span.hi, end)
-        if (spanHi <= spanLo) return
-        var before = forward ? spanLo : spanHi
-        var after = forward ? spanHi : spanLo
-        d += ' L' + before + ',' + from.y
-        if (span.gap) d += ' M' + after + ',' + from.y
-        else {
-          var rx = (spanHi - spanLo) / 2
-          var ry = span.radius
-          d += ' A' + rx + ',' + ry + ' 0 0 ' + ((forward === span.up) ? 1 : 0) + ' ' + after + ',' + from.y
-          see(spanLo, from.y + (span.up ? -ry : ry)); see(spanHi, from.y)
-        }
-        arcs.push(span)
-      })
-      return d + ' L' + to.x + ',' + to.y
+    /** 一条线上的一串点怎么连：两点用贝塞尔，多点用平滑折线。 */
+    function pathFrom(pts) {
+      if (pts.length < 2) return ''
+      if (pts.length === 2) return bezierPath(pts[0], pts[1])
+      var d = 'M' + pts[0].x + ',' + pts[0].y
+      for (var i = 1; i < pts.length; i += 1) d += ' L' + pts[i].x + ',' + pts[i].y
+      return d
+    }
+
+    /**
+     * 一条线上放几个箭头，放在哪。
+     *
+     * 箭头是看方向的唯一线索，所以宁可多。短线上至少一个；线一长就按间距铺，
+     * 最多 6 个——再多就把线糊成一条毛毛虫了。首尾各留 14px，免得箭头压在
+     * 端口小圈或目标卡片上。
+     */
+    /** 贝塞尔上的一点和切线角（t 在 0..1）。 */
+    function bezierAt(a, c1, c2, b, t) {
+      var mt = 1 - t
+      var x = mt*mt*mt*a.x + 3*mt*mt*t*c1.x + 3*mt*t*t*c2.x + t*t*t*b.x
+      var y = mt*mt*mt*a.y + 3*mt*mt*t*c1.y + 3*mt*t*t*c2.y + t*t*t*b.y
+      var dx = 3*mt*mt*(c1.x-a.x) + 6*mt*t*(c2.x-c1.x) + 3*t*t*(b.x-c2.x)
+      var dy = 3*mt*mt*(c1.y-a.y) + 6*mt*t*(c2.y-c1.y) + 3*t*t*(b.y-c2.y)
+      return { x: x, y: y, angle: Math.atan2(dy, dx) * 180 / Math.PI }
+    }
+
+    /** 这条线的控制点；多点（跨层）的线不适用，返回 null。 */
+    function bezierControls(pts) {
+      if (pts.length !== 2) return null
+      var a = pts[0], b = pts[1]
+      var dx = Math.max(36, Math.abs(b.x - a.x) * .5)
+      return { a: a, c1: { x: a.x + dx, y: a.y }, c2: { x: b.x - dx, y: b.y }, b: b }
     }
 
     function arrowDistances(total, every) {
       if (total <= 0) return []
-      if (total < every * 1.45) return [total * .55]
-      return [Math.max(16,total * .28), Math.min(total - 16,total * .72)]
+      if (total < every) return [total * .55]
+      var step = Math.max(56, every)
+      var count = Math.floor((total - 28) / step)
+      if (count < 1) count = 1
+      if (count > 6) count = 6
+      var out = []
+      for (var i = 1; i <= count; i += 1) out.push(total * i / (count + 1))
+      return out
     }
 
     function emitWires(route,hops) {
-      var wires=[],labels=[],junctions=[],arrows=[],segments=new Map()
-      var cornerRadius = route.CORNER || route.WIRE_CORNER || 10
-      hops.hSegs.forEach(function (s) { segments.set(s.p,s) })
+      var wires=[],labels=[],junctions=[],arrows=[]
       route.polylines.forEach(function (line) {
         var pts=line.pts
         if (line.status==='blocked' || pts.length<2) return
         var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity
         var see=function (x,y) { minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y) }
         pts.forEach(function (p) { see(p.x,p.y) })
-        var corner = {}
-        for (var c=1;c<pts.length-1;c++) {
-          var cut = pointAtCorner(pts[c-1],pts[c],pts[c+1],cornerRadius)
-          if (cut) corner[c] = cut
-        }
-        var d='M'+pts[0].x+','+pts[0].y,arcs=[],cursor=pts[0]
-        for (var i=1;i<pts.length;i++) {
-          var p=pts[i-1],q=pts[i]
-          var target = corner[i] ? corner[i].enter : q
-          if (Math.abs(cursor.y-target.y)<.5 && Math.abs(cursor.x-target.x)>=.5) {
-            d = appendHorizontal(d,cursor,target,p,q,segments,see,arcs)
-          } else {
-            d+=' L'+target.x+','+target.y
-          }
-          if (corner[i]) {
-            d+=' Q'+q.x+','+q.y+' '+corner[i].leave.x+','+corner[i].leave.y
-            cursor=corner[i].leave
-            see(q.x,q.y)
-          } else {
-            cursor=q
-          }
-        }
+        // 路径：两点走贝塞尔，跨层（有虚节点拐点）走折线。
+        var d = pathFrom(pts)
+        var arcs = []
         wires.push({ id:line.id,d:d,type:line.type,faded:line.faded,from:line.from,to:line.to,
           fromFile:line.fromFile,toFile:line.toFile,pts:pts,arcs:arcs,
           sourcePort:line.sourcePort,targetPort:line.targetPort,
           bounds:{minX:minX,minY:minY,maxX:maxX,maxY:maxY} })
         var total=geometry.length(pts),distances=arrowDistances(total,route.ARROW_EVERY)
+        var curve = bezierControls(pts)
         distances.forEach(function (distance,j) {
-          var at=geometry.atDistance(pts,distance)
+          // 两点线走的是贝塞尔，箭头必须落在曲线上，不能按弦估。
+          var at = curve !== null
+            ? bezierAt(curve.a, curve.c1, curve.c2, curve.b, Math.min(1, Math.max(0, distance / total)))
+            : geometry.atDistance(pts,distance)
           if (arcs.some(function (arc) { return Math.abs(at.y-arc.y)<0.5 && at.x>=arc.lo-2 && at.x<=arc.hi+2 })) return
           arrows.push({ id:line.id+':head'+j,wireId:line.id,from:line.from,to:line.to,type:line.type,
             x:at.x,y:at.y,angle:at.angle,faded:line.faded })
@@ -5063,779 +4604,6 @@ window.__ModuleLoader__.load({
       return {wires:wires,labels:labels,junctions:junctions,arrows:arrows,unrouted:route.unrouted || []}
     }
     return {emitWires}
-  },
-})
-
-// dsh-cdd-lens — Bezier wires for dataflow and dependency edges.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/curve',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __view_record = require('dsh-cdd-lens/view/record')
-    var stateOf = __view_record.stateOf
-
-    /**
-     * Soft curves for the relations the orthogonal router does not carry.
-     */
-    function emitCurves(edges, orient, relationFilter, drawn) {
-      var chosen = edges.chosen
-      var byId = orient.byId
-      var wires = drawn.wires
-      var arrows = drawn.arrows
-
-      var cubicPoint = function (p0, p1, p2, p3, t) {
-        var u = 1 - t
-        return {
-          x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
-          y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
-        }
-      }
-      var cubicAngle = function (p0, p1, p2, p3, t) {
-        var u = 1 - t
-        var dx = 3 * u * u * (p1.x - p0.x) + 6 * u * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x)
-        var dy = 3 * u * u * (p1.y - p0.y) + 6 * u * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y)
-        return Math.atan2(dy, dx) * 180 / Math.PI
-      }
-      chosen.forEach(function (edge) {
-        var from = byId[edge.from]
-        var to = byId[edge.to]
-        ;(edge.types || ['call']).filter(function (type) {
-          return relationFilter === undefined || relationFilter[type] !== false
-        }).forEach(function (type) {
-          var isData = type === 'dataflow'
-          var yOffset = isData ? 6 : -6
-          var fromRight = from.flowDir !== 'rtl'
-          var toEntryRight = to.flowDir === 'rtl'
-          var p0 = { x: fromRight ? from.x + from.w : from.x, y: from.y + from.h / 2 + yOffset }
-          var p3 = { x: toEntryRight ? to.x + to.w : to.x, y: to.y + to.h / 2 + yOffset }
-          var bend = Math.max(52, Math.abs(p3.y - p0.y) * .20, Math.abs(p3.x - p0.x) * .22)
-          var p1 = { x: p0.x + (fromRight ? bend : -bend), y: p0.y }
-          var p2 = { x: p3.x + (toEntryRight ? bend : -bend), y: p3.y }
-          var id = edge.from + '→' + edge.to + ':' + type
-          var faded = stateOf(edge.to) !== null && stateOf(edge.to) !== undefined && !stateOf(edge.to).remembered
-          wires.push({
-            id: id,
-            d: 'M' + p0.x + ',' + p0.y + ' C' + p1.x + ',' + p1.y + ' ' + p2.x + ',' + p2.y + ' ' + p3.x + ',' + p3.y,
-            type: type, faded: faded,
-            fromFile: from.file, toFile: to.file,
-            from: edge.from, to: edge.to,
-          })
-          var at = cubicPoint(p0, p1, p2, p3, .78)
-          arrows.push({
-            id: id + ':arrow', wireId: id, from: edge.from, to: edge.to,
-            x: at.x, y: at.y, angle: cubicAngle(p0, p1, p2, p3, .78),
-            type: type, faded: faded,
-          })
-        })
-      })
-
-    }
-
-    module.exports = { emitCurves }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — Rerouting the runs that cut through a box.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/routing/avoid',
-  factory: (require) => {
-    var geometry = require('dsh-cdd-lens/routing/geometry')
-
-    // Boundary contact is allowed; entering ANY card interior is not.
-    // Endpoints lie on the boundary and need no whole-node exemption.
-    var TOUCH_SLACK = 0
-
-    /** Every drawn box, so a run can be tested against all of them. */
-    function boxesOf(orient) {
-      var byId = orient.byId
-      return Object.keys(byId).map(function (id) { return byId[id] })
-    }
-
-    /**
-     * Boxes bucketed by position, so a segment asks about its own neighbourhood.
-     *
-     * Testing every segment against every box is fine at forty anchors and half
-     * a second at a thousand: the count of comparisons is segments times boxes,
-     * and both grow with the graph. A run only ever passes near a handful of
-     * boxes, and the grid layout means those are easy to find.
-     */
-    function boxIndex(boxes) {
-      var CELL = 256
-      var cells = {}
-      var key = function (cx, cy) { return cx + ':' + cy }
-      boxes.forEach(function (r) {
-        var x0 = Math.floor(r.x / CELL), x1 = Math.floor((r.x + r.w) / CELL)
-        var y0 = Math.floor(r.y / CELL), y1 = Math.floor((r.y + r.h) / CELL)
-        for (var cx = x0; cx <= x1; cx += 1) {
-          for (var cy = y0; cy <= y1; cy += 1) {
-            var k = key(cx, cy)
-            if (cells[k] === undefined) cells[k] = []
-            cells[k].push(r)
-          }
-        }
-      })
-      return {
-        near: function (p, q, out) {
-          out.length = 0
-          var seen = {}
-          var x0 = Math.floor(Math.min(p.x, q.x) / CELL), x1 = Math.floor(Math.max(p.x, q.x) / CELL)
-          var y0 = Math.floor(Math.min(p.y, q.y) / CELL), y1 = Math.floor(Math.max(p.y, q.y) / CELL)
-          for (var cx = x0; cx <= x1; cx += 1) {
-            for (var cy = y0; cy <= y1; cy += 1) {
-              var list = cells[key(cx, cy)]
-              if (list === undefined) continue
-              for (var i = 0; i < list.length; i += 1) {
-                var r = list[i]
-                if (seen[r.id] === true) continue
-                seen[r.id] = true
-                out.push(r)
-              }
-            }
-          }
-          return out
-        },
-      }
-    }
-
-    /** Test every segment, including internal runs through its own endpoints. */
-    function blockedBy(pts, boxes, fromId, toId, index) {
-      var scratch = []
-      for (var i = 1; i < pts.length; i += 1) {
-        var p = pts[i - 1]
-        var q = pts[i]
-        var near = index === undefined ? boxes : index.near(p, q, scratch)
-        for (var k = 0; k < near.length; k += 1) {
-          var r = near[k]
-          var x1 = r.x + TOUCH_SLACK, y1 = r.y + TOUCH_SLACK
-          var x2 = r.x + r.w - TOUCH_SLACK, y2 = r.y + r.h - TOUCH_SLACK
-          if (x2 <= x1 || y2 <= y1) continue
-          if ((p.x > x1 && p.x < x2 && p.y > y1 && p.y < y2)
-            || (q.x > x1 && q.x < x2 && q.y > y1 && q.y < y2)) return true
-          if (Math.abs(p.y - q.y) < .5) {
-            if (p.y > y1 && p.y < y2
-              && Math.max(p.x, q.x) > x1 && Math.min(p.x, q.x) < x2) return true
-          } else if (Math.abs(p.x - q.x) < .5) {
-            if (p.x > x1 && p.x < x2
-              && Math.max(p.y, q.y) > y1 && Math.min(p.y, q.y) < y2) return true
-          }
-        }
-      }
-      return false
-    }
-
-    // A* over a coordinate-compressed orthogonal visibility grid. The queue is
-    // lazy: only reached grid points and their four neighbours are evaluated.
-    function searchPath(starts, ends, boxes, stub, index, preferred) {
-      var clearance = stub / 2
-      var xs = [], ys = []
-      starts.concat(ends).forEach(function (p) { xs.push(p.exit.x); ys.push(p.exit.y) })
-      boxes.forEach(function (b) { xs.push(b.x-clearance,b.x+b.w+clearance); ys.push(b.y-clearance,b.y+b.h+clearance) })
-      xs = Array.from(new Set(xs)).sort(function (a,b) { return a-b })
-      ys = Array.from(new Set(ys)).sort(function (a,b) { return a-b })
-      var nx = xs.length, xids = new Map(), yids = new Map()
-      xs.forEach(function (x,i) { xids.set(x,i) }); ys.forEach(function (y,i) { yids.set(y,i) })
-      var idOf = function (p) { return yids.get(p.y)*nx+xids.get(p.x) }
-      var pointOf = function (id) { return { x:xs[id%nx],y:ys[Math.floor(id/nx)] } }
-      var targets = new Map()
-      ends.forEach(function (p) { targets.set(idOf(p.exit),p) })
-      var heap = [], best = new Map(), previous = new Map(), origins = new Map(), links = new Map()
-      var push = function (item) {
-        heap.push(item)
-        var i = heap.length-1
-        while (i>0) { var j=(i-1)>>1; if (heap[j].f<=item.f) break; heap[i]=heap[j]; i=j }
-        heap[i]=item
-      }
-      var pop = function () {
-        var first=heap[0],last=heap.pop()
-        if (heap.length) {
-          var i=0
-          while (i*2+1<heap.length) {
-            var c=i*2+1
-            if (c+1<heap.length && heap[c+1].f<heap[c].f) c++
-            if (heap[c].f>=last.f) break
-            heap[i]=heap[c];i=c
-          }
-          heap[i]=last
-        }
-        return first
-      }
-      var estimate = function (p) {
-        var result=Infinity
-        ends.forEach(function (t) { result=Math.min(result,Math.abs(t.exit.x-p.x)+Math.abs(t.exit.y-p.y)) })
-        return result
-      }
-      starts.forEach(function (p) {
-        var id=idOf(p.exit),dir=p.side==='left'||p.side==='right'?1:2,key=id*3+dir
-        var g=stub+(preferred && p.side!==preferred[0]?stub:0)
-        if (best.has(key) && best.get(key)<=g) return
-        best.set(key,g);origins.set(key,p);push({key:key,id:id,dir:dir,g:g,f:g+estimate(p.exit)})
-      })
-      var winner=null,winCost=Infinity
-      while (heap.length) {
-        var state=pop()
-        if (state.f>=winCost) break
-        if (best.get(state.key)!==state.g) continue
-        var p=pointOf(state.id),target=targets.get(state.id)
-        if (target) {
-          var endDir=target.side==='left'||target.side==='right'?1:2
-          var total=state.g+stub+(endDir!==state.dir?stub:0)+(preferred && target.side!==preferred[1]?stub:0)
-          if (total<winCost) { winCost=total;winner={state:state,target:target} }
-        }
-        var xi=state.id%nx,yi=Math.floor(state.id/nx)
-        ;[[xi-1,yi,1],[xi+1,yi,1],[xi,yi-1,2],[xi,yi+1,2]].forEach(function (next) {
-          if (next[0]<0 || next[0]>=nx || next[1]<0 || next[1]>=ys.length) return
-          var id=next[1]*nx+next[0],q=pointOf(id)
-          var link=Math.min(id,state.id)+':'+Math.max(id,state.id)
-          if (!links.has(link)) links.set(link,!blockedBy([p,q],boxes,null,null,index))
-          if (!links.get(link)) return
-          var g=state.g+Math.abs(q.x-p.x)+Math.abs(q.y-p.y)+(state.dir!==next[2]?stub:0)
-          var key=id*3+next[2]
-          if (best.has(key) && best.get(key)<=g) return
-          best.set(key,g);previous.set(key,state.key);origins.set(key,origins.get(state.key))
-          push({key:key,id:id,dir:next[2],g:g,f:g+estimate(q)})
-        })
-      }
-      if (!winner) return null
-      var key=winner.state.key,reverse=[]
-      var origin=origins.get(key)
-      while (key!==undefined) { reverse.push(pointOf(Math.floor(key/3)));key=previous.get(key) }
-      return geometry.compact([origin.point].concat(reverse.reverse(),[winner.target.point]))
-    }
-
-    /** Search local obstacles first; expand only if the local route is blocked. */
-    function clearPath(a,b,boxes,stub,fromId,toId,index,preferred) {
-      index=index || boxIndex(boxes)
-      var sides=['right','left','bottom','top']
-      var ports=function (node) {
-        return sides.map(function (side) { return geometry.portAt(node,side,stub) })
-          .filter(function (p) { return !blockedBy([p.point,p.exit],boxes,null,null,index) })
-      }
-      var starts=ports(a),ends=ports(b)
-      if (!starts.length || !ends.length) return null
-      // All simple doglegs compete by length and turns before searching a grid.
-      var best=null,cost=Infinity
-      starts.forEach(function (s) { ends.forEach(function (t) {
-        ;[[s.exit,{x:t.exit.x,y:s.exit.y},t.exit],
-          [s.exit,{x:s.exit.x,y:t.exit.y},t.exit]].forEach(function (middle) {
-          var candidate=geometry.compact([s.point].concat(middle,[t.point]))
-          var n=geometry.length(candidate)+stub*Math.max(0,candidate.length-2)
-            +(preferred && s.side!==preferred[0]?stub:0)+(preferred && t.side!==preferred[1]?stub:0)
-          if (n<cost && !blockedBy(candidate,boxes,fromId,toId,index)) { cost=n;best=candidate }
-        })
-      }) })
-      if (best) return best
-      var margin=stub*4
-      for (;;) {
-        var local=boxes.filter(function (r) {
-          return r.x+r.w>=Math.min(a.x,b.x)-margin && r.x<=Math.max(a.x+a.w,b.x+b.w)+margin
-            && r.y+r.h>=Math.min(a.y,b.y)-margin && r.y<=Math.max(a.y+a.h,b.y+b.h)+margin
-        })
-        var result=searchPath(starts,ends,local,stub,boxIndex(local),preferred)
-        if (result && !blockedBy(result,boxes,fromId,toId,index)) return result
-        if (local.length===boxes.length) return null
-        margin*=2
-      }
-    }
-
-    /** Repair the source of truth BEFORE hops, decorations and SVG emission. */
-    function repairCrossings(route,orient,metrics) {
-      var boxes=boxesOf(orient),index=boxIndex(boxes),fixed=0
-      route.obstacles=boxes
-      route.unrouted=[]
-      var reuse=new Map()
-      route.polylines.forEach(function (line) {
-        line.pts=geometry.compact(line.pts)
-        var a=orient.byId[line.from],b=orient.byId[line.to]
-        if (!a || !b) { line.status='blocked';route.unrouted.push(line);return }
-        if (line.pts.length>=2 && !blockedBy(line.pts,boxes,line.from,line.to,index)) { line.status='routed';return }
-        var key=line.from+'→'+line.to
-        var preferred=line.pts.length ? [geometry.sideOf(a,line.pts[0]),geometry.sideOf(b,line.pts[line.pts.length-1])] : ['right','left']
-        if (!reuse.has(key)) reuse.set(key,clearPath(a,b,boxes,metrics.PORT_STUB,line.from,line.to,index,preferred))
-        var found=reuse.get(key)
-        if (!found) { line.status='blocked';line.pts=[];route.unrouted.push(line);return }
-        line.pts=found.map(function (p) { return {x:p.x,y:p.y} })
-        line.status='routed';delete line.branchIndex;delete line.busKey;fixed++
-      })
-      geometry.bindPorts(route,orient)
-      return fixed
-    }
-    return { boxesOf,boxIndex,blockedBy,searchPath,clearPath,repairCrossings }
-  },
-})
-
-// dsh-cdd-lens — The board skin: traces, buses and the hops where they cross.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/skins/pcb/route',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __routing_ortho = require('dsh-cdd-lens/routing/ortho')
-    var routeOrtho = __routing_ortho.routeOrtho
-    var __routing_bus = require('dsh-cdd-lens/routing/bus')
-    var mergeBuses = __routing_bus.mergeBuses
-    var __routing_lanes = require('dsh-cdd-lens/routing/lanes')
-    var spreadLanes = __routing_lanes.spreadLanes
-    var __routing_hops = require('dsh-cdd-lens/routing/hops')
-    var markHops = __routing_hops.markHops
-    var __routing_emit = require('dsh-cdd-lens/routing/emit')
-    var emitWires = __routing_emit.emitWires
-    var __routing_avoid = require('dsh-cdd-lens/routing/avoid')
-    var repairCrossings = __routing_avoid.repairCrossings
-
-    /**
-     * The whole board pipeline, in one place instead of spelled out by the
-     * orchestrator: route in the channels, merge what shares a run into a bus,
-     * give each its own lane, mark the crossings as hops rather than joins,
-     * and re-route whatever still cuts through a box.
-     *
-     * The polylines are handed back as well: a shift of the drawing translates
-     * them and re-emits, without routing again.
-     */
-    function routeBoard(edges, orient, relationFilter, metrics, channels) {
-      var route = routeOrtho(edges, orient, relationFilter, channels, metrics)
-      route.WIRE_CORNER = metrics.WIRE_CORNER
-      mergeBuses(route)
-      spreadLanes(route, metrics, orient)
-      repairCrossings(route, orient, metrics)
-      var hops = markHops(route)
-      var drawn = emitWires(route, hops)
-      return { route: route, drawn: drawn }
-    }
-
-    /** Same traces at a new origin: the polylines have already been moved. */
-    function reemitBoard(route, orient, metrics) {
-      var drawn = emitWires(route, markHops(route))
-      return drawn
-    }
-
-    module.exports = { routeBoard, reemitBoard }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The layered skin: how a wire gets from box to box.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/skins/tiers/route',
-  factory: (require) => {
-    var module = { exports: {} }
-    var repairCrossings = require('dsh-cdd-lens/routing/avoid').repairCrossings
-    var emitWires = require('dsh-cdd-lens/routing/emit').emitWires
-    var markHops = require('dsh-cdd-lens/routing/hops').markHops
-
-    /**
-     * Route the chosen relations through the gaps between layers.
-     *
-     * A curve drawn straight from one node's edge to another's crosses whatever
-     * stands between them, which on a layered drawing is every node in every
-     * layer it spans. A wire here leaves the bottom of its source, drops into
-     * the gap below that layer, runs sideways there, and comes down into the top
-     * of its target — so the only place a wire is ever horizontal is a gap where
-     * nothing is standing.
-     *
-     * Wires sharing a gap get their own height in it, ordered by where they are
-     * going, so parallel departures do not lie on top of each other.
-     * @param edges - the relations to draw, from routing/select.
-     * @param orient - byId, the placed node for every id.
-     * @param relationFilter - relation kinds the viewer left switched on.
-     * @param metrics - box metrics; its BOX_GAP_Y is the room between layers.
-     * @returns wires, arrowheads and labels, ready to draw.
-     */
-    function routeTiers(edges, orient, relationFilter, metrics) {
-      var byId = orient.byId
-      var live = []
-      edges.chosen.forEach(function (edge) {
-        var a = byId[edge.from]
-        var b = byId[edge.to]
-        if (a === undefined || b === undefined) return
-        var types = (edge.types || []).filter(function (type) {
-          return relationFilter === undefined || relationFilter[type] !== false
-        })
-        types.forEach(function (type) {
-          live.push({ edge: edge, type: type, a: a, b: b })
-        })
-      })
-
-      // Calls read left to right: a wire leaves the caller's right edge and
-      // arrives at the callee's left edge. The only place it may travel
-      // vertically is the corridor between two layers, so it never runs
-      // through a column it has no business in.
-      //
-      // Everything crossing the same corridor shares it, so each wire gets its
-      // own vertical line inside it rather than all of them stacking on the
-      // middle.
-      var lanes = {}
-      live.forEach(function (w) {
-        var key = Math.round(w.a.x + w.a.w) + ':' + Math.round(w.b.x)
-        if (lanes[key] === undefined) lanes[key] = []
-        lanes[key].push(w)
-      })
-      Object.keys(lanes).forEach(function (key) {
-        var list = lanes[key]
-        list.sort(function (l, r) { return (l.b.y + l.b.h / 2) - (r.b.y + r.b.h / 2) })
-        var left = Number(key.split(':')[0])
-        var right = Number(key.split(':')[1])
-        var room = Math.max(metrics.LANE_STEP, right - left - metrics.CORRIDOR_MIN)
-        var step = room / (list.length + 1)
-        list.forEach(function (w, i) { w.mid = left + step * (i + 1) })
-      })
-
-      var STUB = metrics.PORT_STUB
-      var polylines = []
-      live.forEach(function (w) {
-        var a = w.a
-        var b = w.b
-        var forward = b.x > a.x + a.w
-        var pts
-        if (forward) {
-          var y1 = a.y + a.h / 2
-          var y2 = b.y + b.h / 2
-          var x1 = a.x + a.w
-          var x2 = b.x
-          // Straight out of the exit port, straight into the entry port, and
-          // only the corridor between the two columns in between.
-          var mid = w.mid === undefined ? x1 + (x2 - x1) / 2 : w.mid
-          mid = Math.min(Math.max(mid, x1 + STUB), x2 - STUB)
-          pts = [
-            { x: x1, y: y1 }, { x: mid, y: y1 },
-            { x: mid, y: y2 }, { x: x2, y: y2 },
-          ]
-        } else {
-          // Backwards or sideways: down out of the source, along under both, up
-          // into the target. It never crosses a column because it never enters
-          // one.
-          var below = Math.max(a.y + a.h, b.y + b.h) + STUB * 2
-          var ax = a.x + a.w / 2
-          var bx = b.x + b.w / 2
-          pts = [
-            { x: ax, y: a.y + a.h }, { x: ax, y: below },
-            { x: bx, y: below }, { x: bx, y: b.y + b.h },
-          ]
-        }
-        polylines.push({id:w.edge.from+'→'+w.edge.to+':'+w.type,
-          from:w.edge.from,to:w.edge.to,type:w.type,pts:pts,
-          fromFile:a.file,toFile:b.file,faded:w.edge.faded===true})
-      })
-      var route = {polylines:polylines,LANE_STEP:metrics.LANE_STEP,HOP:metrics.WIRE_HOP,
-        WIRE_CORNER:metrics.WIRE_CORNER,ARROW_EVERY:metrics.ARROW_EVERY}
-      repairCrossings(route,orient,metrics)
-      var drawn = emitWires(route,markHops(route))
-      drawn.route = route
-      return drawn
-    }
-
-    module.exports = { routeTiers }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The flow skin: wires that live in the corridors the columns reserved.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/skins/flow/route',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __routing_hops = require('dsh-cdd-lens/routing/hops')
-    var markHops = __routing_hops.markHops
-    var __routing_emit = require('dsh-cdd-lens/routing/emit')
-    var emitWires = __routing_emit.emitWires
-    var __routing_avoid = require('dsh-cdd-lens/routing/avoid')
-    var repairCrossings = __routing_avoid.repairCrossings
-    var __view_record = require('dsh-cdd-lens/view/record')
-    var stateOf = __view_record.stateOf
-
-    /**
-     * The column geometry the placement produced, rebuilt from the placed
-     * nodes. Columns are keyed by the flowLayer the placement stamped on each
-     * node, not by x coordinate: a node the user dragged keeps its layer even
-     * where its position no longer agrees with it.
-     */
-    function columnsOf(orient) {
-      var byId = orient.byId
-      var byLayer = {}
-      var order = []
-      Object.keys(byId).forEach(function (id) {
-        var p = byId[id]
-        var L = typeof p.flowLayer === 'number' ? p.flowLayer : 0
-        if (byLayer[L] === undefined) { byLayer[L] = []; order.push(L) }
-        byLayer[L].push(p)
-      })
-      order.sort(function (l, r) { return l - r })
-      var index = {}
-      var left = []
-      var right = []
-      var members = []
-      order.forEach(function (L, i) {
-        index[L] = i
-        left[i] = Math.min.apply(Math, byLayer[L].map(function (p) { return p.x }))
-        right[i] = Math.max.apply(Math, byLayer[L].map(function (p) { return p.x + p.w }))
-        members[i] = byLayer[L].slice().sort(function (l, r) { return l.y - r.y })
-      })
-      return { index: index, left: left, right: right, members: members, count: order.length }
-    }
-
-    /**
-     * The heights at which a wire may cross a column without touching a node:
-     * the middle of every gap between two stacked nodes, plus the small
-     * margins above the first and below the last.
-     *
-     * This is the other half of the reservation the placement made: the
-     * corridor between two columns is where a wire runs vertically, and these
-     * gaps are where it may slip horizontally through a column on its way to
-     * the next corridor — the staircase an elk-style layered layout builds
-     * with dummy nodes, read off the nodes that are already there.
-     */
-    function gapLanesOf(members, gapY) {
-      var lanes = []
-      for (var i = 0; i <= members.length; i += 1) {
-        if (i === 0) lanes.push(members[0].y - gapY / 2)
-        else if (i === members.length) lanes.push(members[i - 1].y + members[i - 1].h + gapY / 2)
-        else lanes.push((members[i - 1].y + members[i - 1].h + members[i].y) / 2)
-      }
-      return lanes
-    }
-
-    /**
-     * Route the chosen relations through the reserved corridors.
-     *
-     * A wire only ever runs horizontally where no node stands: inside the
-     * corridor between two columns, or through a gap between two nodes of the
-     * column it crosses. Four shapes cover every relation:
-     *
-     *   near — one layer forward: out of the caller's right edge, down the
-     *     corridor between the two columns, into the callee's left edge;
-     *   same — both ends in one column: out of the right edge, down the
-     *     corridor to the right, back into the right edge;
-     *   far — several layers forward: a staircase. Down the corridor past the
-     *     source to the height of a gap in the next column, across the column
-     *     through that gap, down the next corridor, and so on until the
-     *     corridor before the target, then in through its left edge;
-     *   back — against the direction: the same staircase mirrored, out of the
-     *     left edge and into the target's right edge.
-     *
-     * Earlier the long wires went round the whole drawing instead — up into a
-     * band above everything, across the full canvas, and down — and the
-     * picture grew a ladder of wires over and under it that said nothing. The
-     * staircase keeps a long edge inside the columns it actually crosses.
-     *
-     * Every vertical run shares its corridor with the other wires that need
-     * it, so each gets its own lane inside it, ordered by where it is going.
-     * Crossings that remain are marked as hops, and whatever still cuts
-     * through a box — possible once the user has dragged nodes out of their
-     * columns — is re-routed by the same repair the board skin ends with,
-     * whose detours are the only wires that still leave the drawing.
-     *
-     * @param edges - the relations to draw, from routing/select.
-     * @param orient - byId, the placed node for every id.
-     * @param relationFilter - relation kinds the viewer left switched on.
-     * @param metrics - box metrics; PORT_STUB is the straight run out of a
-     *   port, LAYER_GAP_X the corridor the placement reserved.
-     * @returns the route (polylines, so a shift can move them) and the drawn
-     *   wires, arrowheads and labels.
-     */
-    function routeFlow(edges, orient, relationFilter, metrics) {
-      var byId = orient.byId
-      var STUB = metrics.PORT_STUB
-      var GAP = metrics.LAYER_GAP_X
-      var CORRIDOR_MIN = metrics.CORRIDOR_MIN
-      var SUBLANE_STEP = metrics.SUBLANE_STEP
-      var cols = columnsOf(orient)
-
-      // The x range a corridor owns. A corridor is named after the column it
-      // follows; -1 is the margin left of the first column, which a backward
-      // wire out of the first column leaves through. Outside the first and
-      // last column the corridor is as wide as the placement promised.
-      function corridor(c) {
-        var lo = c < 0 ? cols.left[0] - GAP + STUB : cols.right[c] + STUB
-        var hi = c < 0 || c >= cols.count - 1
-          ? lo + GAP - STUB * 2
-          : cols.left[c + 1] - STUB
-        // Dragged nodes can pull two columns over each other; a corridor that
-        // narrow still answers, and repairCrossings cleans up after it.
-        return { lo: lo, hi: Math.max(hi, lo + CORRIDOR_MIN) }
-      }
-
-      // Lane requests per corridor, assigned once every wire has asked, so the
-      // lanes can be ordered by where each run is headed instead of by which
-      // wire asked first.
-      var requests = {}
-      function ask(c, sort) {
-        var r = { sort: sort, x: null }
-        ;(requests[c] = requests[c] || []).push(r)
-        return r
-      }
-
-      var live = []
-      edges.chosen.forEach(function (edge) {
-        var a = byId[edge.from]
-        var b = byId[edge.to]
-        if (a === undefined || b === undefined || a === b) return
-        ;(edge.types || ['call']).filter(function (type) {
-          return relationFilter === undefined || relationFilter[type] !== false
-        }).forEach(function (type) {
-          live.push({ edge: edge, type: type, a: a, b: b })
-        })
-      })
-
-      var columnOf = function (p) {
-        return cols.index[typeof p.flowLayer === 'number' ? p.flowLayer : 0]
-      }
-      // Which columns each long wire has to cross, so every crossed column can
-      // hand out its gap lanes once all of them are known.
-      var crossings = {}
-      live.forEach(function (w) {
-        var ca = columnOf(w.a)
-        var cb = columnOf(w.b)
-        var ay = w.a.y + w.a.h / 2
-        var by = w.b.y + w.b.h / 2
-        w.lanes = {}
-        w.crossY = {}
-        if (cb === ca + 1) {
-          w.kind = 'near'
-          w.lanes[ca] = ask(ca, by)
-        } else if (cb === ca) {
-          w.kind = 'same'
-          w.lanes[ca] = ask(ca, (ay + by) / 2)
-        } else if (cb > ca + 1) {
-          w.kind = 'far'
-          for (var c = ca; c <= cb - 1; c += 1) w.lanes[c] = ask(c, by)
-          for (var x = ca + 1; x <= cb - 1; x += 1) {
-            ;(crossings[x] = crossings[x] || []).push(w)
-          }
-        } else {
-          w.kind = 'back'
-          for (var k = cb; k <= ca - 1; k += 1) w.lanes[k] = ask(k, by)
-          for (var z = cb + 1; z <= ca - 1; z += 1) {
-            ;(crossings[z] = crossings[z] || []).push(w)
-          }
-        }
-      })
-
-      Object.keys(requests).forEach(function (key) {
-        var list = requests[key]
-        list.sort(function (l, r) { return l.sort - r.sort })
-        var corr = corridor(Number(key))
-        list.forEach(function (r, i) {
-          r.x = corr.lo + (i + 1) * (corr.hi - corr.lo) / (list.length + 1)
-        })
-      })
-
-      // The gap each wire crosses a column through: the one nearest to where
-      // it is going. Wires that share a gap fan out inside it, a few pixels
-      // apart — the gap between two nodes is narrow, and a bundle that reads
-      // as one strand is better than a wire through a node.
-      Object.keys(crossings).forEach(function (key) {
-        var c = Number(key)
-        var lanes = gapLanesOf(cols.members[c], metrics.INNER_GAP_Y)
-        var wires = crossings[key]
-        var byGap = {}
-        wires.forEach(function (w) {
-          var by = w.b.y + w.b.h / 2
-          var best = 0
-          // A tie goes to the later gap: the margins above the first node and
-          // below the last are for when the target really is up against the
-          // column's edge, not for a target that has a gap between nodes
-          // exactly as near.
-          for (var i = 1; i < lanes.length; i += 1) {
-            if (Math.abs(lanes[i] - by) <= Math.abs(lanes[best] - by)) best = i
-          }
-          ;(byGap[best] = byGap[best] || []).push(w)
-          w.crossY[c] = best
-        })
-        Object.keys(byGap).forEach(function (gapKey) {
-          var group = byGap[gapKey]
-          var mid = lanes[Number(gapKey)]
-          group.sort(function (l, r) {
-            return (l.b.y + l.b.h / 2) - (r.b.y + r.b.h / 2)
-          })
-          var step = Math.min(SUBLANE_STEP, (metrics.INNER_GAP_Y - SUBLANE_STEP) / Math.max(1, group.length))
-          group.forEach(function (w, i) {
-            w.crossY[c] = mid + (i - (group.length - 1) / 2) * step
-          })
-        })
-      })
-
-      var polylines = []
-      live.forEach(function (w) {
-        var a = w.a
-        var b = w.b
-        var ay = a.y + a.h / 2
-        var by = b.y + b.h / 2
-        var pts
-        var c
-        if (w.kind === 'near') {
-          pts = [
-            { x: a.x + a.w, y: ay }, { x: w.lanes[columnOf(a)].x, y: ay },
-            { x: w.lanes[columnOf(a)].x, y: by }, { x: b.x, y: by },
-          ]
-        } else if (w.kind === 'same') {
-          pts = [
-            { x: a.x + a.w, y: ay }, { x: w.lanes[columnOf(a)].x, y: ay },
-            { x: w.lanes[columnOf(a)].x, y: by }, { x: b.x + b.w, y: by },
-          ]
-        } else if (w.kind === 'far') {
-          // Right out of the source, then the staircase: vertical in one
-          // corridor, across the next column through its gap, repeat.
-          pts = [{ x: a.x + a.w, y: ay }, { x: w.lanes[columnOf(a)].x, y: ay }]
-          for (c = columnOf(a) + 1; c <= columnOf(b) - 1; c += 1) {
-            pts.push({ x: w.lanes[c - 1].x, y: w.crossY[c] })
-            pts.push({ x: w.lanes[c].x, y: w.crossY[c] })
-          }
-          pts.push({ x: w.lanes[columnOf(b) - 1].x, y: by })
-          pts.push({ x: b.x, y: by })
-        } else {
-          // Left out of the source, the mirrored staircase, into the target's
-          // right edge.
-          pts = [{ x: a.x, y: ay }, { x: w.lanes[columnOf(a) - 1].x, y: ay }]
-          for (c = columnOf(a) - 1; c >= columnOf(b) + 1; c -= 1) {
-            pts.push({ x: w.lanes[c].x, y: w.crossY[c] })
-            pts.push({ x: w.lanes[c - 1].x, y: w.crossY[c] })
-          }
-          pts.push({ x: w.lanes[columnOf(b)].x, y: by })
-          pts.push({ x: b.x + b.w, y: by })
-        }
-        polylines.push({
-          id: w.edge.from + '→' + w.edge.to + ':' + w.type,
-          type: w.type, pts: pts, fromFile: a.file, toFile: b.file,
-          from: w.edge.from, to: w.edge.to,
-          faded: stateOf(w.edge.to) !== null && stateOf(w.edge.to) !== undefined
-            && !stateOf(w.edge.to).remembered,
-        })
-      })
-
-      var route = { polylines: polylines, LANE_STEP: metrics.LANE_STEP, HOP: metrics.WIRE_HOP,
-        WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }
-      repairCrossings(route, orient, metrics)
-      var drawn = emitWires(route, markHops(route))
-      return { route: route, drawn: drawn }
-    }
-
-    /** Same wires at a new origin: the polylines have already been moved. */
-    function reemitFlow(route, orient, metrics) {
-      var drawn = emitWires(route, markHops(route))
-      return drawn
-    }
-
-    module.exports = { routeFlow, reemitFlow }
-    return module.exports
   },
 })
 
@@ -5880,6 +4648,9 @@ window.__ModuleLoader__.load({
       place.placed.forEach(function (p) {
         if (gather.freed[p.id] !== true) return
         p.boxKey = undefined
+        // 用户把它拖出收拢列了：这就是他放的位置，分离重叠不许再推它。
+        // 不标 manual 的话，收拢列的分离过程会把它推回旁边一格。
+        p.manual = true
         freed += 1
       })
       return freed
@@ -5962,16 +4733,21 @@ window.__ModuleLoader__.load({
           p.x = x
           p.y = y0
           p.gathered = true
+          // 被收拢的节点也算「用户放好的位置」：分离重叠那一步不许再推它。
+          // 以前 gather 之后紧跟 restackBoxes 把它们捡回去，所以不需要这个标记；
+          // 现在收拢跑在分离之后，不标的话刚排好的列会被推开。
+          p.manual = true
           // Out of its frame: the frame would otherwise restack it straight
           // back into its old slot on this very pass.
           p.boxKey = undefined
-          // Re-stamped with the column it now stands in. The flow router
-          // reads its corridors off flowLayer, and a card beside the focus
-          // that still claims its old layer would be routed to through the
-          // corridors of a column it no longer occupies — the long way round
-          // that this overlay exists to abolish.
-          if (typeof focus.flowLayer === 'number') {
-            p.flowLayer = focus.flowLayer + (rightward ? 1 : -1)
+          // 重新归层：它现在站的那一列就是它的新层。分层布局按 layer 定 x，
+          // 一个还报着旧层的卡片会被排回原来的列，收拢就白做了。
+          var targetLayer = typeof focus.layer === 'number'
+            ? focus.layer + (rightward ? 1 : -1)
+            : undefined
+          if (targetLayer !== undefined) {
+            p.layer = targetLayer
+            p.flowLayer = targetLayer
           }
           seated.push(p)
           moved += 1
@@ -6019,59 +4795,6 @@ window.__ModuleLoader__.load({
   },
 })
 
-// dsh-cdd-lens — Which of the three drawings the graph is rendered as.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-window.__ModuleLoader__.load({
-  id: 'dsh-cdd-lens/layout/skin',
-  factory: (require) => {
-    var module = { exports: {} }
-    var __skins_tiers_group = require('dsh-cdd-lens/skins/tiers/group')
-    var tiered = __skins_tiers_group.tiered
-
-    var SKINS = ['auto', 'tiers', 'pcb', 'flow']
-
-    /**
-     * Layers, file boxes, or direction columns — and who decides.
-     *
-     * All three drawings already exist. Layers read as a call chain: a column
-     * per step, wires straight across. File boxes read as a board: anchors
-     * grouped by the file that holds them, traces merged into buses and hopped
-     * over each other where they cross. Flow reads as direction: a column per
-     * BFS step of the call graph with the wire corridors reserved between the
-     * columns. Which one is right depends on the question being asked.
-     *
-     * `auto` keeps the old rule — layers when `/chain` has assigned every node
-     * a layer, file boxes when it has not. `tiers` asks for layers and falls
-     * back to the board when no layer was assigned, because drawing half of
-     * each is worse than either alone. `pcb` and `flow` need nothing the graph
-     * does not always have, so they are honoured as asked.
-     *
-     * @param graph - the graph about to be drawn.
-     * @param included - the ids on screen.
-     * @param wanted - 'auto' | 'tiers' | 'pcb' | 'flow'.
-     * @returns the skin to lay out with: 'tiers' | 'pcb' | 'flow'.
-     */
-    function skinFor(graph, included, wanted) {
-      if (wanted === 'pcb') return 'pcb'
-      if (wanted === 'flow') return 'flow'
-      var canLayer = tiered(graph, included)
-      if (wanted === 'tiers') return canLayer ? 'tiers' : 'pcb'
-      return canLayer ? 'tiers' : 'pcb'
-    }
-
-    /** The question older callers still ask: layers, or file boxes. */
-    function byLayerFor(graph, included, wanted) {
-      return skinFor(graph, included, wanted) === 'tiers'
-    }
-
-    module.exports = { SKINS, skinFor, byLayerFor }
-    return module.exports
-  },
-})
-
 // dsh-cdd-lens — Where things end up: fitting the drawing, and unpicking overlaps.
 //
 // Two halves of one job. A placement is proposed, and then it has to be made
@@ -6114,7 +4837,7 @@ window.__ModuleLoader__.load({
       }
       var box = function (b) { see(b.x, b.y); see(b.x + b.w, b.y + b.h) }
       place.placed.forEach(box)
-      place.fileBoxes.forEach(box)
+      ;(place.fileBoxes || []).forEach(box)
       ;(drawn.junctions || []).forEach(function (j) { see(j.x, j.y) })
       ;(drawn.labels || []).forEach(function (l) { see(l.x, l.y) })
       ;(drawn.arrows || []).forEach(function (a) { see(a.x, a.y) })
@@ -6155,7 +4878,7 @@ window.__ModuleLoader__.load({
         p.x += dx
         p.y += dy
       })
-      place.fileBoxes.forEach(function (b) { b.x += dx; b.y += dy })
+      ;(place.fileBoxes || []).forEach(function (b) { b.x += dx; b.y += dy })
       ;(place.rows || []).forEach(function (row) { row.x += dx; row.y += dy })
     }
 
@@ -6399,148 +5122,572 @@ window.__ModuleLoader__.load({
   },
 })
 
+// dsh-cdd-lens — 分层布局（自研 Sugiyama）。唯一的布局，没有皮肤。
+//
+// 端口：从 /Users/a1/Workspace/WORKSPACE/visual_map/js/graph-layout.js 移植，
+// 四步与原实现一致，只把 node 的取法换成 CDD 的 anchor 图：
+//
+//   1. 消环   —— DFS 找回向边，逻辑上反转它们使图变成 DAG
+//   2. 分层   —— 最长路径法：layer[v] = max(layer[前驱]) + 1
+//   3. 排序   —— 跨层长边拆成虚节点链，虚节点与真实节点一起做重心排序；
+//                交叉数 = 每个层边界上「下层序号序列的严格逆序对数」
+//   4. 坐标   —— 层定 x、层内序号定 y、各层垂直居中；
+//                虚节点坐标输出成边的 bendPoints，直接喂给 routing/emit
+//
+// 为什么不用 ELK：纯 ELK 在这张图上性能差。自研这套 400 行、零依赖、确定性。
+//
+// 输入是 CDD 的图：`graph.nodes[id]` 就是 anchor 记录，`graph.ui[id]` 是按钮状态，
+// 布局只读前者，一个字段都不写回。
+window.__ModuleLoader__.load({
+  id: 'dsh-cdd-lens/layout/sugiyama',
+  factory: (require) => {
+    var module = { exports: {} }
+
+    var NODE_W = 180
+    var NODE_H = 46
+    var DUMMY_H = 10
+    var GAP_X = 110
+    var GAP_Y = 26
+    var MARGIN = 40
+    var SWEEPS = 12
+
+    // 端口小圈往外探出的距离，必须和 styles/graph.js 里 .cddl-port 的
+    // left/right 偏移（6px）对上：圈心 = 边界 ∓ 6。线的两端就停在这个圈心上，
+    // 所以这个数字改了，那边也要改——线才不会悬在圈外面。
+    var PORT_OFFSET = 6
+
+    /** 端点：入在左、出在右，各外探 PORT_OFFSET。 */
+    function portsFor(x, y, w, h) {
+      return {
+        in: { x: x - PORT_OFFSET, y: y + h / 2 },
+        out: { x: x + w + PORT_OFFSET, y: y + h / 2 },
+      }
+    }
+
+    /**
+     * 把一个 CDD 图排成分层图。
+     *
+     * @param graph - { nodes: {id: anchor}, edges: [{from,to,types}] }。
+     * @param included - 这一轮要画的 id（layoutScope 决定）。
+     * @param metrics - boxMetrics 的结果，提供 sizeOf / label / PAD。
+     * @returns { placed, polylines, fileBoxes, canvasY, crossings, layers }。
+     */
+    function sugiyama(graph, included, metrics, placedAt) {
+      var ids = included.filter(function (id) { return graph.nodes[id] !== undefined })
+      var idSet = {}
+      ids.forEach(function (id) { idSet[id] = true })
+
+      // 只画两端都在屏幕上的边。
+      var edges = graph.edges.filter(function (e) {
+        return idSet[e.from] === true && idSet[e.to] === true && e.from !== e.to
+      })
+
+      if (ids.length === 0) {
+        return { placed: [], polylines: [], canvasY: MARGIN, crossings: 0, layers: 0 }
+      }
+
+      // ---------- 1. 消环：迭代 DFS，GRAY 邻居即回向边 ----------
+      var out = {}
+      ids.forEach(function (id) { out[id] = [] })
+      edges.forEach(function (e) { out[e.from].push(e.to) })
+
+      var WHITE = 0, GRAY = 1, BLACK = 2
+      var color = {}
+      ids.forEach(function (id) { color[id] = WHITE })
+      var backEdge = {}
+      ids.forEach(function (s) {
+        if (color[s] !== WHITE) return
+        color[s] = GRAY
+        var stack = [[s, 0]]
+        while (stack.length > 0) {
+          var top = stack[stack.length - 1]
+          var v = top[0]
+          var adj = out[v]
+          if (top[1] < adj.length) {
+            var w = adj[top[1]]
+            top[1] += 1
+            if (color[w] === WHITE) { color[w] = GRAY; stack.push([w, 0]) }
+            else if (color[w] === GRAY) { backEdge[v + '\u0000' + w] = true }
+          } else {
+            color[v] = BLACK
+            stack.pop()
+          }
+        }
+      })
+
+      // ---------- 2. DAG 化 + 最长路径分层 ----------
+      var dagEdges = edges.map(function (e) {
+        var reversed = backEdge[e.from + '\u0000' + e.to] === true
+        return { edge: e, from: reversed ? e.to : e.from, to: reversed ? e.from : e.to, reversed: reversed }
+      })
+      var dagOut = {}, dagIn = {}, indeg = {}
+      ids.forEach(function (id) { dagOut[id] = []; dagIn[id] = []; indeg[id] = 0 })
+      dagEdges.forEach(function (d) {
+        dagOut[d.from].push(d.to)
+        dagIn[d.to].push(d.from)
+        indeg[d.to] += 1
+      })
+      var layerOf = {}
+      var queue = ids.filter(function (id) { return indeg[id] === 0 })
+      var left = 0
+      while (queue.length > 0) {
+        var v = queue.shift()
+        left += 1
+        var l = 0
+        dagIn[v].forEach(function (p) { if (layerOf[p] + 1 > l) l = layerOf[p] + 1 })
+        layerOf[v] = l
+        dagOut[v].forEach(function (w) {
+          indeg[w] -= 1
+          if (indeg[w] === 0) queue.push(w)
+        })
+      }
+      // 有环残留时把没排到的塞到最后一层，不让它们消失。
+      var layerCount = 1
+      ids.forEach(function (id) {
+        if (layerOf[id] === undefined) layerOf[id] = 0
+        if (layerOf[id] + 1 > layerCount) layerCount = layerOf[id] + 1
+      })
+
+      // ---------- 3a. 跨层边拆虚节点 ----------
+      var layers = []
+      for (var i = 0; i < layerCount; i += 1) layers.push([])
+      ids.forEach(function (id) { layers[layerOf[id]].push(id) })
+
+      var unitAdj = {}
+      ids.forEach(function (id) { unitAdj[id] = {} })
+      var segsByBoundary = []
+      for (var b = 0; b < layerCount - 1; b += 1) segsByBoundary.push([])
+      var dummyOfEdge = {}
+      var reversedDummy = {}
+      var dummySeq = 0
+
+      function pushUnit(f, t, l) {
+        segsByBoundary[l].push([f, t])
+        unitAdj[f][t] = true
+        unitAdj[t][f] = true
+      }
+
+      dagEdges.forEach(function (d, i) {
+        var span = layerOf[d.to] - layerOf[d.from]
+        if (span <= 1) { pushUnit(d.from, d.to, layerOf[d.from]); return }
+        var chain = []
+        for (var k = 1; k < span; k += 1) {
+          var did = '\u0000vd' + (dummySeq++)
+          chain.push(did)
+          layers[layerOf[d.from] + k].push(did)
+          unitAdj[did] = {}
+        }
+        dummyOfEdge[i] = d.reversed ? chain.slice().reverse() : chain
+        if (d.reversed) chain.forEach(function (k) { reversedDummy[k] = true })
+        var seq = [d.from].concat(chain).concat([d.to])
+        for (var s = 0; s + 1 < seq.length; s += 1) pushUnit(seq[s], seq[s + 1], layerOf[d.from] + s)
+      })
+
+      // ---------- 3b. 重心排序 + 交叉计数 ----------
+      function indexMap(layerNodes) {
+        var m = {}
+        layerNodes.forEach(function (id, i) { m[id] = i })
+        return m
+      }
+      function sortLayer(layerNodes, neighborIndex) {
+        var keys = layerNodes.map(function (id, i) {
+          var sum = 0, cnt = 0
+          Object.keys(unitAdj[id] || {}).forEach(function (nb) {
+            if (neighborIndex[nb] !== undefined) { sum += neighborIndex[nb]; cnt += 1 }
+          })
+          return { id: id, i: i, key: cnt ? sum / cnt : i }
+        })
+        keys.sort(function (a, b) { return a.key - b.key || a.i - b.i })
+        keys.forEach(function (k, i) { layerNodes[i] = k.id })
+      }
+      function countInversions(arr) {
+        var inv = 0
+        var buf = new Array(arr.length)
+        function mergeSort(lo, hi) {
+          if (hi - lo < 2) return
+          var mid = (lo + hi) >> 1
+          mergeSort(lo, mid); mergeSort(mid, hi)
+          var i = lo, j = mid, k = lo
+          while (i < mid && j < hi) {
+            if (arr[i] <= arr[j]) buf[k++] = arr[i++]
+            else { buf[k++] = arr[j++]; inv += mid - i }
+          }
+          while (i < mid) buf[k++] = arr[i++]
+          while (j < hi) buf[k++] = arr[j++]
+          for (var t = lo; t < hi; t += 1) arr[t] = buf[t]
+        }
+        mergeSort(0, arr.length)
+        return inv
+      }
+      function countCrossings(order) {
+        var pos = {}
+        order.forEach(function (layer, l) { layer.forEach(function (id, i) { pos[id] = { l: l, i: i } }) })
+        var c = 0
+        for (var l = 0; l < order.length - 1; l += 1) {
+          var bucket = segsByBoundary[l]
+          if (bucket.length < 2) continue
+          var segs = bucket.map(function (s) { return [pos[s[0]].i, pos[s[1]].i] })
+          segs.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1] })
+          c += countInversions(segs.map(function (s) { return s[1] }))
+        }
+        return c
+      }
+
+      var order = layers.map(function (l) { return l.slice() })
+      var best = countCrossings(order)
+      var bestOrder = order.map(function (l) { return l.slice() })
+      for (var it = 0; it < SWEEPS; it += 1) {
+        for (var l2 = 1; l2 < order.length; l2 += 1) sortLayer(order[l2], indexMap(order[l2 - 1]))
+        for (var l3 = order.length - 2; l3 >= 0; l3 -= 1) sortLayer(order[l3], indexMap(order[l3 + 1]))
+        var c2 = countCrossings(order)
+        if (c2 < best) { best = c2; bestOrder = order.map(function (l) { return l.slice() }) }
+      }
+      order = bestOrder
+
+      // ---------- 4. 坐标 ----------
+      var isDummy = function (id) { return idSet[id] !== true }
+      var sizes = {}
+      var label = {}
+      ids.forEach(function (id) {
+        var size = metrics && metrics.sizeOf ? metrics.sizeOf(id, NODE_W * 2) : { w: NODE_W, h: NODE_H }
+        sizes[id] = { w: size.w, h: size.h }
+        label[id] = metrics && metrics.label ? metrics.label[id] : undefined
+      })
+      var rowH = function (id) { return isDummy(id) ? DUMMY_H : sizes[id].h }
+
+      // 一列一个宽度：层内左沿对齐是分层图可读性的底线，逐个按文字定宽会排出
+      // 七个不同的右沿。取全图最宽的那个名字定列宽，所有节点一样宽。
+      var columnW = 0
+      ids.forEach(function (id) { if (sizes[id].w > columnW) columnW = sizes[id].w })
+      ids.forEach(function (id) { sizes[id].w = columnW })
+
+      var layerHeights = order.map(function (l) {
+        var total = 0
+        l.forEach(function (id) { total += rowH(id) })
+        return total + Math.max(0, l.length - 1) * GAP_Y
+      })
+      var maxH = 0
+      layerHeights.forEach(function (h) { if (h > maxH) maxH = h })
+
+      var placed = []
+      var dummyPos = {}
+      var placeOfId = {}
+      // 反向边（回向边）的虚节点不放在行里：放到整张图下面的一条旁路上。
+      // 放在行里的话，它从源节点的右侧端口一路横穿过去，会穿过同层其它盒子。
+      var bypassY = MARGIN + maxH + 34
+      // 已经画在屏幕上的节点位置冻结：点开上/下展开时，原来的节点不许跳。
+      //
+      // 以前每层都按自己的高度垂直居中，新节点一进来就把老层整体推走——
+      // 实测点一次 ↓，父节点下移 81px。这里改成：有位置的照旧，没位置的往
+      // 该层「已有内容的下方」排。整张图第一次画（没有任何位置）时行为不变。
+      var frozen = {}
+      if (typeof placedAt === 'function') {
+        ids.forEach(function (id) {
+          var at = placedAt(id)
+          if (at === null || at === undefined) return
+          if (typeof at.x !== 'number' || typeof at.y !== 'number') return
+          frozen[id] = { x: at.x, y: at.y, w: at.w, h: at.h, layer: at.layer }
+        })
+      }
+      var frozenCount = Object.keys(frozen).length
+      // 冻结节点的层不动：它已经在那一列了，重算层只会让它在列之间跳。
+      var frozenLayers = {}
+      Object.keys(frozen).forEach(function (id) { frozenLayers[frozen[id].layer] = true })
+
+      order.forEach(function (layerNodes, l) {
+        var colX = MARGIN + l * (columnW + GAP_X)
+        var y = MARGIN + (maxH - layerHeights[l]) / 2
+        // 这一层里已经站着的节点，按它们的 y 排好，新节点接在下面。
+        var standing = []
+        if (frozenCount > 0) {
+          layerNodes.forEach(function (id) {
+            if (frozen[id] !== undefined) standing.push(frozen[id])
+          })
+          standing.sort(function (a, b) { return a.y - b.y })
+          if (standing.length > 0) {
+            var bottom = standing[standing.length - 1]
+            y = bottom.y + bottom.h + GAP_Y
+            colX = standing[0].x
+          }
+        }
+        layerNodes.forEach(function (id) {
+          if (isDummy(id)) {
+            if (reversedDummy[id] === true) {
+              // 底部旁路：只占 x，y 统一在图下方。
+              dummyPos[id] = { x: colX + columnW / 2, y: bypassY }
+              return
+            }
+            dummyPos[id] = { x: colX + columnW, y: y + DUMMY_H / 2 }
+            y += DUMMY_H + GAP_Y
+            return
+          }
+          if (frozen[id] !== undefined) {
+            // 位置照旧，一个像素都不动；只把它记进 placeOfId 供布线用。
+            var keep = frozen[id]
+            // 宽度也用**它画着时的那一个**：新来一个名字更长的邻居会把全图
+            // 列宽推大，跟着走的话老卡片会自己变宽——那也是一种跳变。
+            var keepW = typeof keep.w === 'number' ? keep.w : sizes[id].w
+            var keepRec = {
+              id: id, node: graph.nodes[id], anchor: graph.nodes[id],
+              x: keep.x, y: keep.y, w: keepW, h: sizes[id].h,
+              file: graph.nodes[id].file,
+              layer: keep.layer, tree: 0,
+              label: label[id],
+              ports: portsFor(keep.x, keep.y, keepW, sizes[id].h),
+              flowDir: 'ltr',
+              boxKey: graph.nodes[id].file,
+              frozen: true,
+            }
+            placed.push(keepRec)
+            placeOfId[id] = keepRec
+            return
+          }
+          var w = sizes[id].w
+          var h = sizes[id].h
+          var rec = {
+            id: id, node: graph.nodes[id], anchor: graph.nodes[id],
+            x: colX, y: y, w: w, h: h,
+            file: graph.nodes[id].file,
+            layer: l, tree: 0,
+            label: label[id],
+            ports: portsFor(colX, y, w, h),
+            flowDir: 'ltr',
+            boxKey: graph.nodes[id].file,
+          }
+          placed.push(rec)
+          placeOfId[id] = rec
+          y += h + GAP_Y
+        })
+      })
+
+      // ---------- 边 → polylines（emit 直接吃这个） ----------
+      var polylines = []
+      dagEdges.forEach(function (d, i) {
+        var a = placeOfId[d.edge.from]
+        var b = placeOfId[d.edge.to]
+        if (a === undefined || b === undefined) return
+        var dummies = (dummyOfEdge[i] || []).map(function (k) {
+          var p = dummyPos[k]
+          return p === undefined ? null : { x: p.x, y: p.y }
+        }).filter(Boolean)
+        var types = d.edge.types || ['call']
+        // 反向边（回向边）走底部旁路。光有旁路点不够：直接从源节点的右侧端口
+        // 连到旁路点，会横穿源节点自己那一层的其它盒子。所以拆成三段——
+        //   从端口先下降到旁路高度（垂直，贴着端口那一列的右沿，不压任何盒子）
+        //   → 沿旁路横走到目标那一列
+        //   → 再垂直上升到目标端口
+        var pts
+        if (d.reversed && dummies.length > 0) {
+          var startPort = a.ports.out
+          var endPort = b.ports.in
+          pts = [{ x: startPort.x, y: startPort.y }]
+          pts.push({ x: startPort.x, y: bypassY })
+          pts = pts.concat(dummies.slice(0, dummies.length - 1))
+          pts.push({ x: endPort.x, y: bypassY })
+          pts.push({ x: endPort.x, y: endPort.y })
+        } else {
+          pts = [a.ports.out].concat(dummies).concat([b.ports.in])
+        }
+        polylines.push({
+          id: d.edge.from + '\u2192' + d.edge.to + ':' + types.join(','),
+          from: d.edge.from, to: d.edge.to,
+          type: types[0], types: types,
+          reversed: d.reversed,
+          faded: false,
+          fromFile: a.file, toFile: b.file,
+          pts: pts,
+          sourcePort: { side: 'right', point: a.ports.out },
+          targetPort: { side: 'left', point: b.ports.in },
+          status: 'ok',
+        })
+      })
+
+      return {
+        placed: placed,
+        polylines: polylines,
+        canvasY: bypassY + 60,
+        crossings: best,
+        layers: layerCount,
+        width: MARGIN * 2 + layerCount * columnW + Math.max(0, layerCount - 1) * GAP_X,
+        height: MARGIN * 2 + maxH,
+      }
+    }
+
+    module.exports = { sugiyama }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — One graph in, one drawing out: the stages in order.
 //
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
+// 只有一条路径，没有皮肤。分层由 layout/sugiyama 自己算——不再问服务端要 `/chain`。
+//
+// 这条管线是照 /Users/a1/Workspace/WORKSPACE/visual_map 重写的：
+//   数据(graph) → 分层布局(sugiyama) → 边折线(polylines) → emit 成 SVG 路径
+// visual_map 里布局与布线解耦，靠的是 `edge.bendPoints` 这一个契约；这里也一样，
+// sugiyama 把跨层边的拐点算好放进 pts，emit 只管照着画。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/layout/layout',
   factory: (require) => {
     var module = { exports: {} }
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+    var fact = __runtime_debug.fact
+    var placeOf = __graph_model.placeOf
+    var setPlace = __graph_model.setPlace
     var __layout_prep = require('dsh-cdd-lens/layout/prep')
     var layoutScope = __layout_prep.layoutScope
-    var rankFiles = __layout_prep.rankFiles
-    var orientFlow = __layout_prep.orientFlow
-    var __layout_space = require('dsh-cdd-lens/layout/space')
-    var fitExtent = __layout_space.fitExtent
-    var shiftPlacement = __layout_space.shiftPlacement
-    var shiftDrawing = __layout_space.shiftDrawing
-    var separateOverlaps = __layout_space.separateOverlaps
-    var reclaimStrays = __layout_space.reclaimStrays
-    var restackBoxes = __layout_space.restackBoxes
-    var __layout_camera = require('dsh-cdd-lens/layout/camera')
-    var cameraLayout = __layout_camera.cameraLayout
     var __layout_metrics = require('dsh-cdd-lens/layout/metrics')
     var boxMetrics = __layout_metrics.boxMetrics
-    var __skins_tiers_route = require('dsh-cdd-lens/skins/tiers/route')
-    var routeTiers = __skins_tiers_route.routeTiers
-    var __layout_skin = require('dsh-cdd-lens/layout/skin')
-    var skinFor = __layout_skin.skinFor
-    var __state_store_skin = require('dsh-cdd-lens/state/store')
-    var sharedSkin = __state_store_skin.shared
-    var __skins_tiers_group = require('dsh-cdd-lens/skins/tiers/group')
-    var placeTiers = __skins_tiers_group.placeTiers
-    var __skins_pcb_group = require('dsh-cdd-lens/skins/pcb/group')
-    var placeBoxes = __skins_pcb_group.placeBoxes
-    var __skins_pcb_route = require('dsh-cdd-lens/skins/pcb/route')
-    var routeBoard = __skins_pcb_route.routeBoard
-    var reemitBoard = __skins_pcb_route.reemitBoard
-    var __skins_flow_group = require('dsh-cdd-lens/skins/flow/group')
-    var placeFlow = __skins_flow_group.placeFlow
-    var __skins_flow_route = require('dsh-cdd-lens/skins/flow/route')
-    var routeFlow = __skins_flow_route.routeFlow
-    var reemitFlow = __skins_flow_route.reemitFlow
-    var __layout_channels = require('dsh-cdd-lens/layout/channels')
-    var buildChannels = __layout_channels.buildChannels
-    var __routing_select = require('dsh-cdd-lens/routing/select')
-    var chooseEdges = __routing_select.chooseEdges
+    var __layout_sugiyama = require('dsh-cdd-lens/layout/sugiyama')
+    var sugiyama = __layout_sugiyama.sugiyama
+    var __layout_space = require('dsh-cdd-lens/layout/space')
+    var reclaimStrays = __layout_space.reclaimStrays
+    var separateOverlaps = __layout_space.separateOverlaps
+    var fitExtent = __layout_space.fitExtent
+    var shiftDrawing = __layout_space.shiftDrawing
     var __layout_gather = require('dsh-cdd-lens/layout/gather')
     var applyGather = __layout_gather.applyGather
     var freeGatherDragged = __layout_gather.freeGatherDragged
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
+    var __routing_select = require('dsh-cdd-lens/routing/select')
+    var chooseEdges = __routing_select.chooseEdges
+    var __routing_emit = require('dsh-cdd-lens/routing/emit')
+    var emitWires = __routing_emit.emitWires
 
     /**
      * Turn one graph into one drawing.
      *
-     * Every step is a file of its own: what is on screen, how it ranks, how
-     * big the boxes are, where they go, which way each node faces, where the
-     * corridors are, which relations earn a wire, and how those wires are
-     * routed and emitted. Routing is the last stage and the only one the skin
-     * decides, so replacing it replaces nothing else.
-     * @param graph - nodes and edges to draw.
-     * @param relationFilter - relation kinds the viewer left switched on.
-     * @param avail - the canvas viewport width in CSS pixels.
-     * @returns nodes, wires, labels, junctions, arrows, file boxes and size.
+     * @param graph - nodes and edges to draw。
+     * @param relationFilter - relation kinds the viewer left switched on。
+     * @param avail - the canvas viewport width in CSS pixels。
+     * @returns nodes, wires, labels, junctions, arrows, file boxes and size。
      */
     function layout(graph, relationFilter, avail) {
-      if (graph.rootId === null) return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
-      var scope = layoutScope(graph)
-      var rank = rankFiles(graph, relationFilter, scope)
-      var metrics = boxMetrics(graph, scope, avail)
-      // Layers when `/chain` has said where everything goes, file boxes or
-      // direction columns when it has not — or whichever of the three the
-      // viewer asked for. They cannot be mixed: half a drawing laid out by
-      // relation and half by directory is harder to read than either alone.
-      var skin = skinFor(graph, scope.included, sharedSkin.skin || 'auto')
-      var place = skin === 'tiers' ? placeTiers(graph, scope, metrics)
-        : skin === 'flow' ? placeFlow(graph, scope, metrics)
-        : placeBoxes(graph, scope, metrics)
-      cameraLayout(graph, scope, place, rank, metrics)
-      // A node dragged out of a running gather is out of its frame too —
-      // before the restack, which would seat it again.
-      freeGatherDragged(place)
-      // Hand-placed coordinates are written in verbatim above, so this is the
-      // first point at which a box can be on top of another, or off on its own
-      // in an empty quarter because the layout changed shape under a saved
-      // point. Pull the strays in first, then push apart what now collides.
-      reclaimStrays(place, metrics, avail)
-      separateOverlaps(place, metrics)
-      // Frames stay in their grid slots; a drag reorders what is inside one.
-      restackBoxes(place, metrics)
-      // The gather overlay seats the selected node's callers and callees
-      // beside it — after the restack, so a frame cannot take a gathered node
-      // back, and before orientation and routing read the positions. With no
-      // selection gathered it moves nothing and every skin draws as before.
-      applyGather(graph, place, metrics)
-      // The grid placed these boxes; deriving them again from where the
-      // anchors ended up threw that away — and it ran after the separation
-      // pass, so two files whose anchors had drifted together produced two
-      // boxes on top of each other.
-      var orient = orientFlow(graph, scope, place, metrics, avail)
-      metrics.canvasWidth = orient.canvasWidth
-      place.canvasY = orient.canvasY
-      var channels = buildChannels(place, metrics)
-      var edges = chooseEdges(graph, scope, orient)
-      // Declared for both paths on purpose. These used to be `var`s inside the
-      // else, which hoists them: the layered path then reached a `route` that
-      // was always `undefined`, and the shift below threw on it — blanking the
-      // whole view for any drawing that happened to need moving.
-      var route = null
-      var drawn
-      if (skin === 'tiers') {
-        // Layered drawings get a router that knows about layers: the gap under
-        // a row is the only place a wire may run sideways, so a wire never
-        // crosses a node it has nothing to do with.
-        drawn = routeTiers(edges, orient, relationFilter, metrics)
-        route = drawn.route
-      } else if (skin === 'flow') {
-        // Flow drawings get a router that knows about the corridors the
-        // placement reserved between the columns: the only places a wire may
-        // run at all.
-        var flow = routeFlow(edges, orient, relationFilter, metrics)
-        route = flow.route
-        drawn = flow.drawn
-      } else {
-        var board = routeBoard(edges, orient, relationFilter, metrics, channels)
-        route = board.route
-        drawn = board.drawn
+      if (graph.rootId === null) {
+        note('layout', 'rootId=null，没有起点可用（nodes=' + Object.keys(graph.nodes).length + '）')
+        return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
-      // The size comes from what was drawn. If any of it landed off the top
-      // left, move the whole drawing into view and emit it again there —
-      // routing does not change, only where its origin sits.
+      var scope = layoutScope(graph)
+      var metrics = boxMetrics(graph, scope, avail)
+
+      // ---- 会话自己的边要画出来，不管有没有人按过按钮 ----
+      //
+      // 这是删掉 /among 之后必须补上的一件事：那条路由以前给 bridge 边打
+      // `always`。没有它，一个刚 ingest 出来的图里每条边两端都没被按过，
+      // select.js 就把它们全部滤掉——画面上就是「一堆卡片，一根线都没有」。
+      //
+      // 判据不是「谁打的标记」，而是这个节点本身有没有被这次会话碰过：
+      // 两个 anchor 都是会话自己的，它们之间的关系就是这次会话要看的答案。
+      graph.edges.forEach(function (e) {
+        if (e.always === true) return
+        var fromUI = uiOf(graph, e.from)
+        var toUI = uiOf(graph, e.to)
+        var fromSession = fromUI !== null && (fromUI.session === true || fromUI.explored === true)
+        var toSession = toUI !== null && (toUI.session === true || toUI.explored === true)
+        if (fromSession && toSession) e.always = true
+      })
+
+      // ---- 分层布局：消环 → 分层 → 排序 → 坐标，一次全出 ----
+      var laid = sugiyama(graph, scope.included, metrics, function (id) {
+        var known = placeOf(graph, id)
+        // 只认已经真正画过的那一次位置。node 上没有位置 = 它还没上过屏幕。
+        if (known === null || typeof known.x !== 'number' || typeof known.y !== 'number') return null
+        return known
+      })
+      var place = {
+        placed: laid.placed,
+        rows: [],
+        canvasY: laid.canvasY,
+      }
+
+      // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
+      // 注意顺序：先应用保存的位置，再分离重叠——反过来的话保存的位置会被覆盖。
+      applySavedPositions(graph, place, shared.nodePositions || {})
+      freeGatherDragged(place)
+      reclaimStrays(place, metrics, avail)
+
+      var orient = { byId: {} }
+      place.placed.forEach(function (p) { orient.byId[p.id] = p })
+
+      // 选中节点的上下游坐到它旁边，收拢之后才推重叠——反过来的话
+      // 收拢列里刚排好的卡片会被分离过程推走。
+      applyGather(graph, place, metrics)
+      separateOverlaps(place, metrics)
+
+      // ---- 布线：哪条边值得画 ----
+      var edges = chooseEdges(graph, scope, orient)
+      var picked = {}
+      edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
+
+      // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
+      var polylines = laid.polylines.filter(function (line) {
+        return picked[line.from + '\u0000' + line.to] === true
+      })
+      var kept = {}
+      polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
+      // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
+      var hops = { hSegs: new Map(), segments: [] }
+      var drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
+
+      // ---- 尺寸：从画出来的东西反推 ----
+      // 手工坐标可能把某个节点放到负坐标（画布原点左边/上边）。那时整张图
+      // 往右下挪一屏边距，挪完再重新出线——布线不变，只是原点移了位置。
       var fit = fitExtent(place, drawn, metrics)
       if (fit.dx > 0 || fit.dy > 0) {
-        shiftDrawing(place, route, fit.dx, fit.dy)
-        drawn = reemitBoard(route, orient, metrics)
+        shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
+        orient.byId = {}
+        place.placed.forEach(function (p) { orient.byId[p.id] = p })
+        drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }
+      // 把这一次画出来的坐标记回 graph.layout，下一次展开时它们就是「已经在
+      // 屏幕上的位置」，会被冻结，不再因为新节点进来而整体跳变。
+      place.placed.forEach(function (p) {
+        setPlace(graph, p.id, {
+          x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer,
+          ports: p.ports,
+        })
+      })
+
+      var maxX = fit.maxX, maxY = fit.maxY
+
+      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (laid.layers || 0) + 'L')
+      note('layout', 'in=' + Object.keys(graph.nodes).length + ' edges=' + graph.edges.length
+        + ' -> placed=' + place.placed.length + ' wires=' + drawn.wires.length + ' layers=' + laid.layers)
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
         junctions: drawn.junctions, arrows: drawn.arrows, unrouted: drawn.unrouted,
-        rows: place.rows || [], files: place.fileBoxes,
-        width: Math.max(avail || 0, fit.maxX + metrics.PAD),
-        height: Math.max(360, fit.maxY + metrics.PAD),
+        rows: [], files: [],
+        layers: laid.layers,
+        crossings: laid.crossings,
+        width: Math.max(avail || 0, maxX + metrics.PAD),
+        height: Math.max(360, maxY + metrics.PAD),
       }
+    }
+
+    /**
+     * 手工拖过的坐标原样写上。
+     *
+     * 分层布局先给出建议位置，用户拖过的那一个覆盖它——不然每次重画都会把用户
+     * 摆好的东西弹回去。
+     */
+    function applySavedPositions(graph, place, positions) {
+      if (positions === null || positions === undefined) return
+      place.placed.forEach(function (p) {
+        var at = positions[p.id]
+        if (at === undefined || typeof at.x !== 'number' || typeof at.y !== 'number') return
+        p.x = at.x
+        p.y = at.y
+        p.manual = true
+        p.ports = {
+          in: { x: p.x, y: p.y + p.h / 2 },
+          out: { x: p.x + p.w, y: p.y + p.h / 2 },
+        }
+      })
     }
 
     module.exports = { layout }
@@ -6571,8 +5718,8 @@ window.__ModuleLoader__.load({
     var History = __view_panels.History
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
+    var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
+    var openDockBesideChat = __shell_chatSeat.openDockBesideChat
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
     var EXPANDED_KEY = 'cdd-lens.trajectory-expanded.v1'
@@ -6808,13 +5955,32 @@ window.__ModuleLoader__.load({
       try { return document.execCommand('insertText', false, path + ' ') } catch (e) { return false }
     }
 
+    function sourceLineCount(source) {
+      if (source === null || source === undefined) return 0
+      if (Number.isFinite(source.lineCount)) return source.lineCount
+      return Math.max(0, Number(source.end) - Number(source.start) + 1)
+    }
+
     function SourceSnippet(props) {
       var source = (shared.sourceCache || {})[props.id]
       if (source === undefined) return h('div', { className: 'cddl-trace-loading' }, '读取源码…')
+      if (source === null || source.lines === undefined) {
+        return h('div', {
+          className: 'cddl-trace-source cddl-trace-missing',
+          'data-cdd-source-id': props.id,
+        }, '源码范围读不出来')
+      }
+      var count = sourceLineCount(source)
       return h('div', { className: 'cddl-trace-source' }, [
         h('div', { key: 'path', className: 'cddl-trace-path', title: source.file },
-          source.file + ':' + source.start + '–' + source.end),
-        h('pre', { key: 'code' }, source.lines.map(function (text, i) {
+          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'),
+        h('pre', {
+          key: 'code',
+          'data-cdd-source-id': source.id || props.id,
+          'data-cdd-source-start': source.start,
+          'data-cdd-source-end': source.end,
+          'data-cdd-source-lines': count,
+        }, source.lines.map(function (text, i) {
           return h('div', { key: source.from + i }, [
             h('span', { key: 'n' }, source.from + i),
             h('code', { key: 'c' }, text === '' ? ' ' : text),
@@ -6824,6 +5990,7 @@ window.__ModuleLoader__.load({
     }
 
     function locateInGraph(ctx, engine, id) {
+      // 先把图面板开出来，再定位：面板没开的话，定位完了也没人看得见。
       openDockBesideChat(ctx)
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
@@ -6835,7 +6002,7 @@ window.__ModuleLoader__.load({
     function AnchorRow(props) {
       var row = props.row
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
-      var anchor = node === undefined ? null : node.anchor
+      var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
       return h('article', {
         className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : ''),
@@ -7024,10 +6191,6 @@ window.__ModuleLoader__.load({
             'aria-label': collapsed ? '展开代码轨迹' : '收起代码轨迹',
             title: collapsed ? '展开轨迹侧栏' : '收起轨迹侧栏', onClick: toggleCollapsed,
           }, collapsed ? '代码轨迹' : '收起'),
-          h('button', {
-            key: 'graph', className: 'cddl-trajectory-graph',
-            onClick: function () { openDockBesideChat(props.ctx) },
-          }, '逻辑图'),
         ]),
         h('div', {
           key: 'body', ref: bodyRef, className: 'cddl-trajectory-body',
@@ -7305,7 +6468,7 @@ window.__ModuleLoader__.load({
           h(Search, { key: 'q', engine: engine }),
           h('div', { key: 'b', className: 'cddl-body' }, [body, h(Unresolved, { key: 'u' })]),
           h(Legend, { key: 'l' }),
-          h(Source, { key: 's' }),
+          h(Source, { key: 's', engine: engine }),
           h(History, { key: 'y' }),
         ]))
     }
@@ -7432,6 +6595,23 @@ window.__ModuleLoader__.load({
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
+      /**
+       * 这个节点现在**看得见吗**（它的框整个落在可滚动视野内，留一点余量）。
+       *
+       * 展开只在这里返回 false 时才动视口：你点开一个就在眼前的节点，
+       * 画面不该动；点开一个滚出视野的节点，才需要把它带回来。
+       */
+      var onScreen = function (el, id, m, scale) {
+        if (el === null) return true
+        var target = m.nodes.filter(function (p) { return p.id === id })[0]
+        if (target === undefined) return false
+        var pad = 12
+        var left = target.x * scale, top = target.y * scale
+        var right = (target.x + target.w) * scale, bottom = (target.y + target.h) * scale
+        return left >= el.scrollLeft + pad && top >= el.scrollTop + pad
+          && right <= el.scrollLeft + el.clientWidth - pad
+          && bottom <= el.scrollTop + el.clientHeight - pad
+      }
       var centerOn = function (id, scale) {
         var el = canvasRef.current
         if (el === null) return
@@ -7464,8 +6644,18 @@ window.__ModuleLoader__.load({
         mode: 'fit',
         seq: 0,
       }
+      // 视口只在**真的有人请求**时才动。
+      //
+      // 以前这个 effect 的依赖里有 model.width / model.height，于是图一长大
+      // （展开一层、画布变高）它就重跑，把视口重新居中到选中节点——节点坐标
+      // 一个像素没动，整屏却在跳。用户看到的就是「展开之后乱跳」。
+      //
+      // 现在按请求序号走：同一个 seq 只消费一次，重画多少次视口都不动。
+      var lastSeq = useRef(-1)
       useEffect(function () {
         if (tab[0] !== 'graph' || model.nodes.length === 0) return
+        if (viewportRequest.seq === lastSeq.current) return
+        lastSeq.current = viewportRequest.seq
         var frame = window.requestAnimationFrame(function () {
           // Never auto-shrink. Fitting the whole canvas means dividing by its
           // HEIGHT, and a graph of any size is tall — the solve landed on 68%
@@ -7478,10 +6668,16 @@ window.__ModuleLoader__.load({
             var readable = Math.max(zoom[0], 1)
             if (zoom[0] !== readable) setZoom(readable)
             window.requestAnimationFrame(function () { centerOn(viewportRequest.id, readable) })
+          } else if (viewportRequest.mode === 'ensure') {
+            // 展开用这个：节点已经在视野里就什么都不做。展开一个新节点时视口
+            // 跳一下，看着就是「点了展开树乱跳」——真正跳的是视口不是节点。
+            if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) {
+              centerOn(viewportRequest.id, zoom[0])
+            }
           } else centerOn(viewportRequest.id, zoom[0])
         })
         return function () { window.cancelAnimationFrame(frame) }
-      }, [tab[0], viewportRequest.seq, model.width, model.height])
+      }, [tab[0], viewportRequest.seq])
 
       return { ctx: ctx, engine: engine, tab: tab, relations: relations, zoom: zoom, layoutRevision: layoutRevision, canvasRef: canvasRef, context: context, viewRef: viewRef, reserve: reserve, model: model, setZoom: setZoom, centerOn: centerOn, fit: fit, toggleRelation: toggleRelation }
     }
@@ -7514,6 +6710,8 @@ window.__ModuleLoader__.load({
     var Outline = __view_outline.Outline
     var __view_need_ndex = require('dsh-cdd-lens/view/needIndex')
     var NeedIndex = __view_need_ndex.NeedIndex
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var DebugBar = __runtime_debug.DebugBar
     var __view_node = require('dsh-cdd-lens/view/node')
     var GraphNode = __view_node.GraphNode
 
@@ -7574,11 +6772,11 @@ window.__ModuleLoader__.load({
             }, [
               h('defs', { key: 'd' }, [
                 h('marker', {
-                  key: 'a', id: 'cddl-arrow', markerWidth: 8, markerHeight: 8, refX: 6.5, refY: 3, orient: 'auto',
-                }, h('path', { d: 'M0,0 L6,3 L0,6 z' })),
+                  key: 'a', id: 'cddl-arrow', markerWidth: 11, markerHeight: 11, refX: 8, refY: 3.4, orient: 'auto',
+                }, h('path', { d: 'M0,0 L7,3.4 L0,6.8 z' })),
                 h('marker', {
-                  key: 'f', id: 'cddl-arrow-faded', markerWidth: 8, markerHeight: 8, refX: 6.5, refY: 3, orient: 'auto',
-                }, h('path', { d: 'M0,0 L6,3 L0,6 z' })),
+                  key: 'f', id: 'cddl-arrow-faded', markerWidth: 11, markerHeight: 11, refX: 8, refY: 3.4, orient: 'auto',
+                }, h('path', { d: 'M0,0 L7,3.4 L0,6.8 z' })),
               ]),
             ].concat(model.wires.map(function (wire) {
               return h('path', {
@@ -7668,7 +6866,12 @@ window.__ModuleLoader__.load({
         ]))
       }
 
-      return canvas
+      // 调试栏挂在画布外面、上面：它是个诊断窄栏，不该跟着画布缩放平移。
+      // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
+      return h('div', { className: 'cddl-stage-inner' }, [
+        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
+        h('div', { key: 'cv', className: 'cddl-canvaswrap' }, canvas),
+      ])
     }
 
     module.exports = { renderCanvas }
@@ -7701,12 +6904,6 @@ window.__ModuleLoader__.load({
     var SKIN_KEY = 'cdd-lens.skin.v1'
     // Restored once, before anything draws, so the first frame is already the
     // drawing this browser last asked for rather than a flash of the other one.
-    if (shared.skin === undefined) {
-      try {
-        var savedSkin = window.localStorage.getItem(SKIN_KEY)
-        shared.skin = savedSkin === 'tiers' || savedSkin === 'pcb' || savedSkin === 'flow' ? savedSkin : 'auto'
-      } catch (e) { shared.skin = 'auto' }
-    }
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var clearNodePositions = __state_persist.clearNodePositions
     var __view_panels = require('dsh-cdd-lens/view/panels')
@@ -7732,11 +6929,6 @@ window.__ModuleLoader__.load({
 
       // Kept per browser: which drawing someone prefers is a reading habit, not
       // a property of the repository.
-      var setSkin = function (value) {
-        shared.skin = value
-        try { window.localStorage.setItem(SKIN_KEY, value) } catch (e) { /* optional */ }
-        publish()
-      }
 
       return h('div', { className: 'cddl-toolbar', key: 't' }, [
           h('div', { key: 'seg', className: 'cddl-seg' }, [
@@ -7744,25 +6936,32 @@ window.__ModuleLoader__.load({
             h('button', { key: 'o', className: tab[0] === 'outline' ? 'on' : '', onClick: function () { tab[1]('outline') } }, '目录'),
             h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: function () { tab[1]('draw') } }, 'cdd draw'),
           ]),
-          // All three drawings have always existed as data; only the chooser
-          // used to decide between two of them. Layers read as a call chain,
-          // file boxes read as a board, flow reads as direction — which one
-          // answers your question is not something the data knows.
+          // 树选择器。规则文档 §1.3 定义了四棵树；这里就是选它看哪一棵。
+          //   直接树 = 1 度树：seed 之间直接有边，中间不插点
+          //   anchor 树：单个 anchor 周围直接相连的邻居，也不插点
+          //   2 度树：允许一个中间点把两个 seed 接起来
+          //   edit 树：只管 edit 过的那批 anchor
+          // 「全部」不套任何树，把图里现有的都画出来。
           tab[0] !== 'graph' ? null
-            : h('div', { key: 'skin', className: 'cddl-seg cddl-skin', 'aria-label': '图的形态' },
-              [['auto', '自动'], ['tiers', '分层'], ['pcb', 'PCB'], ['flow', '流向']].map(function (pair) {
-                var value = pair[0]
-                return h('button', {
-                  key: value,
-                  className: (shared.skin || 'auto') === value ? 'on' : '',
-                  'aria-pressed': (shared.skin || 'auto') === value ? 'true' : 'false',
-                  title: value === 'tiers' ? '按调用层级排成列'
-                    : value === 'pcb' ? '按文件分盒子，走线像电路板'
-                    : value === 'flow' ? '按调用方向分列，线走层间预留的通道'
-                    : '有层级信息就分层，没有就用文件盒',
-                  onClick: function () { setSkin(value) },
-                }, pair[1])
-              })),
+            : h('div', { key: 'tree', className: 'cddl-seg cddl-tree', 'aria-label': '看哪棵树' },
+              [['all', '全部'], ['anchor', 'anchor 树'], ['degree1', '1 度树'], ['degree2', '2 度树'], ['edit', 'edit 树']]
+                .map(function (pair) {
+                  var value = pair[0]
+                  return h('button', {
+                    key: value,
+                    className: (shared.treeMode || 'all') === value ? 'on' : '',
+                    'aria-pressed': (shared.treeMode || 'all') === value ? 'true' : 'false',
+                    title: value === 'degree1' ? 'seed 之间直接有边的那些，中间不插点'
+                      : value === 'degree2' ? '允许一个中间点把两个 seed 接起来'
+                      : value === 'edit' ? '只看这次会话 edit 过的 anchor'
+                      : value === 'anchor' ? '当前选中 anchor 周围直接相连的邻居'
+                      : '图里现有的全部画出来',
+                    onClick: function () {
+                      shared.treeMode = value
+                      publish()
+                    },
+                  }, pair[1])
+                })),
           h(Search, { key: 'q', engine: engine }),
           h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系筛选' },
             ['call', 'dataflow', 'inherit', 'impact', 'dispatch'].map(function (name) {

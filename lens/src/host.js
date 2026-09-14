@@ -346,25 +346,35 @@ module.exports = {
     register('/outline', async (_req, res, q) => json(res, 200, await ask('outline', q)))
     register('/file', async (_req, res, q) => json(res, 200, await ask('file', q)))
     register('/anchor', async (_req, res, q) => json(res, 200, await ask('anchor', q)))
-    // One request for the whole local picture: the seeds, everything within
-    // `hops` of them in both directions, grouped into the trees they form.
-    // Asking hop by hop is what left the client holding a pile of anchors with
-    // no idea which layer any of them belonged to.
-    register('/chain', async (_req, res, q) => json(res, 200, await ask('chain', q)))
     register('/members', async (_req, res, q) => json(res, 200, await ask('members', q)))
     register('/search', async (_req, res, q) => json(res, 200, await ask('search', q)))
     register('/source', async (_req, res, q) => json(res, 200, await ask('source', q)))
-    register('/among', async (_req, res, q) => json(res, 200, await ask('among', q)))
 
-    register('/neighbors', async (_req, res, q) => {
+    // ---- 图的数据面：两个动作 -------------------------------------------
+    //
+    // 旧的 /chain /neighbors /among /verify 已删。它们各自承载的职责分给了下面
+    // 两个接口和新布局，不再需要独立路由：
+    //   /chain      -> 布局自己算层（client/layout/sugiyama）
+    //   /neighbors  -> /expand，区别是不再只认 call，按 rel 分关系返回
+    //   /among      -> /walk 的结果里本来就有边；桥由 2 度树那一步产生
+    //   /verify     -> 保留职责，重命名为 /recheck
+
+    /** 展开一层：沿某个关系、某个方向走一跳。 */
+    register('/expand', async (_req, res, q) => {
       const direction = q.dir === 'up' ? 'up' : 'down'
-      json(res, 200, await ask('neighbors', q, { direction }))
+      json(res, 200, await ask('expand', q, { direction }))
+    })
+
+    /** 链式展开：一路走到底，一次请求拿到整条链。 */
+    register('/walk', async (_req, res, q) => {
+      const direction = q.dir === 'up' ? 'up' : 'down'
+      json(res, 200, await ask('walk', q, { direction }))
     })
 
     // Re-validation takes the whole drawn graph, so the id list rides in a POST
     // body — a query string of three hundred anchor ids is a URL some proxy
     // will silently cut in half.
-    register('/verify', async (req, res, q) => {
+    register('/recheck', async (req, res, q) => {
       if (req.method === 'POST') {
         const body = await readJson(req)
         const ids = Array.isArray(body.ids) ? body.ids.slice(0, 2000) : []

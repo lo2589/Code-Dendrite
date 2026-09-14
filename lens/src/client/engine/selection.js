@@ -13,6 +13,8 @@ window.__ModuleLoader__.load({
     var shared = __state_store.shared
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var saveNodePosition = __state_persist.saveNodePosition
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     /**
      * What is selected, focused, or being dragged.
@@ -31,6 +33,10 @@ window.__ModuleLoader__.load({
           shared.focused = id
           shared.edgeFocus = null
           shared.lit = null
+          // 记下「这一轮看过它」：看过的节点按轮次变旧、过期撤下；
+          // edit 过的不受影响，一直留着（见 graph/visible.fadedOut）。
+          var ui = uiOf(shared.graph, id)
+          if (ui !== null) ui.viewedAt = shared.turn
           requestViewport(id, 'center')
           publish()
           return engine.source(id)

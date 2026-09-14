@@ -39,6 +39,9 @@ window.__ModuleLoader__.load({
       place.placed.forEach(function (p) {
         if (gather.freed[p.id] !== true) return
         p.boxKey = undefined
+        // 用户把它拖出收拢列了：这就是他放的位置，分离重叠不许再推它。
+        // 不标 manual 的话，收拢列的分离过程会把它推回旁边一格。
+        p.manual = true
         freed += 1
       })
       return freed
@@ -121,16 +124,21 @@ window.__ModuleLoader__.load({
           p.x = x
           p.y = y0
           p.gathered = true
+          // 被收拢的节点也算「用户放好的位置」：分离重叠那一步不许再推它。
+          // 以前 gather 之后紧跟 restackBoxes 把它们捡回去，所以不需要这个标记；
+          // 现在收拢跑在分离之后，不标的话刚排好的列会被推开。
+          p.manual = true
           // Out of its frame: the frame would otherwise restack it straight
           // back into its old slot on this very pass.
           p.boxKey = undefined
-          // Re-stamped with the column it now stands in. The flow router
-          // reads its corridors off flowLayer, and a card beside the focus
-          // that still claims its old layer would be routed to through the
-          // corridors of a column it no longer occupies — the long way round
-          // that this overlay exists to abolish.
-          if (typeof focus.flowLayer === 'number') {
-            p.flowLayer = focus.flowLayer + (rightward ? 1 : -1)
+          // 重新归层：它现在站的那一列就是它的新层。分层布局按 layer 定 x，
+          // 一个还报着旧层的卡片会被排回原来的列，收拢就白做了。
+          var targetLayer = typeof focus.layer === 'number'
+            ? focus.layer + (rightward ? 1 : -1)
+            : undefined
+          if (targetLayer !== undefined) {
+            p.layer = targetLayer
+            p.flowLayer = targetLayer
           }
           seated.push(p)
           moved += 1

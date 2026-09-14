@@ -13,6 +13,10 @@ window.__ModuleLoader__.load({
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var addEdge = __graph_model.addEdge
     var addNode = __graph_model.addNode
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+    var fact = __runtime_debug.fact
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
@@ -139,9 +143,22 @@ window.__ModuleLoader__.load({
               // One surviving verbatim read is enough to say the model still knows it.
               record.remembered = record.events.some(function (e) { return e.onSurface })
               record.approx = record.events.every(function (e) { return e.approx })
+              // 把「这次会话改过它」同时写到节点上：edit 的节点一直留在图上，图那一边
+              // 不必每次去翻 trace。也记下最近一次被碰是哪一轮——看过的节点按轮次
+              // 变旧、过期撤下（见 graph/visible.fadedOut）。
+              var ui = uiOf(shared.graph, record.id)
+              if (ui !== null) {
+                if (edited || working) ui.edited = true
+                ui.viewedAt = record.lastTurn
+              }
             })
             shared.trace = byAnchor
             shared.unresolved = Object.keys(unresolved).map(function (k) { return unresolved[k] })
+            note('graph', 'anchors=' + Object.keys(byAnchor).length
+              + ' unresolved=' + shared.unresolved.length + ' graphNodes=' + Object.keys(shared.graph.nodes).length
+              + ' graphEdges=' + shared.graph.edges.length)
+            fact('trace', Object.keys(byAnchor).length)
+            fact('unresolved', shared.unresolved.length)
             // Rank by the seq of the first call that reached each anchor: the
             // order the agent actually walked, which is what the graph is for.
             var firstSeq = {}
@@ -177,16 +194,16 @@ window.__ModuleLoader__.load({
             ids.forEach(function (id) {
               if (shared.graph.nodes[id] === undefined) {
                 addNode(shared.graph, byAnchor[id].anchor)
-                shared.graph.nodes[id].island = true
+                uiOf(shared.graph, id).island = true
                 fresh.push(id)
               }
-              shared.graph.nodes[id].session = true
+              uiOf(shared.graph, id).session = true
             })
             if (shared.graph.rootId === null) {
               var newest = ids.map(function (id) { return byAnchor[id] })
                 .sort(function (l, r) { return r.lastTurn - l.lastTurn })[0]
               shared.graph.rootId = newest.id
-              shared.graph.nodes[newest.id].island = false
+              uiOf(shared.graph, newest.id).island = false
               if (shared.selected === null) {
                 shared.selected = newest.id
                 requestViewport(newest.id, 'fit')
@@ -211,8 +228,8 @@ window.__ModuleLoader__.load({
               (link.bridges || []).forEach(function (anchor) {
                 if (shared.graph.nodes[anchor.id] === undefined) {
                   addNode(shared.graph, anchor)
-                  shared.graph.nodes[anchor.id].bridge = true
-                  shared.graph.nodes[anchor.id].synthetic = true
+                  uiOf(shared.graph, anchor.id).bridge = true
+                  uiOf(shared.graph, anchor.id).synthetic = true
                 }
               })
               link.edges.forEach(function (e) {
@@ -223,10 +240,10 @@ window.__ModuleLoader__.load({
                 var edge = addEdge(shared.graph, e.from, e.to, [e.type])
                 if (edge !== undefined) edge.always = true
                 if (shared.graph.nodes[e.from] !== undefined) {
-                  shared.graph.nodes[e.from].island = false
+                  uiOf(shared.graph, e.from).island = false
                 }
                 if (shared.graph.nodes[e.to] !== undefined) {
-                  shared.graph.nodes[e.to].island = false
+                  uiOf(shared.graph, e.to).island = false
                 }
               })
               publish()
@@ -236,26 +253,26 @@ window.__ModuleLoader__.load({
 
           // What the picture is about is what was changed. The edits are the
           // seeds; `chain` pushes each of them out and back and reports the
-          // trees they land in, so a node arrives already knowing its layer
-          // instead of the view having to invent one from file names.
+          // 这里以前调 engine.chain(edits, 1) 让服务端把图分层、把树长出来。
+          //
+          // /chain 已经删了——分层现在由布局自己算（layout/sugiyama 的第 2 步），
+          // 子节点由按关系的展开按钮（/expand、/walk）拉进来。这一次会话 ingest
+          // 只负责把「碰过的 anchor」放上屏幕并连上它们之间的边，够布局画第一版。
+          //
+          // 留着这个调用的话，engine.chain 不存在会当场抛错，整张图建不出来——
+          // 表现就是「面板说还没有起点」，而画布空白。
           var grow = function () {
-            var edits = Object.keys(shared.trace || {}).filter(function (id) {
-              var record = shared.trace[id]
-              var node = shared.graph.nodes[id]
-              return (record.state === 'edited' || record.state === 'working')
-                && node !== undefined && node.synthetic !== true && node.bridge !== true
-            })
-            // Nothing was edited yet — a session that has only read so far still
-            // deserves a picture, so the reads stand in as seeds.
-            if (edits.length === 0) {
-              edits = Object.keys(shared.trace || {}).filter(function (id) {
-                var node = shared.graph.nodes[id]
-                return node !== undefined && node.synthetic !== true && node.bridge !== true
-              })
-            }
-            return engine.chain(edits, 1)
+            fact('graphNodes', Object.keys(shared.graph.nodes).length)
+            fact('graphEdges', shared.graph.edges.length)
+            fact('root', shared.graph.rootId === null ? 'null' : String(shared.graph.rootId).split('::').pop())
+            note('graph', '图就绪 nodes=' + Object.keys(shared.graph.nodes).length
+              + ' edges=' + shared.graph.edges.length + ' root=' + shared.graph.rootId)
+            publish()
+            return Promise.resolve()
           }
 
+          note('graph', 'ingest calls=' + snap.calls.length + ' pending=' + pending.length
+            + ' resolved=' + Object.keys(shared.resolved).length)
           if (window.__cddLens !== undefined) window.__cddLens.pending = pending.length
           if (pending.length === 0) { after(); return Promise.resolve() }
           return fetch(ROUTE + '/resolve?' + new URLSearchParams(params()).toString(), {

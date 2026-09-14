@@ -40,7 +40,7 @@ window.__ModuleLoader__.load({
       }
       var box = function (b) { see(b.x, b.y); see(b.x + b.w, b.y + b.h) }
       place.placed.forEach(box)
-      place.fileBoxes.forEach(box)
+      ;(place.fileBoxes || []).forEach(box)
       ;(drawn.junctions || []).forEach(function (j) { see(j.x, j.y) })
       ;(drawn.labels || []).forEach(function (l) { see(l.x, l.y) })
       ;(drawn.arrows || []).forEach(function (a) { see(a.x, a.y) })
@@ -81,7 +81,7 @@ window.__ModuleLoader__.load({
         p.x += dx
         p.y += dy
       })
-      place.fileBoxes.forEach(function (b) { b.x += dx; b.y += dy })
+      ;(place.fileBoxes || []).forEach(function (b) { b.x += dx; b.y += dy })
       ;(place.rows || []).forEach(function (row) { row.x += dx; row.y += dy })
     }
 

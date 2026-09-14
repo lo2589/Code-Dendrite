@@ -29,6 +29,12 @@ window.__ModuleLoader__.load({
       selected: null,
       focused: null,
       edgeFocus: null,
+      // 看哪棵树（规则文档 §1.3）：all 不套树，其余是四棵树之一。
+      // 选择器在工具栏；这个值决定布局把哪些节点放上屏幕。
+      treeMode: 'all',
+      // 画线模式。默认 'all' 画全部关系边——默认走「主干」的话，没选中任何节点时
+      // 画面上可能一根线都没有，看起来就是「图坏了」。工具栏上仍可切回主干。
+      wireMode: 'all',
       // What a click on a wire lit up: the anchors and the wires that
       // belong to the same run of relations. A highlight, not a layout —
       // nothing moves, so you can see what you clicked in the place you
@@ -83,6 +89,16 @@ window.__ModuleLoader__.load({
       shared.listeners.forEach(function (fn) { fn() })
     }
 
+    /**
+     * 请求把视口移到某个节点上。
+     *
+     * mode:
+     *   'center'  直接居中（用户主动点选、搜索跳转）
+     *   'fit'     按可读比例居中（换图、会话 ingest）
+     *   'ensure'  **只在它不在视野里时才动**。展开用这个：点一下展开，
+     *             节点就在你眼前，视口却跳一下，看着就是「树乱跳」。
+     *             已经在视野里就什么都不做，你看到的画面一个像素都不动。
+     */
     function requestViewport(id, mode) {
       shared.viewportRequest = {
         id: id,

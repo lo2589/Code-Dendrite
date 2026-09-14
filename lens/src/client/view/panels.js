@@ -23,15 +23,36 @@ window.__ModuleLoader__.load({
 
     // ---- source ------------------------------------------------------------
 
+    function sourceLineCount(source) {
+      if (source === null || source === undefined) return 0
+      if (Number.isFinite(source.lineCount)) return source.lineCount
+      return Math.max(0, Number(source.end) - Number(source.start) + 1)
+    }
+
+    function SourceMissing(props) {
+      return h('div', { className: 'cddl-src' }, [
+        h('div', { key: 'h', className: 'cddl-srch' }, [
+          h('span', { key: 't' }, props.id + ' · 源码范围读不出来'),
+          h('button', {
+            key: 'x', className: 'cddl-src-close', title: '关闭源码详情',
+            onClick: function () { props.engine.blur() },
+          }, '×'),
+        ]),
+      ])
+    }
+
     function Source(props) {
       var id = shared.selected
       if (id === null || id === undefined) return null
       var source = (shared.sourceCache || {})[id]
       var node = shared.graph.nodes[id]
-      var anchor = node !== undefined ? node.anchor : null
+      var record = stateOf(id)
+      var anchor = node !== undefined ? node : (record && record.anchor ? record.anchor : null)
       if (source === undefined) {
         return h('div', { className: 'cddl-src' }, h('div', { className: 'cddl-srch' }, '读源码…'))
       }
+      if (source === null || source.lines === undefined) return h(SourceMissing, { id: id, engine: props.engine })
+      var count = sourceLineCount(source)
       var lines = source.lines.map(function (text, i) {
         var no = source.from + i
         var inside = no >= source.start && no <= source.end
@@ -42,13 +63,19 @@ window.__ModuleLoader__.load({
       })
       return h('div', { className: 'cddl-src' }, [
         h('div', { className: 'cddl-srch', key: 'h' }, [
-          h('span', { key: 't' }, source.file + ' · ' + (anchor ? anchor.symbol : '') + ' · ' + source.start + '–' + source.end),
+          h('span', { key: 't' }, source.file + ' · ' + (anchor ? anchor.symbol : '') + ' · ' + source.start + '–' + source.end + ' · ' + count + ' 行'),
           h('button', {
             key: 'x', className: 'cddl-src-close', title: '关闭源码详情',
             onClick: function () { props.engine.blur() },
           }, '×'),
         ]),
-        h('pre', { key: 'p' }, lines),
+        h('pre', {
+          key: 'p',
+          'data-cdd-source-id': source.id || id,
+          'data-cdd-source-start': source.start,
+          'data-cdd-source-end': source.end,
+          'data-cdd-source-lines': count,
+        }, lines),
       ])
     }
 
@@ -112,13 +139,6 @@ window.__ModuleLoader__.load({
         h('b', { key: 'v' }, [h('i', { key: 'd', className: 'cddl-dot cddl-v' }), '看过']),
         h('b', { key: 'e' }, [h('i', { key: 'd', className: 'cddl-dot cddl-e' }), '改过']),
         h('b', { key: 'w' }, [h('i', { key: 'd', className: 'cddl-dot cddl-w' }), '正在改']),
-        h('b', { key: 'call' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-call' }), 'call']),
-        h('b', { key: 'data' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-dataflow' }), 'dataflow']),
-        h('b', { key: 'inherit' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-inherit' }), 'inherit']),
-        h('b', { key: 'impact' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-impact' }), 'impact']),
-        h('b', { key: 'dispatch' }, [h('i', { key: 'd', className: 'cddl-swatch cddl-dispatch' }), 'dispatch']),
-        h('b', { key: 'plus', className: 'cddl-action-help cddl-action-help-plus' }, '＋N 显示 N 个下游'),
-        h('b', { key: 'minus', className: 'cddl-action-help cddl-action-help-minus' }, '−N 隐藏 N 个下游'),
         h('b', { key: 'f', style: { opacity: .45 } }, '变淡 = 被 compaction 压缩，模型记不清了'),
       ])
     }

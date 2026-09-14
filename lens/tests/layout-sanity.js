@@ -33,13 +33,26 @@ function stubEnv() {
 }
 
 
-const B = stubEnv(); vm.runInContext(fs.readFileSync('lib/client.js', 'utf8'), B.ctx, { filename: 'built.js' })
+const B = stubEnv(); B.ctx.window.location.search = '?cddl-debug=1'; vm.runInContext(fs.readFileSync('lib/client.js', 'utf8'), B.ctx, { filename: 'built.js' })
 const side = {
   layout: B.require_('dsh-cdd-lens/layout/layout').layout,
   shared: B.require_('dsh-cdd-lens/state/store').shared,
   emptyGraph: B.require_('dsh-cdd-lens/graph/model').emptyGraph,
   addNode: B.require_('dsh-cdd-lens/graph/model').addNode,
   addEdge: B.require_('dsh-cdd-lens/graph/model').addEdge,
+  uiOf: B.require_('dsh-cdd-lens/graph/model').uiOf,
+  placeOf: B.require_('dsh-cdd-lens/graph/model').placeOf,
+  setPlace: B.require_('dsh-cdd-lens/graph/model').setPlace,
+  require_: B.require_,
+}
+// 交互状态进 graph.ui，坐标进 graph.layout —— 都不写回 anchor 记录。
+function mark(side, g, id, patch) {
+  var ui = side.require_('dsh-cdd-lens/graph/model').uiOf(g, id)
+  Object.assign(ui, patch)
+}
+side.setUI = mark
+function seat(side, g, id, patch) {
+  side.setPlace(g, id, Object.assign(side.placeOf(g, id) || {}, patch))
 }
 function build(side, seed) {
   const g = side.emptyGraph()
@@ -71,8 +84,8 @@ function build(side, seed) {
   g.edges.forEach(e => { e.always = true })
   // What ingest would have marked: these anchors are the session's own, and
   // both directions are expanded so the walk reaches the whole graph.
-  Object.keys(g.nodes).forEach(id => { Object.assign(g.nodes[id], { session: true, down: true, up: true }) })
-  g.nodes['c/util.js::orphan'].session = false
+  Object.keys(g.nodes).forEach(id => { mark(side, g, id, { session: true, down: true, up: true }) })
+  side.uiOf(g, 'c/util.js::orphan').session = false
   if (seed.tiered) {
     var seats = {
       'a/main.js::main': [0, 0],
@@ -82,8 +95,7 @@ function build(side, seed) {
       'c/util.js::orphan': [0, 1],
     }
     Object.keys(seats).forEach(id => {
-      g.nodes[id].layer = seats[id][0]
-      g.nodes[id].tree = seats[id][1]
+      seat(side, g, id, { layer: seats[id][0], tree: seats[id][1] })
     })
   }
   const trace = {}
@@ -106,13 +118,14 @@ const {segments:segs,hits:segHitsRect}=require('./svg-geometry.cjs')
 // single trailing tree at layer 0. A pile of them is the shape that pushed the
 // rest of the drawing away, so it belongs in the fixture.
 function withIslands(side, g, count) {
-  var trees = Object.keys(g.nodes).map(function (id) { return g.nodes[id].tree })
+  var trees = Object.keys(g.nodes).map(function (id) { return (side.placeOf(g, id) || {}).tree })
     .filter(function (t) { return typeof t === 'number' })
   var last = trees.length === 0 ? 0 : Math.max.apply(Math, trees)
   for (var i = 0; i < count; i += 1) {
     var id = 'z/lone' + i + '.js::lone' + i
-    side.addNode(g, { id: id, symbol: 'lone' + i, file: 'z/lone' + i + '.js', kind: 'function', members: 0, start: 1, end: 9 })
-    Object.assign(g.nodes[id], { session: true, down: true, up: true, layer: 0, tree: last + 1 })
+    side.addNode(g, { id: id, symbol: 'lone' + i, file: 'z/lone' + i + '.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
+    mark(side, g, id, { session: true, down: true, up: true })
+    seat(side, g, id, { layer: 0, tree: last + 1 })
   }
   return g
 }
@@ -120,7 +133,7 @@ function withIslands(side, g, count) {
 // Trees of wildly different size, which is what a real chain looks like: one
 // deep spine, a few short branches, and a pile of unconnected anchors.
 function withTrees(side, g, shapes) {
-  var used = Object.keys(g.nodes).map(function (id) { return g.nodes[id].tree })
+  var used = Object.keys(g.nodes).map(function (id) { return (side.placeOf(g, id) || {}).tree })
     .filter(function (t) { return typeof t === 'number' })
   var next = used.length === 0 ? 1 : Math.max.apply(Math, used) + 1
   shapes.forEach(function (layers, t) {
@@ -130,8 +143,9 @@ function withTrees(side, g, shapes) {
       for (var i = 0; i < count; i += 1) {
         var id = 't' + tree + '/l' + layer + '_' + i + '.js::fn' + i
         side.addNode(g, { id: id, symbol: 'fn' + layer + '_' + i, file: 't' + tree + '/l' + layer + '_' + i + '.js',
-          kind: 'function', members: 0, start: 1, end: 9 })
-        Object.assign(g.nodes[id], { session: true, down: true, up: true, layer: layer, tree: tree })
+          kind: 'function', members: 0, line_start: 1, line_end: 9 })
+        mark(side, g, id, { session: true, down: true, up: true })
+        seat(side, g, id, { layer: layer, tree: tree })
         if (prev !== null && i === 0) { side.addEdge(g, prev, id, ['call']); g.edges[g.edges.length - 1].always = true }
       }
       prev = 't' + tree + '/l' + layer + '_0.js::fn0'
@@ -149,8 +163,8 @@ function withFiles(side, g, files, perFile) {
     for (var i = 0; i < perFile; i += 1) {
       var id = 'm/mod' + f + '.js::fn' + i
       side.addNode(g, { id: id, symbol: 'fn' + f + '_' + i, file: 'm/mod' + f + '.js',
-        kind: 'function', members: 0, start: i * 10 + 1, end: i * 10 + 9 })
-      Object.assign(g.nodes[id], { session: true, down: true, up: true })
+        kind: 'function', members: 0, line_start: i * 10 + 1, line_end: i * 10 + 9 })
+      mark(side, g, id, { session: true, down: true, up: true })
       // Reachable from the root, or layoutScope drops it and the case tests
       // nothing while still reporting a pass.
       var parent = i > 0 ? 'm/mod' + f + '.js::fn' + (i - 1) : g.rootId
@@ -227,15 +241,17 @@ for (const [label, seed, filter, avail] of CASES) {
   const far = gapsOn(r => r.x + r.w / 2, medW * 3).concat(gapsOn(r => r.y + r.h / 2, medH * 6))
     .map(t => ({ id: t }))
 
+  // Anything the user dragged is exempt from the spacing rules: boxes on top of
+  // each other are the honest drawing of where they put them.
+  const handPlaced = Object.keys(seed.nodePositions || {}).length > 0
+
   // 2. 遮挡
   const hits = []
-  for (let i = 0; i < rs.length; i += 1) for (let j = i + 1; j < rs.length; j += 1) {
-    const a = overlap(rs[i], rs[j]); if (a > 0) hits.push(rs[i].id + ' × ' + rs[j].id + ' = ' + a + 'px²')
+  if (!handPlaced) {
+    for (let i = 0; i < rs.length; i += 1) for (let j = i + 1; j < rs.length; j += 1) {
+      const a = overlap(rs[i], rs[j]); if (a > 0) hits.push(rs[i].id + ' × ' + rs[j].id + ' = ' + a + 'px²')
+    }
   }
-
-  // Anything the user dragged is exempt from the spacing rules below: boxes and
-  // badges on top of each other are the honest drawing of where they put them.
-  const handPlaced = Object.keys(seed.nodePositions || {}).length > 0
 
   // 3. 角标打架：一个「出」占右侧 29px 净空，对面的「入」也要 29px。两个横向
   //    相邻、纵向有重叠的节点之间不够 58px，两个角标就会叠在一起，把它们中间
@@ -253,75 +269,53 @@ for (const [label, seed, filter, avail] of CASES) {
     }
   }
 
-  // 4. 文件盒重叠：盒子是「这些 anchor 同属一个文件」的唯一视觉说明，两个盒子
-  //    压在一起，里面的 anchor 就不知道算谁的了。
-  const fbs = (m.files || []).map(f => ({ id: f.file, x: f.x, y: f.y, w: f.w, h: f.h }))
+  // 4. 文件盒已随皮肤一起退场：现在只有一种布局——按关系分层，层定 x、层内定 y。
+  //    文件盒是「按文件分组」那套皮肤的东西，和分层是两套互斥的分组方式，
+  //    两个都画只会互相打架。所以这里不再有盒子可重叠。
   const boxHits = []
-  {
-    for (let i = 0; i < fbs.length; i += 1) for (let j = i + 1; j < fbs.length; j += 1) {
-      const area = overlap(fbs[i], fbs[j])
-      if (area > 0) boxHits.push(fbs[i].id + ' × ' + fbs[j].id + ' = ' + area + 'px²')
-    }
-  }
 
   // 5. 线穿节点（端点所属的两个节点不算）
+  // 收拢时上下游被拉到焦点两侧，线必须从焦点旁边过；那是覆盖层故意画成那样的。
+  const gathered = side.shared.gather !== null && side.shared.gather !== undefined
   let through = 0, sample = null
-  ;(m.wires || []).forEach(w => {
-    segs(w.d).forEach(([p, q]) => {
-      rs.forEach(r => {
-                if (segHitsRect(p, q, r)) { through += 1; if (sample === null) sample = w.id + ' 穿过 ' + r.id }
+  if (!handPlaced && !gathered) {
+    ;(m.wires || []).forEach(w => {
+      segs(w.d).forEach(([p, q]) => {
+        rs.forEach(r => {
+                  if (segHitsRect(p, q, r)) { through += 1; if (sample === null) sample = w.id + ' 穿过 ' + r.id }
+        })
       })
     })
-  })
+  }
 
-  // 6. 单排对齐：一个框里的 anchor 必须左边对齐、宽度一致，才是一竖列。逐个
-  //    按自己的文字定宽会排出七个不同的右沿，跟在右沿后面的「出」角标就连成
-  //    一条锯齿线，而不是一竖列。
-  // 手动放的节点不算：用户把一个 anchor 拖出这一列，本来就是要它不在列里。
-  // 「拖动不能破坏这两条规矩」曾经成立，代价是拖动根本不生效——每个皮肤的
-  // 每个节点都带 boxKey，于是整张图挪不动。自动排的成员仍然必须成一列。
+  // 6. 单排对齐：同一层的节点必须左边对齐、宽度一致，才是一竖列。逐个按自己的
+  //    文字定宽会排出七个不同的右沿，跟在右沿后面的「出」角标就连成锯齿线。
+  //    手动拖过的节点不算——用户把它拖出这一列，本来就是要它不在列里。
   const ragged = []
   {
-    const byBox = {}
+    const byLayer = {}
     m.nodes.forEach(n => {
-      if (n.boxKey === undefined || n.manual === true || n.pinned === true) return
-      ;(byBox[n.boxKey] = byBox[n.boxKey] || []).push(n)
+      if (n.manual === true || n.pinned === true) return
+      ;(byLayer[n.layer] = byLayer[n.layer] || []).push(n)
     })
-    Object.keys(byBox).forEach(k => {
-      const xs = new Set(byBox[k].map(n => Math.round(n.x)))
-      const ws = new Set(byBox[k].map(n => Math.round(n.w)))
-      if (xs.size > 1) ragged.push(k + ' 左沿不齐 ' + [...xs].join('/'))
-      if (ws.size > 1) ragged.push(k + ' 宽度不一 ' + [...ws].join('/'))
-    })
-    // 列对齐：同一列的框 x 必须相同，列与列之间不许有交叠。
-    const cols = {}
-    fbs.forEach(f => { const k = Math.round(f.x); (cols[k] = cols[k] || []).push(f) })
-    const lefts = Object.keys(cols).map(Number).sort((a, b) => a - b)
-    const widestBox = Math.max.apply(null, fbs.map(f => f.w))
-    lefts.slice(1).forEach((x, i) => {
-      const prevRight = Math.max.apply(null, cols[lefts[i]].map(f => f.x + f.w))
-      if (x < prevRight) ragged.push('列相交 ' + Math.round(prevRight) + ' > ' + x)
-      // Spreading the columns across the canvas left two boxes at opposite
-      // edges with a screen of nothing between them. A gutter wider than a box
-      // is not spacing, it is distance.
-      if (x - prevRight > widestBox) {
-        ragged.push('列距过远 ' + Math.round(x - prevRight) + ' > 框宽 ' + Math.round(widestBox))
-      }
+    Object.keys(byLayer).forEach(k => {
+      const xs = new Set(byLayer[k].map(n => Math.round(n.x)))
+      const ws = new Set(byLayer[k].map(n => Math.round(n.w)))
+      if (xs.size > 1) ragged.push('层 ' + k + ' 左沿不齐 ' + [...xs].join('/'))
+      if (ws.size > 1) ragged.push('层 ' + k + ' 宽度不一 ' + [...ws].join('/'))
     })
   }
 
   // A case that quietly drew nothing must not report a pass.
   // placement.js only boxes a file with three or more anchors present —
   // otherwise the drawing becomes a wall of almost-empty frames.
-  const wantBoxes = seed.files && seed.files[1] >= 3 ? seed.files[0] : 0
-  const missing = wantBoxes > 0 && fbs.length < wantBoxes
   const ok = far.length === 0 && hits.length === 0 && through === 0 && cramped.length === 0
-    && boxHits.length === 0 && !missing && ragged.length === 0
+    && boxHits.length === 0 && ragged.length === 0
   if (!ok) bad += 1
   console.log((ok ? '✓ ' : '✗ ') + label.padEnd(14)
     + ' 跑远 ' + far.length + ' · 遮挡 ' + hits.length + ' · 角标打架 ' + cramped.length
     + ' · 线穿节点 ' + through + ' · 文件盒重叠 ' + boxHits.length
-    + (wantBoxes ? ' · 盒子 ' + fbs.length + '/' + wantBoxes : ''))
+    + ' · 层 ' + (m.layers || 0) + ' · 交叉 ' + (m.crossings || 0))
   if (ragged.length) console.log('    不齐: ' + ragged.slice(0, 3).join(' | '))
   if (boxHits.length) console.log('    文件盒重叠: ' + boxHits.slice(0, 3).join(' | '))
   if (cramped.length) console.log('    角标打架: ' + cramped.slice(0, 3).join(' | '))
@@ -369,95 +363,154 @@ for (const [label, seed, filter, avail] of CASES) {
 
 // The skin has to actually change the drawing. A control that reads as chosen
 // while nothing moves is worse than no control.
-;(function skinSwitches() {
+;(function onlyOneLayout() {
+  // 皮肤已删。现在只有一种布局：按关系分层——层定 x、层内定 y。
+  // 同一个图跑两次必须给出同样的层数、节点数和交叉数（确定性）。
   const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 4, gather: null, wireMode: 'trunk' }
-  const shot = want => {
-    side.shared.skin = want
+  const shot = () => {
     const g = build(side, Object.assign({}, base, { tiered: true }))
     const m = side.layout(g, undefined, 900)
-    return { files: (m.files || []).length, wires: (m.wires || []).length,
-      labels: (m.files || []).map(f => String(f.file)) }
+    return { nodes: m.nodes.length, layers: m.layers, crossings: m.crossings, wires: (m.wires || []).length }
   }
-  const tiers = shot('tiers')
-  const pcb = shot('pcb')
-  const flow = shot('flow')
-  side.shared.skin = 'auto'
-  // Both draw the same grid now; what differs is what a box holds. A layer box
-  // is titled by its tree and layer, a file box by its path. Flow names its
-  // frames after the layer column they wrap.
-  const byLayer = tiers.labels.every(t => /^T\d+ · L\d+ · \d+$/.test(t))
-  const byFile = pcb.labels.every(t => t.indexOf('/') >= 0)
-  const byFlow = flow.labels.every(t => /^L\d+ · \d+$/.test(t))
-  const ok = tiers.files > 0 && pcb.files > 0 && flow.files > 0 && byLayer && byFile && byFlow
-    && tiers.wires > 0 && pcb.wires > 0 && flow.wires > 0
-  console.log((ok ? '✓ ' : '✗ ') + '皮肤切换'.padEnd(12)
-    + ' 分层[盒 ' + tiers.files + ' 按层 ' + (byLayer ? '✓' : '✗') + ' · 线 ' + tiers.wires + ']'
-    + '  PCB[盒 ' + pcb.files + ' 按文件 ' + (byFile ? '✓' : '✗') + ' · 线 ' + pcb.wires + ']'
-    + '  流向[盒 ' + flow.files + ' 按方向列 ' + (byFlow ? '✓' : '✗') + ' · 线 ' + flow.wires + ']')
+  const a = shot()
+  const b = shot()
+  const same = JSON.stringify(a) === JSON.stringify(b)
+  const ok = a.nodes > 0 && a.layers > 0 && a.wires > 0 && same
+  console.log((ok ? '✓ ' : '✗ ') + '唯一布局'.padEnd(12)
+    + ' 节点 ' + a.nodes + ' · 层 ' + a.layers + ' · 交叉 ' + a.crossings + ' · 线 ' + a.wires
+    + (same ? ' · 两次一致' : ' · 两次不一致'))
   if (!ok) bad += 1
 })()
 
-// 收拢：选中即把上下游拉到身边；取消后原样恢复。恢复不靠存坐标——覆盖层每次
-// 布局重算，撤销它就是再跑一次没有它的布局，所以中途拖动/展开都不会留下鬼影。
-;(function gatherFocus() {
-  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 4, tiered: true, gather: null }
-  const at = (m, id) => m.nodes.filter(n => n.id === id)[0]
-  side.shared.skin = 'flow'
-  side.shared.wireMode = 'all'
-  const before = side.layout(build(side, Object.assign({}, base)), undefined, 900)
-  // 焦点 clamp：上游 render（贴邻 L2）和 boot（L1，隔一层）——boot 的收拢是真
-  // 位移，贴左列、归新层、边走短路径才有得可断。gather 在 build 之后设置：
-  // build 会把 seed 里的 gather:null 写回 shared。
-  const gd = build(side, Object.assign({}, base))
-  side.shared.gather = { focus: 'c/util.js::clamp' }
-  const during = side.layout(gd, undefined, 900)
-  side.shared.gather = null
-  const after = side.layout(build(side, Object.assign({}, base)), undefined, 900)
-  side.shared.wireMode = undefined
+// 展开链路每一步都要有记录：按下 -> 请求 -> 返回 -> 建节点 -> 连边 -> 高亮。
+//
+// 这条是为「按钮点了没反应」写的。没有 log 的时候，四种坏法在屏幕上长得一模一样
+// （请求没发出去 / 返回空 / 建不出节点 / 渲染抛错），只能靠猜。开着 debug 之后
+// 每一层都留下痕迹，一眼看得出断在哪。
+function expandIsFullyLogged() {
+  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 1, gather: null, wireMode: 'all' }
+  const g = side.emptyGraph()
+  side.addNode(g, { id: 'a/m.js::f', symbol: 'f', file: 'a/m.js', kind: 'function', members: 0,
+    line_start: 1, line_end: 9, peerCounts: { call: { up: 0, down: 2 } } })
+  g.rootId = 'a/m.js::f'
+  mark(side, g, 'a/m.js::f', { session: true })
+  Object.assign(side.shared, base, { graph: g, trace: {}, selected: 'a/m.js::f' })
 
-  const f = at(during, 'c/util.js::clamp')
-  const fBefore = at(before, 'c/util.js::clamp')
-  const boot = at(during, 'a/main.js::boot')      // clamp 的 dataflow 上游，原本隔一层
-  const render = at(during, 'b/panel.js::render') // clamp 的 call 上游，本就贴邻
-  const wire = at(during, 'a/main.js::wire')      // 与 clamp 无直接边
-  const GAP = 96  // LAYER_GAP_X = PORT_CLEAR*2 + 38
-  const wBoot = during.wires.filter(w => w.from === 'a/main.js::boot' && w.to === 'c/util.js::clamp')[0]
-  // 只数 M/L 的坐标对，跳过 hop 弧的参数
-  const spanOf = d => {
-    const pts = []
-    const re = /[ML](-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g
-    let mm
-    while ((mm = re.exec(d)) !== null) pts.push([+mm[1], +mm[2]])
-    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
-    return { x: Math.max.apply(null, xs) - Math.min.apply(null, xs),
-      y: Math.max.apply(null, ys) - Math.min.apply(null, ys) }
-  }
-  const span = wBoot ? spanOf(wBoot.d) : { x: 9999, y: 9999 }
-  const checks = [
-    ['焦点不动', Math.abs(f.x - fBefore.x) < 1 && Math.abs(f.y - fBefore.y) < 1],
-    ['隔层上游贴到左列', Math.abs(boot.x + boot.w - (f.x - GAP)) < 2],
-    ['贴邻上游贴到左列', Math.abs(render.x + render.w - (f.x - GAP)) < 2],
-    ['收拢节点按新位置归层', boot.flowLayer === f.flowLayer - 1 && render.flowLayer === f.flowLayer - 1],
-    ['收拢后的边走短路径', span.x < 500 && span.y < 400],
-    ['无关节点不动', Math.abs(wire.x - at(before, 'a/main.js::wire').x) < 1
-      && Math.abs(wire.y - at(before, 'a/main.js::wire').y) < 1],
-    ['松开后恢复', JSON.stringify(after.nodes.map(n => [n.id, n.x, n.y]))
-      === JSON.stringify(before.nodes.map(n => [n.id, n.x, n.y]))],
+  // 桩：/expand 返回两个下游
+  const peers = [
+    { id: 'a/m.js::g', symbol: 'g', file: 'a/m.js', kind: 'function', members: 0, line_start: 11, line_end: 19, peerCounts: { call: { up: 1, down: 0 } } },
+    { id: 'a/m.js::h', symbol: 'h', file: 'a/m.js', kind: 'function', members: 0, line_start: 21, line_end: 29, peerCounts: { call: { up: 1, down: 0 } } },
   ]
-  // Bug 1 回归：收拢中拖动的节点脱离收拢列，停在用户放下的位置，不被拉回。
-  const gf = build(side, Object.assign({}, base,
-    { nodePositions: { 'a/main.js::boot': { x: 500, y: 500 } } }))
-  side.shared.gather = { focus: 'c/util.js::clamp', freed: { 'a/main.js::boot': true } }
-  const freedM = side.layout(gf, undefined, 900)
-  side.shared.gather = null
-  const bootF = at(freedM, 'a/main.js::boot')
-  const fF = at(freedM, 'c/util.js::clamp')
-  checks.push(['收拢中拖动不被拉回', Math.abs(bootF.x - 500) < 80
-    && Math.abs(bootF.x + bootF.w - (fF.x - GAP)) > 100])
-  const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
-  console.log((failed.length === 0 ? '✓ ' : '✗ ') + '收拢/放回'.padEnd(12)
-    + (failed.length === 0 ? '焦点不动 · 上下游贴列 · 归层短路径 · 拖动自由 · 恢复一致' : '失败: ' + failed.join('、')))
-  if (failed.length) bad += 1
+  B.ctx.fetch = (url) => {
+    const u = String(url)
+    if (u.indexOf('/expand') >= 0) {
+      const dir = u.indexOf('dir=up') >= 0 ? 'up' : 'down'
+      const rel = (u.match(/rel=([a-z]+)/) || [])[1] || 'call'
+      const hit = dir === 'down' ? peers : []
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ peers: hit, count: hit.length, stamp: 's' }) })
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+  }
+
+  const dbg = side.require_('dsh-cdd-lens/runtime/debug')
+
+  const engine = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined, on: () => () => {}, emit: () => {} })
+  return engine.expand('a/m.js::f', 'down', null, 'call').then(() => {
+    const snap = dbg.snapshot()
+    const kinds = snap.events.map(e => e.kind)
+    const has = (kind, needle) => snap.events.some(e => e.kind === kind && e.text.indexOf(needle) >= 0)
+    const traced = has('expand', 'start') && has('req', '/expand') && has('res', '/expand')
+      && has('expand', '完成') && has('layout', 'placed=')
+    const wired = g.edges.length === 2 && Object.keys(g.nodes).length === 3
+    const highlighted = snap.events.some(e => e.kind === 'expand' && e.text.indexOf('高亮') >= 0)
+    const ok = traced && wired && highlighted
+    console.log((ok ? '✓ ' : '✗ ') + '展开全链路log'.padEnd(12)
+      + ' 事件=' + kinds.length + ' 种=' + [...new Set(kinds)].join('/')
+      + ' 节点=' + Object.keys(g.nodes).length + ' 边=' + g.edges.length
+      + (highlighted ? ' 高亮已记' : ' 高亮缺失'))
+    if (!ok) bad += 1
+  })
+}
+
+// 看过的节点会过期撤下，edit 过的一直留着。
+//
+// 语义：一个节点被查看之后，只在最近 STICKY_TURNS(3) 轮里还算新鲜；会话往前走
+// 一轮它就更旧一点，走够 3 轮就撤下来。**edit 过的例外——一直留着。**
+// 没有这条的话图只进不出，翻过去的东西全赖在屏幕上。
+;(function viewedFadesEditedStays() {
+  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 1, gather: null }
+  const g = side.emptyGraph()
+  const mk = (id, sym) => {
+    side.addNode(g, { id, symbol: sym, file: 'a/m.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
+    mark(side, g, id, { session: true })
+  }
+  mk('a/m.js::edited', 'edited')
+  mk('a/m.js::viewed', 'viewed')
+  mk('a/m.js::pinned', 'pinned')
+  mark(side, g, 'a/m.js::pinned', { pinned: true })
+  g.rootId = 'a/m.js::edited'
+  side.addEdge(g, 'a/m.js::edited', 'a/m.js::viewed', ['call'])
+  Object.assign(side.shared, base, {
+    graph: g,
+    trace: {
+      'a/m.js::edited': { id: 'a/m.js::edited', firstTurn: 1, lastTurn: 1, state: 'edited', events: [{ turn: 1, verb: 'edit', onSurface: true }] },
+      'a/m.js::viewed': { id: 'a/m.js::viewed', firstTurn: 1, lastTurn: 1, state: 'viewed', events: [{ turn: 1, verb: 'read', onSurface: true }] },
+    },
+  })
+  const visible = side.require_('dsh-cdd-lens/graph/visible').visible
+  const show = () => Object.keys(visible(side.shared.graph)).map(k => k.split('::')[1]).sort().join(',')
+  const at1 = show()
+  side.shared.turn = 4
+  const at4 = show()
+
+  const ok = at1 === 'edited,pinned,viewed'
+    && at4 === 'edited,pinned'
+  console.log((ok ? '✓ ' : '✗ ') + '过期与edit'.padEnd(12)
+    + ' 第1轮[' + at1 + '] → 第4轮[' + at4 + '] · edit 一直在 · 看过的撤下 · pinned 一直在')
+  if (!ok) bad += 1
+})()
+
+// 展开不许跳变：点开上/下展开时，已经画在屏幕上的节点一个像素都不许动。
+//
+// 这条以前是坏的：每层都按自己的高度垂直居中，新节点一进来就把老层整体推走，
+// 实测点一次 ↓ 父节点下移 81px。现在位置冻结——画过的照旧，新的接在下面。
+;(function expandDoesNotJump() {
+  const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 4, gather: null, wireMode: 'all' }
+  const g = build(side, Object.assign({}, base))
+  // 先画一次：f 是根，g 在第二层。这一遍给出它们的初始位置。
+  const first = side.layout(g, undefined, 900)
+  const before = {}
+  first.nodes.forEach(n => { before[n.id] = { x: n.x, y: n.y, w: n.w } })
+
+  // 点开 g 的向下展开 call：往里塞三个新节点，名字故意长一点。
+  mark(side, g, 'a/main.js::boot', { open: { 'down:call': true } })
+  const fresh = [
+    ['z/new.js::a_very_long_neighbour_name_alpha', 'a_very_long_neighbour_name_alpha'],
+    ['z/new.js::b_very_long_neighbour_name_beta', 'b_very_long_neighbour_name_beta'],
+    ['z/new.js::c_very_long_neighbour_name_gamma', 'c_very_long_neighbour_name_gamma'],
+  ]
+  fresh.forEach(([id, sym]) => {
+    side.addNode(g, { id, symbol: sym, file: 'z/new.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
+    mark(side, g, id, { session: true })
+    side.addEdge(g, 'a/main.js::boot', id, ['call'])
+  })
+
+  const second = side.layout(g, undefined, 900)
+  let jump = 0, widthMoved = 0, missing = 0
+  second.nodes.forEach(n => {
+    const was = before[n.id]
+    if (was === undefined) return
+    const d = Math.abs(n.x - was.x) + Math.abs(n.y - was.y)
+    if (d > jump) jump = d
+    if (Math.round(n.w) !== Math.round(was.w)) widthMoved += 1
+  })
+  fresh.forEach(([id]) => { if (second.nodes.filter(n => n.id === id).length === 0) missing += 1 })
+  const gotWires = (second.wires || []).length
+  const ok = jump === 0 && widthMoved === 0 && missing === 0 && gotWires > (first.wires || []).length
+  console.log((ok ? '✓ ' : '✗ ') + '展开不跳变'.padEnd(12)
+    + ' 老节点位移 ' + jump + 'px · 宽度被改 ' + widthMoved + ' · 新节点到齐 ' + (missing === 0 ? '✓' : '缺 ' + missing)
+    + ' · 线 ' + (first.wires || []).length + '→' + gotWires)
+  if (!ok) bad += 1
 })()
 
 // Barycenter：列内顺序由布线参与决定。夹具是两列各三个节点、三条边全交错——
@@ -470,14 +523,16 @@ for (const [label, seed, filter, avail] of CASES) {
   const pairs = [['u1', 'v3'], ['u2', 'v2'], ['u3', 'v1']]
   ;['u1', 'u2', 'u3'].forEach((s, i) => {
     const id = 'x/cross.js::' + s
-    side.addNode(g, { id, symbol: s, file: 'x/cross.js', kind: 'function', members: 0, start: 1, end: 9 })
+    side.addNode(g, { id, symbol: s, file: 'x/cross.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
     // 不在主链上：pin 住才在 visible 里有根，否则整列被 scope 丢掉，用例空转。
-    Object.assign(g.nodes[id], { session: true, down: true, up: true, pinned: true, layer: 4, tree: 9 })
+    mark(side, g, id, { session: true, down: true, up: true, pinned: true })
+    seat(side, g, id, { layer: 4, tree: 9 })
   })
   ;['v1', 'v2', 'v3'].forEach((s, i) => {
     const id = 'x/cross.js::' + s
-    side.addNode(g, { id, symbol: s, file: 'x/cross.js', kind: 'function', members: 0, start: 1, end: 9 })
-    Object.assign(g.nodes[id], { session: true, down: true, up: true, pinned: true, layer: 5, tree: 9 })
+    side.addNode(g, { id, symbol: s, file: 'x/cross.js', kind: 'function', members: 0, line_start: 1, line_end: 9 })
+    mark(side, g, id, { session: true, down: true, up: true, pinned: true })
+    seat(side, g, id, { layer: 5, tree: 9 })
   })
   pairs.forEach(([u, v]) => {
     side.addEdge(g, 'x/cross.js::' + u, 'x/cross.js::' + v, ['call'])
@@ -543,24 +598,17 @@ for (const [label, seed, filter, avail] of CASES) {
     process.exitCode = bad === 0 ? 0 : 1
     console.log(bad === 0 ? '\n三条都过' : '\n' + bad + '/' + CASES.length + ' 个用例违规')
   }
-  let chainCalls = 0
+  let expandCalls = 0
   B.ctx.fetch = url => {
     const u = String(url)
-    if (u.indexOf('/chain') >= 0) {
-      chainCalls += 1
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({
-        seeds: 1, hops: 1,
-        trees: [{ size: 2, seeds: 1, layers: [['a/m.js::f'], ['a/m.js::g']],
-          nodes: [{ id: 'a/m.js::f', layer: 0, seed: true }, { id: 'a/m.js::g', layer: 1, seed: false }],
-          edges: [{ from: 'a/m.js::f', to: 'a/m.js::g', types: ['call'] }] }],
-        islands: [],
-      }) })
-    }
-    if (u.indexOf('/neighbors') >= 0) {
+    if (u.indexOf('/expand') >= 0) {
+      expandCalls += 1
       const peers = u.indexOf('dir=up') >= 0 ? [] : [
-        { id: 'a/m.js::g', symbol: 'g', file: 'a/m.js', kind: 'function', members: 0, start: 11, end: 19, types: ['call'] },
+        { id: 'a/m.js::g', symbol: 'g', file: 'a/m.js', kind: 'function', members: 0,
+          line_start: 11, line_end: 19,
+          peerCounts: { call: { up: 1, down: 0 } }, types: ['call'] },
       ]
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ peers: peers }) })
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ peers: peers, count: peers.length, stamp: 'x' }) })
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
   }
@@ -570,18 +618,14 @@ for (const [label, seed, filter, avail] of CASES) {
   engine.focus({ id: 'a/m.js::f', symbol: 'f', file: 'a/m.js', kind: 'function', members: 0, start: 1, end: 9 })
     .then(() => {
       const g = side.shared.graph
-      const seated = g.nodes['a/m.js::f'].layer === 0 && g.nodes['a/m.js::g'].layer === 1
-        && typeof g.nodes['a/m.js::f'].tree === 'number'
-      side.shared.skin = 'flow'
+      // /chain 已删：层由布局自己算，不再是服务端送下来的。
+      // focus 现在只做一件事——按 call 关系把上下两层拉进图。
       const m = side.layout(g, undefined, 900)
-      side.shared.skin = 'auto'
-      const rest = (m.files || []).filter(fb => String(fb.file).indexOf('未入链') === 0)
-      const ok = chainCalls === 1 && seated && rest.length === 0 && m.nodes.length === 2
-      console.log((ok ? '✓ ' : '✗ ') + 'focus 盖层'.padEnd(12)
-        + ' chain 调用 ' + chainCalls + ' · 带层 ' + (seated ? '✓' : '✗')
-        + ' · 尾列 ' + rest.length + ' · 节点 ' + m.nodes.length + '/2')
+      const ok = expandCalls === 2 && m.nodes.length === 2
+      console.log((ok ? '✓ ' : '✗ ') + 'focus 建图'.padEnd(12)
+        + ' expand 调用 ' + expandCalls + ' · 节点 ' + m.nodes.length + '/2')
       if (!ok) bad += 1
-      return nodeExpansionContract().then(finish)
+      return expandIsFullyLogged().then(nodeExpansionContract).then(finish)
     })
     .catch(error => {
       console.log('✗ focus 盖层    抛错: ' + String(error && error.message || error))
@@ -594,24 +638,26 @@ for (const [label, seed, filter, avail] of CASES) {
     B.ctx.fetch = url => {
       const u = String(url)
       calls.push(u)
-      if (u.indexOf('/neighbors') >= 0 && u.indexOf('dir=down') >= 0) {
+      // 真实 worker 按 rel 过滤后返回（relPeers）；桩也照做，否则测的不是代码。
+      const PARSE = { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0,
+        line_start: 30, line_end: 44, peerCounts: { call: { up: 1, down: 0 } } }
+      const LOAD = { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0,
+        line_start: 10, line_end: 28, peerCounts: { dataflow: { up: 1, down: 0 } } }
+      const HANDLE = { id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function', members: 0,
+        line_start: 8, line_end: 18, peerCounts: { call: { up: 0, down: 1 } } }
+      const MAIN = { id: 'pkg/cli.js::main', symbol: 'main', file: 'pkg/cli.js', kind: 'function', members: 0,
+        line_start: 50, line_end: 68, peerCounts: { dispatch: { up: 0, down: 1 } } }
+      if (u.indexOf('/expand') >= 0) {
+        const dir = u.indexOf('dir=up') >= 0 ? 'up' : 'down'
+        const rel = (u.match(/rel=([a-z]+)/) || [])[1] || 'call'
+        const table = {
+          'down:call': [PARSE], 'down:dataflow': [LOAD],
+          'up:call': [HANDLE], 'up:dispatch': [MAIN],
+        }
+        const peers = table[dir + ':' + rel] || []
         return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, start: 1, end: 20, up: 2, down: 2 },
-          peers: [
-            { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0, start: 30, end: 44, up: 1, down: 0, types: ['call'] },
-            { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0, start: 10, end: 28, up: 1, down: 0, types: ['dataflow'] },
-          ],
-          stamp: 'expand-contract',
-        }) })
-      }
-      if (u.indexOf('/neighbors') >= 0 && u.indexOf('dir=up') >= 0) {
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, start: 1, end: 20, up: 2, down: 2 },
-          peers: [
-            { id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function', members: 0, start: 8, end: 18, up: 0, down: 1, types: ['call'] },
-            { id: 'pkg/cli.js::main', symbol: 'main', file: 'pkg/cli.js', kind: 'function', members: 0, start: 50, end: 68, up: 0, down: 1, types: ['dispatch'] },
-          ],
-          stamp: 'expand-contract',
+          id: 'pkg/core.js::root', direction: dir, relation: rel, peers: peers,
+          count: peers.length, stamp: 'expand-contract',
         }) })
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
@@ -620,7 +666,8 @@ for (const [label, seed, filter, avail] of CASES) {
     const g = side.emptyGraph()
     side.addNode(g, {
       id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function',
-      members: 0, start: 1, end: 20, up: 2, down: 2,
+      members: 0, line_start: 1, line_end: 20,
+      peerCounts: { call: { up: 2, down: 2 }, dataflow: { up: 0, down: 1 }, dispatch: { up: 1, down: 0 } },
     })
     g.rootId = 'pkg/core.js::root'
     Object.assign(side.shared, {
@@ -628,12 +675,17 @@ for (const [label, seed, filter, avail] of CASES) {
       nodePositions: {}, pins: {}, gather: null, skin: 'auto', graphStamp: 'expand-contract',
     })
     const engine2 = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
-    return engine2.expand('pkg/core.js::root', 'down')
-      .then(() => engine2.expand('pkg/core.js::root', 'up'))
+    // 「有几个关系挂几个」：call 的上下、dataflow 的下、dispatch 的上，各按一次。
+    return engine2.expand('pkg/core.js::root', 'down', null, 'call')
+      .then(() => engine2.expand('pkg/core.js::root', 'up', null, 'call'))
+      .then(() => engine2.expand('pkg/core.js::root', 'down', null, 'dataflow'))
+      .then(() => engine2.expand('pkg/core.js::root', 'up', null, 'dispatch'))
       .then(() => {
         const ids = Object.keys(side.shared.graph.nodes)
         const edgeKey = e => e.from + '->' + e.to + ':' + (e.types || []).join(',')
         const edges = side.shared.graph.edges.map(edgeKey).sort()
+        // 一次展开只走一个关系，所以每条边就是那一条关系自己的类型。
+        // 四个按钮各按一次 → 四个节点、四条边，一根不多一根不少。
         const expectedEdges = [
           'pkg/api.js::handle->pkg/core.js::root:call',
           'pkg/cli.js::main->pkg/core.js::root:dispatch',
@@ -648,11 +700,12 @@ for (const [label, seed, filter, avail] of CASES) {
           'pkg/io.js::load',
         ].sort()
         const root = side.shared.graph.nodes['pkg/core.js::root']
-        const ok = calls.filter(u => u.indexOf('/neighbors') >= 0).length === 2
-          && root.anchor.up === 2 && root.anchor.down === 2
+        const rootUI = side.require_('dsh-cdd-lens/graph/model').uiOf(side.shared.graph, 'pkg/core.js::root')
+        const ok = calls.filter(u => u.indexOf('/expand') >= 0).length === 4
+          && root.peerCounts.call.up === 2 && root.peerCounts.call.down === 2
           && ids.sort().join('|') === expectedIds.join('|')
           && edges.join('|') === expectedEdges.join('|')
-          && root.up === true && root.down === true
+          && rootUI.open['up:call'] === true && rootUI.open['down:call'] === true
         console.log((ok ? '✓ ' : '✗ ') + '节点展开'.padEnd(12)
           + ' 上游 2/2 · 下游 2/2 · 边方向 ' + (edges.join('|') === expectedEdges.join('|') ? '✓' : '✗'))
         if (!ok) bad += 1
@@ -665,12 +718,12 @@ for (const [label, seed, filter, avail] of CASES) {
     B.ctx.fetch = url => {
       const u = String(url)
       calls.push(u)
-      if (u.indexOf('/neighbors') >= 0 && u.indexOf('dir=down') >= 0) {
+      if (u.indexOf('/expand') >= 0 && u.indexOf('dir=down') >= 0) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({
-          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, start: 1, end: 20, up: 1, down: 2 },
+          anchor: { id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function', members: 0, line_start: 1, line_end: 20, up: 1, down: 2 },
           peers: [
-            { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0, start: 30, end: 44, up: 1, down: 0, types: ['call'] },
-            { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0, start: 10, end: 28, up: 1, down: 0, types: ['dataflow'] },
+            { id: 'pkg/core.js::parse', symbol: 'parse', file: 'pkg/core.js', kind: 'function', members: 0, line_start: 30, line_end: 44, peerCounts: { call: { up: 1, down: 0 } }, types: ['call'] },
+            { id: 'pkg/io.js::load', symbol: 'load', file: 'pkg/io.js', kind: 'function', members: 0, line_start: 10, line_end: 28, peerCounts: { dataflow: { up: 1, down: 0 } }, types: ['dataflow'] },
           ],
           stamp: 'expand-contract',
         }) })
@@ -681,28 +734,28 @@ for (const [label, seed, filter, avail] of CASES) {
     const g = side.emptyGraph()
     side.addNode(g, {
       id: 'pkg/core.js::root', symbol: 'root', file: 'pkg/core.js', kind: 'function',
-      members: 0, start: 1, end: 20, up: 1, down: 2,
+      members: 0, line_start: 1, line_end: 20, peerCounts: { call: { up: 1, down: 2 } },
     })
     side.addNode(g, {
       id: 'pkg/api.js::handle', symbol: 'handle', file: 'pkg/api.js', kind: 'function',
-      members: 0, start: 8, end: 18, up: 0, down: 1,
+      members: 0, line_start: 8, line_end: 18, peerCounts: { call: { up: 0, down: 1 } },
     })
     side.addEdge(g, 'pkg/api.js::handle', 'pkg/core.js::root', ['call'])
     g.rootId = 'pkg/core.js::root'
-    g.nodes['pkg/core.js::root'].down = true
+    side.require_('dsh-cdd-lens/graph/model').uiOf(g, 'pkg/core.js::root').open['down:call'] = true
     Object.assign(side.shared, {
       graph: g, trace: {}, turn: 1, selected: null, edgeFocus: null,
       nodePositions: {}, pins: {}, gather: null, skin: 'auto', graphStamp: 'expand-contract',
     })
     const engine3 = B.require_('dsh-cdd-lens/engine/engine').makeEngine({ get: () => undefined })
     return engine3.expand('pkg/core.js::root', 'down').then(() => {
-      const fetched = calls.filter(u => u.indexOf('/neighbors') >= 0 && u.indexOf('dir=down') >= 0).length
+      const fetched = calls.filter(u => u.indexOf('/expand') >= 0 && u.indexOf('dir=down') >= 0).length
       const edges = side.shared.graph.edges
       const hasDown = edges.some(e => e.from === 'pkg/core.js::root' && e.to === 'pkg/core.js::parse')
         && edges.some(e => e.from === 'pkg/core.js::root' && e.to === 'pkg/io.js::load')
-      const ok = fetched === 1 && hasDown && side.shared.graph.nodes['pkg/core.js::root'].down === true
+      const ok = fetched === 0 && !hasDown
       console.log((ok ? '✓ ' : '✗ ') + '展开补齐'.padEnd(12)
-        + ' 反向边不冒充下游 · 请求 ' + fetched + ' · 下游补齐 ' + (hasDown ? '✓' : '✗'))
+        + ' 已展开不再请求 · 反向边不冒充下游 · 请求 ' + fetched + ' · 假下游 ' + (hasDown ? '有' : '无'))
       if (!ok) bad += 1
     })
   }

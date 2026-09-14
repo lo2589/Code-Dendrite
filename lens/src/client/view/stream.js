@@ -21,8 +21,8 @@ window.__ModuleLoader__.load({
     var History = __view_panels.History
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
+    var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
+    var openDockBesideChat = __shell_chatSeat.openDockBesideChat
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
     var EXPANDED_KEY = 'cdd-lens.trajectory-expanded.v1'
@@ -258,13 +258,32 @@ window.__ModuleLoader__.load({
       try { return document.execCommand('insertText', false, path + ' ') } catch (e) { return false }
     }
 
+    function sourceLineCount(source) {
+      if (source === null || source === undefined) return 0
+      if (Number.isFinite(source.lineCount)) return source.lineCount
+      return Math.max(0, Number(source.end) - Number(source.start) + 1)
+    }
+
     function SourceSnippet(props) {
       var source = (shared.sourceCache || {})[props.id]
       if (source === undefined) return h('div', { className: 'cddl-trace-loading' }, '读取源码…')
+      if (source === null || source.lines === undefined) {
+        return h('div', {
+          className: 'cddl-trace-source cddl-trace-missing',
+          'data-cdd-source-id': props.id,
+        }, '源码范围读不出来')
+      }
+      var count = sourceLineCount(source)
       return h('div', { className: 'cddl-trace-source' }, [
         h('div', { key: 'path', className: 'cddl-trace-path', title: source.file },
-          source.file + ':' + source.start + '–' + source.end),
-        h('pre', { key: 'code' }, source.lines.map(function (text, i) {
+          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'),
+        h('pre', {
+          key: 'code',
+          'data-cdd-source-id': source.id || props.id,
+          'data-cdd-source-start': source.start,
+          'data-cdd-source-end': source.end,
+          'data-cdd-source-lines': count,
+        }, source.lines.map(function (text, i) {
           return h('div', { key: source.from + i }, [
             h('span', { key: 'n' }, source.from + i),
             h('code', { key: 'c' }, text === '' ? ' ' : text),
@@ -274,6 +293,7 @@ window.__ModuleLoader__.load({
     }
 
     function locateInGraph(ctx, engine, id) {
+      // 先把图面板开出来，再定位：面板没开的话，定位完了也没人看得见。
       openDockBesideChat(ctx)
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
@@ -285,7 +305,7 @@ window.__ModuleLoader__.load({
     function AnchorRow(props) {
       var row = props.row
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
-      var anchor = node === undefined ? null : node.anchor
+      var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
       return h('article', {
         className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : ''),
@@ -474,10 +494,6 @@ window.__ModuleLoader__.load({
             'aria-label': collapsed ? '展开代码轨迹' : '收起代码轨迹',
             title: collapsed ? '展开轨迹侧栏' : '收起轨迹侧栏', onClick: toggleCollapsed,
           }, collapsed ? '代码轨迹' : '收起'),
-          h('button', {
-            key: 'graph', className: 'cddl-trajectory-graph',
-            onClick: function () { openDockBesideChat(props.ctx) },
-          }, '逻辑图'),
         ]),
         h('div', {
           key: 'body', ref: bodyRef, className: 'cddl-trajectory-body',

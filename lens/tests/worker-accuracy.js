@@ -70,11 +70,11 @@ const check = (name, cond) => {
 
 async function main() {
 const anchor_f = await ask('anchor', { id: 'a.py::f' })
-const down = await ask('neighbors', { id: 'a.py::f', direction: 'down' })
-const up = await ask('neighbors', { id: 'a.py::f', direction: 'up' })
-check('self-loop not counted: f.down === 1', anchor_f.anchor.down === 1)
+const down = await ask('expand', { id: 'a.py::f', direction: 'down', rel: 'call' })
+const up = await ask('expand', { id: 'a.py::f', direction: 'up', rel: 'call' })
+check('self-loop not counted: f call down === 1', anchor_f.anchor.peerCounts.call.down === 1)
 check('self-loop not listed: expand shows 1 peer', down.peers.length === 1)
-check('neighbors returns same-snapshot source anchor', down.anchor.id === 'a.py::f' && down.anchor.down === down.peers.length)
+check('expand returns same-snapshot source anchor', down.from.id === 'a.py::f' && down.count === down.peers.length)
 // A DOM node IS an anchor: what CodeDendrite stored has to reach the browser,
 // both for the node that is drawn and for every node an expand creates. A
 // node carrying a stripped stub cannot draw itself or expand honestly.
@@ -87,35 +87,42 @@ check('a drawn node carries its whole stored anchor',
 check('a node born from an expand carries its whole stored anchor',
   carried(down.peers[0], { hash: 'hash-of-g', qualified_name: 'g', imports: ['sys'], callers: ['a.py::f'], symbol_type: 'function' }))
 check('the anchor beside an expand result is the same record',
-  carried(up.anchor, { hash: 'hash-of-f', qualified_name: 'f', callers: ['a.py::g', 'a.py::h'] }))
-check('button count === expand count (down)', anchor_f.anchor.down === down.peers.length)
-check('button count === expand count (up)', anchor_f.anchor.up === up.peers.length && up.peers.length === 2)
+  carried(up.from, { hash: 'hash-of-f', qualified_name: 'f', callers: ['a.py::g', 'a.py::h'] }))
+check('button count === expand count (down)', anchor_f.anchor.peerCounts.call.down === down.peers.length)
+check('button count === expand count (up)', anchor_f.anchor.peerCounts.call.up === up.peers.length && up.peers.length === 2)
 // 邻居只由 call 决定，线也只画那条 call 边：出和入不许共用一条边，types 不许多挂。
 check('a peer reached by call is one neighbour, wired as call',
   down.peers[0].id === 'a.py::g' && down.peers[0].types.length === 1 && down.peers[0].types[0] === 'call')
-check('neighbors carries stamp', typeof down.stamp === 'string')
+check('expand carries stamp', typeof down.stamp === 'string')
 
 const ver = await ask('verify', { ids: ['a.py::f', 'a.py::gone'] })
 check('verify keeps the living', ver.nodes[0].id === 'a.py::f' && ver.nodes[0].missing === undefined)
 check('verify reports the gone', ver.nodes[1].missing === true)
 check('verify carries stamp', typeof ver.stamp === 'string')
 
-const chain = await ask('chain', { ids: 'a.py::f', hops: 1 })
-check('chain carries stamp', typeof chain.stamp === 'string')
-check('chain self-loop out of layering: f and g on layers', chain.trees.length === 1)
+// /chain 已删：分层现在由布局自己算（client/layout/sugiyama）。
+// 链式展开走 /walk：一次请求拿到 a → b → c 整条链。
+const walked = await ask('walk', { id: 'a.py::f', direction: 'down', rel: 'call', depth: 4 })
+check('walk carries stamp', typeof walked.stamp === 'string')
+check('walk follows the chain f -> g (g calls back to f, already seen)',
+  walked.nodes.length === 2 && walked.edges.length >= 1)
+const walkedUp = await ask('walk', { id: 'a.py::g', direction: 'up', rel: 'call', depth: 4 })
+check('walk upstream of g reaches f then its callers',
+  walkedUp.nodes.map(n => n.id).sort().join(',') === 'a.py::f,a.py::g,a.py::h')
 
 const stats = await ask('stats', {})
 check('stats hides virtual anchors', stats.anchors === 9)
 const mainAnchor = await ask('anchor', { id: 'a.py::main' })
-const mainDown = await ask('neighbors', { id: 'a.py::main', direction: 'down' })
-check('virtual block folded out of neighbour count', mainAnchor.anchor.down === 1)
+const mainDown = await ask('expand', { id: 'a.py::main', direction: 'down', rel: 'call' })
+check('virtual block folded out of neighbour count', mainAnchor.anchor.peerCounts.call.down === 1)
 check('expand skips virtual block and reaches real child',
   mainDown.peers.length === 1 && mainDown.peers[0].id === 'a.py::child')
 const virtualBlock = await ask('anchor', { id: 'a.py::main#if' })
 check('virtual block stays hidden if addressed directly', virtualBlock.anchor.hidden === true)
 const virtualSearch = await ask('search', { q: 'main#if', limit: 8 })
 check('search hides virtual blocks', virtualSearch.hits.length === 0)
-const foldedChain = await ask('chain', { ids: 'a.py::main', hops: 1 })
+// 虚块折叠现在靠 /walk：从 main 往下走，穿虚拟块摸到真节点 child。
+const foldedChain = { trees: [{ nodes: (await ask('walk', { id: 'a.py::main', direction: 'down', rel: 'call', depth: 4 })).nodes.map(n => ({ id: n.id })) }] }
 const foldedIds = foldedChain.trees.flatMap(tree => tree.nodes.map(node => node.id))
 check('chain folds virtual blocks out',
   foldedIds.includes('a.py::child') && !foldedIds.includes('a.py::main#if'))

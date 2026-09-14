@@ -244,23 +244,58 @@ function recordPeers(repo, id, direction) {
  * 它出，所以三者不可能对不上。
  */
 function callPeers(repo, id, direction) {
+  return relPeers(repo, id, direction, 'call')
+}
+
+/** 有数据的关系类型。 */
+const RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+
+/**
+ * 按关系取邻居：**两端都必须是真实 anchor**。
+ *
+ * relations.json 给出已经解析好的边（谁指向谁、那个名字在这段上下文里指哪里），
+ * anchors.json 把两端的 id 变成一条真实记录——记录取得到，这个 peer 才建得出 node。
+ * 缺前者就没有方向，缺后者就没有节点。
+ *
+ * 不再「只认 call」。上下键现在按关系分开：call 一个按钮、inherit 一个按钮，
+ * 各自显示各自的数、各自的颜色（见规则文档 §2.3）。同一条边的 from === id 就是
+ * 下行、to === id 就是上行，两个方向永远不会共用同一条边。
+ *
+ * @param relation - 关系类型；省略表示全部关系。
+ */
+function relPeers(repo, id, direction, relation) {
   const edges = (direction === 'up' ? repo.in : repo.out).get(id) ?? []
   const found = new Set()
   for (const e of edges) {
-    if (e.type !== 'call') continue
+    if (relation !== undefined && relation !== null && e.type !== relation) continue
     const peer = direction === 'up' ? e.from : e.to
     if (peer === id) continue
     if (!repo.anchors.has(peer) || !repo.visible.has(peer)) continue
     found.add(peer)
   }
-  // 一条 call 边只可能属于一个方向：from === id 是下行，to === id 是上行，
-  // 不可能同时成立 —— 出和入永远不会共用同一条边。
   return [...found].sort()
 }
 
+/**
+ * 一个 anchor 每个关系、每个方向有几个邻居。
+ *
+ * **这是按钮数字的唯一来源。** 有几个关系挂几个按钮，某个关系是 0 就不挂那个按钮、
+ * 不写数字（见规则文档 §2.3.1、§2.3.2）。按钮上的数字、展开出来的名单、画出来的线
+ * 都走 relPeers，所以三者不可能对不上。
+ */
+function peerCounts(repo, id) {
+  const counts = {}
+  for (const rel of RELATIONS) {
+    const up = relPeers(repo, id, 'up', rel).length
+    const down = relPeers(repo, id, 'down', rel).length
+    if (up > 0 || down > 0) counts[rel] = { up, down }
+  }
+  return counts
+}
+
 /** 两个来源的差集：只做情报，不参与过滤。onlyInEdges 通常是记录写了裸名字。 */
-function crossCheck(repo, id, direction) {
-  const fromEdges = new Set(callPeers(repo, id, direction))
+function crossCheck(repo, id, direction, relation) {
+  const fromEdges = new Set(relPeers(repo, id, direction, relation))
   const record = recordPeers(repo, id, direction)
   if (record === null) {
     return { edges: fromEdges.size, record: null, agreed: fromEdges.size, onlyInEdges: [], onlyInRecord: [] }
@@ -277,21 +312,22 @@ function crossCheck(repo, id, direction) {
 }
 
 /**
- * 这条线的类型：恒为 `call`。
+ * 这条线的类型。
  *
- * 邻居既然只由 call 边决定，画出来的线就只能是那条 call 边本身。以前这里把两个
- * 节点之间的**所有**关系塞进 types，于是一条下行线身上可能挂着反向的 dataflow，
- * 出和入看着像同一条边——`cddl-wire` 的语义、`select.js` 的过滤都跟着含糊。
+ * 一次展开只走一个关系（call 一个按钮、inherit 一个按钮），所以画出来的线就是
+ * 那条边自己的类型。以前这里把两个节点之间的**所有**关系塞进 types，于是一条
+ * 下行线身上可能挂着反向的 dataflow，出和入看着像同一条边。
  */
-function peerTypes() {
-  return ['call']
+function peerTypes(relation) {
+  return [relation || 'call']
 }
 
 /** Distinct edges to `id`'s neighbours in one direction, deduped by target. */
-function hop(repo, id, direction) {
-  return callPeers(repo, id, direction).map(peer => ({
+function hop(repo, id, direction, relation) {
+  const rel = relation || 'call'
+  return relPeers(repo, id, direction, rel).map(peer => ({
     id: peer,
-    types: peerTypes(repo, id, peer),
+    types: peerTypes(rel),
     ...describe(repo, peer),
   }))
 }
@@ -339,10 +375,14 @@ function describe(repo, id) {
     // Self-loops are excluded for one reason: hop() skips them, so a recursive
     // function counting itself here made the button promise one neighbour more
     // than expand can ever list. The number on the button IS the expand count.
-    // 按钮上的数字就是展开出来的名单长度——两边都走 callPeers，同一次判断，
-    // 不可能出现"说 60 只给出 25 个"。只认 call，理由见 callPeers。
-    up: callPeers(repo, id, 'up').length,
-    down: callPeers(repo, id, 'down').length,
+    // 按钮上的数字就是展开出来的名单长度——两边都走 relPeers，同一次判断，
+    // 不可能出现"说 60 只给出 25 个"。
+    //   up / down        ：call 方向的计数，老调用方还在读
+    //   peerCounts       ：**每个关系每个方向**的计数，按钮按它挂
+    //                      有几个关系挂几个，是 0 的不出现在这里
+    up: relPeers(repo, id, 'up', 'call').length,
+    down: relPeers(repo, id, 'down', 'call').length,
+    peerCounts: peerCounts(repo, id),
   }
 }
 
@@ -590,134 +630,6 @@ function among(repo, ids, bridge) {
   return { edges, bridges: [...bridges.values()] }
 }
 
-/**
- * The trees a set of seeds forms once each one is pushed out and back.
- *
- * There is no subject. Every seed walks `hops` steps along out-edges and,
- * separately, `hops` steps along in-edges. Separately, because following an
- * out-edge from a caller would drag in that caller's OTHER callees and stand
- * them beside the seed as if the seed had called them. The union of those walks
- * is one graph: whatever it joins is a tree, and a seed that joins nothing is an
- * island. The untouched anchors in the middle are what does the joining, so they
- * belong in the answer rather than being noise in it.
- *
- * Layers are the longest path from the tree's own sources, with back edges left
- * out — a call graph has cycles, and a layer number cannot survive one.
- *
- * @param repo - the loaded index.
- * @param seeds - the anchors to grow from; the session's edits, normally.
- * @param hops - how far each seed reaches in each direction.
- * @returns trees, the one holding the most seeds first, each with its nodes in
- *   layers and its own edges, plus the seeds that reached nothing.
- */
-function chain(repo, seeds, hops) {
-  const start = seeds.filter(id => repo.visible.has(id))
-  const nodes = new Set(start)
-  const edges = new Map()
-  const addEdge = (from, to, type) => {
-    const key = from + ' -> ' + to
-    const seen = edges.get(key)
-    if (seen === undefined) edges.set(key, { from, to, types: [type] })
-    else if (!seen.types.includes(type)) seen.types.push(type)
-  }
-
-  for (const seed of start) {
-    for (const direction of ['out', 'in']) {
-      const table = direction === 'out' ? repo.out : repo.in
-      let frontier = new Set([seed])
-      const reached = new Set([seed])
-      for (let step = 0; step < hops; step += 1) {
-        const next = new Set()
-        for (const cur of frontier) {
-          for (const e of table.get(cur) ?? []) {
-            const peer = direction === 'out' ? e.to : e.from
-            if (peer === cur) continue
-            addEdge(e.from, e.to, e.type)
-            if (!reached.has(peer)) { reached.add(peer); next.add(peer) }
-          }
-        }
-        frontier = next
-      }
-      for (const id of reached) nodes.add(id)
-    }
-  }
-
-  const out = new Map()
-  const both = new Map()
-  const link = (map, a, b) => {
-    const list = map.get(a)
-    if (list === undefined) map.set(a, [b])
-    else if (!list.includes(b)) list.push(b)
-  }
-  for (const e of edges.values()) {
-    link(out, e.from, e.to)
-    link(both, e.from, e.to)
-    link(both, e.to, e.from)
-  }
-
-  const home = new Map()
-  const groups = []
-  for (const id of nodes) {
-    if (home.has(id)) continue
-    const members = []
-    const stack = [id]
-    while (stack.length > 0) {
-      const cur = stack.pop()
-      if (home.has(cur)) continue
-      home.set(cur, groups.length)
-      members.push(cur)
-      for (const peer of both.get(cur) ?? []) {
-        if (!home.has(peer)) stack.push(peer)
-      }
-    }
-    groups.push(members)
-  }
-
-  const seedSet = new Set(start)
-  const trees = []
-  const islands = []
-  for (const members of groups) {
-    if (members.length === 1) {
-      islands.push({ ...describe(repo, members[0]), seed: seedSet.has(members[0]) })
-      continue
-    }
-    const mine = new Set(members)
-    // Depth-first finish order, so the edge that closes a cycle is the one left
-    // out of the layering rather than the one deciding it.
-    const state = new Map()
-    const finished = []
-    const visit = (id) => {
-      state.set(id, true)
-      for (const peer of out.get(id) ?? []) {
-        if (mine.has(peer) && !state.has(peer)) visit(peer)
-      }
-      finished.push(id)
-    }
-    for (const id of members) if (!state.has(id)) visit(id)
-    finished.reverse()
-    const layer = new Map(members.map(id => [id, 0]))
-    for (const id of finished) {
-      for (const peer of out.get(id) ?? []) {
-        if (mine.has(peer) && layer.get(peer) <= layer.get(id)) layer.set(peer, layer.get(id) + 1)
-      }
-    }
-    const deepest = Math.max(...layer.values())
-    const layers = []
-    for (let d = 0; d <= deepest; d += 1) layers.push([])
-    for (const id of members) layers[layer.get(id)].push(id)
-    trees.push({
-      size: members.length,
-      seeds: members.filter(id => seedSet.has(id)).length,
-      layers,
-      nodes: members.map(id => ({ ...describe(repo, id), layer: layer.get(id), seed: seedSet.has(id) })),
-      edges: [...edges.values()].filter(e => mine.has(e.from) && mine.has(e.to)),
-    })
-  }
-  // The picture is about what was edited, so the tree holding the most edits
-  // leads and size breaks the tie.
-  trees.sort((l, r) => r.seeds - l.seeds || r.size - l.size)
-  return { hops, seeds: start.length, trees, islands }
-}
 
 const handlers = {
   stats: (repo) => ({
@@ -730,19 +642,69 @@ const handlers = {
   outline: repo => ({ dirs: outline(repo) }),
   file: (repo, q) => ({ file: q.file, symbols: fileSymbols(repo, q.file) }),
   anchor: (repo, q) => ({ anchor: describe(repo, q.id) }),
-  neighbors: (repo, q) => ({
-    id: q.id,
-    direction: q.direction,
-    anchor: describe(repo, q.id),
-    peers: hop(repo, q.id, q.direction),
-    // 关系表与 anchor 记录的差集。两个来源不一致时摆出来，不静默取一个。
-    crossCheck: crossCheck(repo, q.id, q.direction),
-    stamp: repo.stamp,
-  }),
-  chain: (repo, q) => {
-    const ids = typeof q.ids === 'string' ? q.ids.split(',').filter(Boolean) : (q.ids ?? [])
-    const hops = Math.max(1, Math.min(3, Number(q.hops) || 1))
-    return { ...chain(repo, ids, hops), stamp: repo.stamp }
+  /**
+   * 按关系展开一层：从 `id` 出发，沿 `rel` 关系往 `direction` 走一跳。
+   *
+   * 一个新接口替掉旧的 `/neighbors`。区别只有一个但很关键：**不再只认 call**。
+   * 前端对每个有数据的关系挂一个按钮，点哪个就带哪个 `rel` 过来，所以：
+   *   - 按钮上的数字（`counts[rel][direction]`）
+   *   - 这次返回的名单（`peers`）
+   * 都出自同一个 `relPeers`，同一次判断——说 N 就一定是 N 个节点。
+   */
+  expand: (repo, q) => {
+    const relation = RELATIONS.includes(q.rel) ? q.rel : 'call'
+    const direction = q.direction === 'up' ? 'up' : 'down'
+    const peers = hop(repo, q.id, direction, relation)
+    return {
+      id: q.id,
+      direction,
+      relation,
+      from: describe(repo, q.id),
+      peers,
+      count: peers.length,
+      stamp: repo.stamp,
+    }
+  },
+  /**
+   * 链式展开：`a → b → c → d` 一路走。
+   *
+   * 从 `id` 开始沿 `rel` 往 `direction` 走，每一层的新节点继续走，直到没有新节点
+   * 或到 `depth`。**一次请求就是一整条链**，前端不用为每一层再发一次——这就是
+   * 「一路往下拉能 a→b→c→d」的数据侧。
+   *
+   * 用 BFS 记 `parent`，所以每个节点只出现一次，回来的边天然构成一条到根的路径，
+   * 不会因为图里有菱形而重复建节点。
+   */
+  walk: (repo, q) => {
+    const relation = RELATIONS.includes(q.rel) ? q.rel : 'call'
+    const direction = q.direction === 'up' ? 'up' : 'down'
+    const depth = Math.max(1, Math.min(8, Number(q.depth) || 4))
+    const start = describe(repo, q.id)
+    const nodes = new Map([[start.id, start]])
+    const edges = []
+    let frontier = [start.id]
+    for (let level = 0; level < depth && frontier.length > 0; level += 1) {
+      const next = []
+      for (const current of frontier) {
+        for (const peer of hop(repo, current, direction, relation)) {
+          edges.push({ from: peer.id, to: current, types: [relation] })
+          if (nodes.has(peer.id)) continue
+          nodes.set(peer.id, peer)
+          next.push(peer.id)
+        }
+      }
+      frontier = next
+    }
+    return {
+      id: q.id,
+      direction,
+      relation,
+      depth,
+      nodes: [...nodes.values()],
+      edges,
+      count: nodes.size,
+      stamp: repo.stamp,
+    }
   },
   // Re-validation after the index moved under a drawn graph: which of these
   // nodes still exist, and what are their counts now. describe() reports

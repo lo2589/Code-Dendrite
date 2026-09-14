@@ -18,6 +18,8 @@ window.__ModuleLoader__.load({
     var visible = __graph_visible.visible
     var __layout_camera = require('dsh-cdd-lens/layout/camera')
     var edgeFocusOf = __layout_camera.edgeFocusOf
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     /**
      * What is on screen at all, and which file each anchor belongs to.
@@ -31,8 +33,9 @@ window.__ModuleLoader__.load({
       // new file box, while bridge-only implementation details stay hidden.
       var included = graph.order.filter(function (id) {
         var node = graph.nodes[id]
-        return shown[id] && node !== undefined
-          && (node.session || node.explored || node.pinned || id === shared.selected || id === graph.rootId)
+        var ui = uiOf(graph, id)
+        return shown[id] && node !== undefined && ui !== null
+          && (ui.session || ui.explored || ui.pinned || id === shared.selected || id === graph.rootId)
       })
       if (included.length === 0 && graph.nodes[graph.rootId]) included.push(graph.rootId)
       var activeFocus = edgeFocusOf(graph)
@@ -44,7 +47,7 @@ window.__ModuleLoader__.load({
       var byFile = {}
       var fileOrder = []
       included.forEach(function (id) {
-        var file = graph.nodes[id].anchor.file
+        var file = graph.nodes[id].file
         if (byFile[file] === undefined) { byFile[file] = []; fileOrder.push(file) }
         byFile[file].push(id)
       })
@@ -96,7 +99,7 @@ window.__ModuleLoader__.load({
         nextComponentRank = Math.max.apply(Math, Object.keys(relationRank).map(function (id) { return relationRank[id] })) + 2
       }
       included.filter(function (id) {
-        return graph.nodes[id].anchor.symbol.split && graph.nodes[id].anchor.symbol.split('.').pop() === 'main'
+        return graph.nodes[id].symbol.split && graph.nodes[id].symbol.split('.').pop() === 'main'
       }).forEach(rankFrom)
       rankFrom(graph.rootId)
       included.filter(function (id) { return indegree[id] === 0 }).forEach(rankFrom)
@@ -115,12 +118,12 @@ window.__ModuleLoader__.load({
 
       fileOrder.forEach(function (file) {
         byFile[file].sort(function (l, r) {
-          var la = graph.nodes[l].anchor
-          var ra = graph.nodes[r].anchor
+          var la = graph.nodes[l]
+          var ra = graph.nodes[r]
           var lm = la.symbol.split('.').pop() === 'main' ? 0 : 1
           var rm = ra.symbol.split('.').pop() === 'main' ? 0 : 1
           return relationRank[l] - relationRank[r] || lm - rm
-            || (la.start || 0) - (ra.start || 0) || la.symbol.localeCompare(ra.symbol)
+            || (la.line_start || 0) - (ra.line_start || 0) || la.symbol.localeCompare(ra.symbol)
         })
       })
 

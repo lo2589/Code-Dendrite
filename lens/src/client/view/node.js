@@ -22,17 +22,23 @@ window.__ModuleLoader__.load({
     var dotClass = __view_record.dotClass
     var stateOf = __view_record.stateOf
     var turnLabel = __view_record.turnLabel
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
 
     function GraphNode(props) {
       var engine = props.engine
       var p = props.p
       var zoom = props.zoom || 1
       var drag = useRef(null)
-      var anchor = p.node.anchor
+      // node 就是 anchor：不用再走 `.anchor` 那一跳。
+      var anchor = p.node
+      var ui = uiOf(shared.graph, p.id) || {}
       var record = stateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
-      var synthetic = p.node.synthetic === true || p.node.bridge === true || anchor.hidden === true
+      var synthetic = ui.synthetic === true || ui.bridge === true || anchor.hidden === true
       var isClass = !synthetic && (anchor.kind === 'class' || anchor.members > 0)
       // A class and a function are two different things, and the card has to say
       // so in colour rather than in a 1.5px border nobody can see. `kind` rides
@@ -48,17 +54,60 @@ window.__ModuleLoader__.load({
           key: 'c', className: 'cddl-count',
           title: anchor.members + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(p.id) },
-        }, (p.node.members ? '▾ ' : '▸ ') + anchor.members)
-          : h('span', { key: 'l', className: 'cddl-lines' }, anchor.start + '–' + anchor.end),
+        }, (ui.members ? '▾ ' : '▸ ') + anchor.members)
+          : h('span', { key: 'l', className: 'cddl-lines' }, anchor.line_start + '–' + anchor.line_end),
         isClass ? h('span', { key: 'k', className: 'cddl-kind' }, '类') : null,
       ])
 
-      // Read before the buttons are built, not after. `var` hoisting made
-      // these undefined inside the action row when it moved into the card,
-      // so the button never lit up and its tooltip said the wrong thing
-      // while the expansion itself worked fine.
-      var upOpen = p.node.up === true
-      var downOpen = p.node.down === true
+      // 展开按钮按关系挂：anchor.peerCounts 是 worker 给的
+      //   { call: {up, down}, inherit: {up, down}, … }
+      // 只列出**有数据**的关系——某个关系是 0 就不在这里出现，不画箭头也不写数字。
+      var REL_LABEL = {
+        call: '调用', dataflow: '数据流', inherit: '继承',
+        dispatch: '分派', impact: '影响',
+      }
+      var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+      var counts = anchor.peerCounts || {}
+
+      function hopButton(direction, rel) {
+        var n = counts[rel][direction]
+        var slot = direction + ':' + rel
+        var open = ui.open[slot] === true
+        var arrow = direction === 'up' ? '↑' : '↓'
+        var verb = direction === 'up' ? '谁在用它' : '它在用谁'
+        return h('button', {
+          key: slot,
+          title: REL_LABEL[rel] + ' · ' + verb + '（' + n + '）'
+            + '\n点一下：展开/收起一层'
+            + '\n按住 Shift 点：一路展开到底（链式）',
+          className: 'cddl-action-' + direction + ' cddl-rel-' + rel + (open ? ' on' : ''),
+          'data-action': direction === 'up' ? 'expand-callers' : 'expand-callees',
+          'data-relation': rel,
+          'data-count': n,
+          onClick: function (e) {
+            e.stopPropagation()
+            note('btn', '按下 ' + (direction === 'up' ? '↑' : '↓') + rel
+              + ' count=' + n + (open ? ' [收起]' : '')
+              + ' 节点=' + String(p.id).split('::').pop())
+            if (open) { engine.collapse(p.id, direction, rel); return }
+            if (e.shiftKey) engine.walk(p.id, direction, rel, 4)
+            else engine.expand(p.id, direction, null, rel)
+          },
+        }, [
+          h('span', { key: 'a', className: 'cddl-rel-arrow' }, arrow),
+          h('span', { key: 'n', className: 'cddl-rel-count' }, n),
+          h('span', { key: 'r', className: 'cddl-rel-name' }, rel),
+        ])
+      }
+
+      var hopButtons = []
+      REL_ORDER.forEach(function (rel) {
+        var c = counts[rel]
+        if (c === undefined) return
+        // 上行在左、下行在右，同一关系两个方向挨着，颜色一致。
+        if (c.up > 0) hopButtons.push(hopButton('up', rel))
+        if (c.down > 0) hopButtons.push(hopButton('down', rel))
+      })
 
       var actions = synthetic
         ? h('div', { key: 'h', className: 'cddl-node-actions cddl-node-actions-bridge' }, [
@@ -68,52 +117,24 @@ window.__ModuleLoader__.load({
           }, '桥'),
         ])
         :
-        h('div', { key: 'h', className: 'cddl-node-actions' }, [
-          h('button', {
-            key: 'u',
-            title: anchor.up === 0
-              ? '索引里没有谁用它'
-              : (upOpen ? '收起：谁在用它（' + anchor.up + '）' : '展开：谁在用它（' + anchor.up + '）'),
-            disabled: anchor.up === 0,
-            className: 'cddl-action-up' + (upOpen ? ' on' : ''),
-            'data-action': 'expand-callers',
-            onClick: function (e) {
-              e.stopPropagation()
-              if (upOpen) engine.collapse(p.id, 'up')
-              else engine.expand(p.id, 'up')
-            },
-          }, '↑' + anchor.up),
-          h('button', {
-            key: 'd',
-            title: anchor.down === 0
-              ? '索引里它没用任何东西'
-              : (downOpen ? '收起：它在用谁（' + anchor.down + '）' : '展开：它在用谁（' + anchor.down + '）'),
-            disabled: anchor.down === 0,
-            className: 'cddl-action-down' + (downOpen ? ' on' : ''),
-            'data-action': 'expand-callees',
-            onClick: function (e) {
-              e.stopPropagation()
-              if (downOpen) engine.collapse(p.id, 'down')
-              else engine.expand(p.id, 'down')
-            },
-          }, '↓' + anchor.down),
+        h('div', { key: 'h', className: 'cddl-node-actions' }, hopButtons.concat([
           h('button', {
             key: 'p',
-            title: p.node.pinned
+            title: ui.pinned
               ? '取消固定'
               : (stickyByRecency(p.id)
                 ? '最近碰过，自动保留三轮；点一下改为永久固定'
                 : '固定：折叠上级时也留在图上'),
-            className: 'cddl-action-pin' + (p.node.pinned ? ' on' : (stickyByRecency(p.id) ? ' auto' : '')),
+            className: 'cddl-action-pin' + (ui.pinned ? ' on' : (stickyByRecency(p.id) ? ' auto' : '')),
             'data-action': 'pin-anchor',
             onClick: function (e) { e.stopPropagation(); engine.pin(p.id) },
           }, 'pin'),
-        ])
+        ]))
 
       var members = null
-      if (!synthetic && p.node.members && p.node.memberList !== undefined) {
+      if (!synthetic && ui.members && ui.memberList !== undefined) {
         members = h('div', { className: 'cddl-members', key: 'm' },
-          p.node.memberList.map(function (member) {
+          ui.memberList.map(function (member) {
             var mrec = stateOf(member.id)
             return h('div', {
               key: member.id,
@@ -127,27 +148,32 @@ window.__ModuleLoader__.load({
               turnLabel(mrec) === null ? null : React.cloneElement(turnLabel(mrec), { key: 'b' }),
               h('span', { key: 'l', className: 'cddl-lines' }, member.start + '–' + member.end),
             ])
-          }).concat([h('div', { key: 'more', className: 'cddl-more' }, '共 ' + p.node.memberList.length + ' 个方法')]))
+          }).concat([h('div', { key: 'more', className: 'cddl-more' }, '共 ' + ui.memberList.length + ' 个方法')]))
       }
 
-      // The same card is used twice: positioned on the canvas, and standing in
-      // the flow of the stream rail. Only where it sits differs, so only that
-      // is switched — a second component would drift from this one.
+      // 同一张卡片用在两处：画布上定位的，和轨迹栏里顺着流排的。只有位置不同，
+      // 所以只切这一个标记——另写一个组件迟早会和这个跑偏。
       var flow = props.flow === true
+      // 出入口各一个小圈：**入在左、出在右，不同口**。线从左边的小圈进、
+      // 从右边的小圈出，两头都停在圈上——线必须明显连到圈上，不许悬空。
+      //
+      // 以前这里是 24×20 的方块角标，里面写「入」「出」两个字，而且入出可以
+      // 落在同一条边（role='both'）上；那样两个方向挤在一个口，看不出谁进谁出。
       var vertical = p.flowAxis === 'vertical'
-      var ports = p.routingPorts
-      if (!ports || !ports.length) ports = [
-        {side:vertical?'top':'left',in:true,out:false},
-        {side:vertical?'bottom':'right',in:false,out:true},
+      var portViews = [
+        h('span', {
+          key: 'port-in',
+          className: 'cddl-port cddl-port-in' + (vertical ? ' cddl-port-vtop' : ''),
+          'data-port': 'in',
+          title: '关系进入此 Anchor',
+        }),
+        h('span', {
+          key: 'port-out',
+          className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''),
+          'data-port': 'out',
+          title: '关系离开此 Anchor',
+        }),
       ]
-      var portViews = ports.map(function (port) {
-        var role=port.in && port.out?'both':port.in?'in':'out'
-        return h('span', {key:'port-'+port.side,
-          className:'cddl-port cddl-port-'+role+' cddl-port-'+port.side,
-          'data-port':role, 'data-port-side':port.side,
-          title:role==='both'?'此处有进入和离开此 Anchor 的关系':port.in?'关系进入此 Anchor':'关系离开此 Anchor',
-        }, role==='both'?'入出':port.in?'入':'出')
-      })
       return h('div', {
         className: 'cddl-node-shell' + (p.island ? ' cddl-shell-island' : '')
           + (flow ? ' cddl-node-flow' : ''),
@@ -159,7 +185,11 @@ window.__ModuleLoader__.load({
         // button that does not light up after it worked is indistinguishable
         // from one that did nothing, and guessing which was costing more than
         // the attribute does.
-        'data-open': (upOpen ? 'up' : '') + (downOpen ? 'down' : '') || 'none',
+        // 有哪些「方向:关系」开着，供外部测试读。以前只报 up/down 两个方向，
+        // 现在每个关系各开各的，所以按 key 全列出来。
+        'data-open': Object.keys(ui.open).filter(function (k) {
+          return ui.open[k] === true && k.indexOf('auto') !== 0
+        }).sort().join(' ') || 'none',
       }, [
         portViews,
         h('div', {
@@ -169,7 +199,7 @@ window.__ModuleLoader__.load({
               : (shared.lit.nodes[p.id] === true ? ' cddl-lit' : ' cddl-unlit'))
             + (selected ? ' cddl-sel' : '')
             + (faded ? ' cddl-faded' : '')
-            + (p.node.island ? ' cddl-island' : '')
+            + (ui.island ? ' cddl-island' : '')
             + (synthetic ? ' cddl-bridge' : '')
             + (isClass ? ' cddl-cls cddl-class' : '')
             + (isFn ? ' cddl-fn' : ''),

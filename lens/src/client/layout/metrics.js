@@ -9,6 +9,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __layout_cardBox = require('dsh-cdd-lens/layout/cardBox')
     var cardBox = __layout_cardBox.cardBox
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     var SYMBOL_FONT = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace'
     var measurer = null
@@ -63,7 +65,7 @@ window.__ModuleLoader__.load({
       included.forEach(function (id) {
         var node = graph.nodes[id]
         if (node === undefined) return
-        var name = shortSymbol(node.anchor.symbol)
+        var name = shortSymbol(node.symbol)
         if (byShort[name] === undefined) byShort[name] = []
         byShort[name].push(id)
       })
@@ -71,7 +73,7 @@ window.__ModuleLoader__.load({
       Object.keys(byShort).forEach(function (name) {
         var group = byShort[name]
         group.forEach(function (id) {
-          out[id] = group.length === 1 ? name : graph.nodes[id].anchor.symbol
+          out[id] = group.length === 1 ? name : graph.nodes[id].symbol
         })
       })
       return out
@@ -105,11 +107,12 @@ window.__ModuleLoader__.load({
       var BADGES = em(17.3)
       var longest = 0
       included.forEach(function (id) {
-        var anchor = graph.nodes[id].anchor
-        var chars = anchor.symbol.length
+        var node = graph.nodes[id]
+        var chars = node.symbol.length
         if (chars > longest) longest = chars
-        if (graph.nodes[id].memberList !== undefined) {
-          graph.nodes[id].memberList.forEach(function (m) {
+        var ui = uiOf(graph, id)
+        if (ui !== null && ui.memberList !== undefined) {
+          ui.memberList.forEach(function (m) {
             var own = m.symbol.split('.').pop().length + 2
             if (own > longest) longest = own
           })
@@ -192,7 +195,8 @@ window.__ModuleLoader__.load({
       var label = labelsFor(graph, included)
       var sizeOf = function (id, widthLimit) {
         var node = graph.nodes[id]
-        var text = label[id] === undefined ? shortSymbol(node.anchor.symbol) : label[id]
+        var ui = uiOf(graph, id) || {}
+        var text = label[id] === undefined ? shortSymbol(node.symbol) : label[id]
         var badge = 46
         var chrome = 22 + 14 + 16
         // Keep one small readability gutter between the symbol and its badges;
@@ -202,7 +206,7 @@ window.__ModuleLoader__.load({
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.anchor.kind === 'class' || node.anchor.members > 0 ? 142 : 96
+        var reserved = node.kind === 'class' || node.members > 0 ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
         var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
         var wrapped = (lines - 1) * CARD.symLine
@@ -215,8 +219,8 @@ window.__ModuleLoader__.load({
           // was a flat 70 for a plain card that actually draws 55. Every row in
           // every box carried fifteen pixels of slack that nothing was in, and
           // the boxes were that much taller than their contents.
-          h: node.members && node.memberList !== undefined
-            ? CARD_BASE + MEMBERS_CHROME + node.memberList.length * MEMBER_ROW + MORE_ROW + wrapped
+          h: ui.members && ui.memberList !== undefined
+            ? CARD_BASE + MEMBERS_CHROME + ui.memberList.length * MEMBER_ROW + MORE_ROW + wrapped
             : CARD_BASE + wrapped,
         }
       }

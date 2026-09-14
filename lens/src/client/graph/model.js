@@ -10,29 +10,85 @@ window.__ModuleLoader__.load({
 
     // ---- graph store ------------------------------------------------------
     //
-    // Nodes and edges accumulate as you walk. Nothing is ever silently dropped:
-    // collapsing hides descendants that no other branch and no pin is holding,
-    // and the anchor's turn record survives regardless — a collapse must not
-    // erase that the agent was there on turn 3.
+    // A node IS an anchor. `graph.nodes[id]` holds the record that came out of
+    // `.codedendrite/anchors.json` — `symbol`, `file`, `line_start`, `callers`,
+    // `mro`, `own_methods`, the lot — and nothing else. There is no wrapper and
+    // no `node.anchor` hop: everything that wants to know about the code reads
+    // the anchor, and anything the drawing needs about a node is either derived
+    // from that record or kept in one of the side tables below.
+    //
+    // Two side tables, both keyed by anchor id, both outside the record:
+    //
+    //   graph.ui     —按钮和交互状态（谁按开了 up、谁在 loading、谁被 pin）。
+    //                  这些是「你看它的方式」，不是「它是什么」，所以不写进
+    //                  anchor，重画一次不会污染索引来的数据。
+    //   graph.layout — 布局算出来的坐标和端口。布局产物，同样不写回 anchor。
+    //
+    // Anything typed into .codedendrite stays there; anything we invent lives
+    // beside it and can be thrown away and recomputed.
 
     function emptyGraph() {
-      return { nodes: {}, order: [], edges: [], rootId: null }
+      return { nodes: {}, ui: {}, layout: {}, order: [], edges: [], rootId: null }
+    }
+
+    /** 每个 anchor 的交互状态。节点进图时建一次，之后只改字段。 */
+    function emptyUI() {
+      return {
+        // 展开状态按「方向:关系」存：一个 anchor 有几个关系就挂几个按钮，各开各的。
+        //   ui.open['down:call']     点开了 call 的下游
+        //   ui.open['up:inherit']    点开了 inherit 的上游
+        //   auto 前缀的是 gather 自动拉进来的，不算用户按过
+        open: {},
+        members: false, memberList: undefined,
+        pinned: false, loading: null, error: null,
+        explored: false, island: false, session: false,
+        bridge: false, synthetic: false,
+        // 这个节点最近一次被查看是哪一轮。看过的节点按轮次变旧、过期撤下；
+        // edit 过的节点不看它，一直留着（判据在 graph/visible.fadedOut）。
+        viewedAt: undefined,
+        // 构图时就明确知道它被 edit 过（trace 还没到时用）。
+        edited: false,
+      }
+    }
+
+    /** anchor 记录的第一次出现，补上 id（索引里本来就带，防外部传裸记录）。 */
+    function anchorRecord(anchor) {
+      return anchor
     }
 
     function addNode(graph, anchor) {
+      if (anchor === undefined || anchor === null || anchor.id === undefined) return false
       if (graph.nodes[anchor.id] !== undefined) {
-        // Refresh the counts; a reindex can change them under us.
-        graph.nodes[anchor.id].anchor = anchor
+        // 重新索引会换掉记录：整条替换，不留旧字段。
+        graph.nodes[anchor.id] = anchorRecord(anchor)
         return false
       }
-      // up/down 是按钮状态（用户按出来的）；autoUp/autoDown 是 gather 选中时
-      // 自动拉进来的邻居。两者分开，按钮才不会被 gather 代按。
-      graph.nodes[anchor.id] = {
-        anchor: anchor, down: false, up: false, autoDown: false, autoUp: false,
-        members: false, pinned: false,
-      }
+      graph.nodes[anchor.id] = anchorRecord(anchor)
+      graph.ui[anchor.id] = emptyUI()
       graph.order.push(anchor.id)
       return true
+    }
+
+    /** 交互状态的读写口。没有这条 node 时返回 null，调用方不必自己判空。 */
+    function uiOf(graph, id) {
+      var entry = graph.ui[id]
+      return entry === undefined ? null : entry
+    }
+
+    /** 布局产物（x/y/w/h/layer/ports）。算子只读它，不改 anchor。 */
+    function placeOf(graph, id) {
+      var entry = graph.layout[id]
+      return entry === undefined ? null : entry
+    }
+
+    function setPlace(graph, id, place) {
+      graph.layout[id] = place
+      return place
+    }
+
+    /** 图上现有的 anchor id，按进入顺序。 */
+    function nodeIds(graph) {
+      return graph.order
     }
 
     function addEdge(graph, from, to, types) {
@@ -59,6 +115,8 @@ window.__ModuleLoader__.load({
     function removeNode(graph, id) {
       if (graph.nodes[id] === undefined) return false
       delete graph.nodes[id]
+      delete graph.ui[id]
+      delete graph.layout[id]
       graph.order = graph.order.filter(function (x) { return x !== id })
       graph.edges = graph.edges.filter(function (e) { return e.from !== id && e.to !== id })
       if (graph.rootId === id) graph.rootId = graph.order.length > 0 ? graph.order[0] : null
@@ -76,7 +134,10 @@ window.__ModuleLoader__.load({
      * explicit pin overrides it and never expires.
      */
 
-    module.exports = { emptyGraph, addNode, addEdge, removeNode }
+    module.exports = {
+      emptyGraph, emptyUI, addNode, addEdge, removeNode,
+      uiOf, placeOf, setPlace, nodeIds,
+    }
     return module.exports
   },
 })

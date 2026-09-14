@@ -97,14 +97,16 @@ assert(bundle.includes('.cddl-trajectory-toggle{display:block}'))
 // something has to agree with it.
 assert(bundle.includes('--cddl-rail-shut'))
 assert(bundle.includes('width:var(--cddl-rail-shut)!important'))
-// One placement for both skins: boxes in a grid, anchors down each box. What
-// differs is only what a box groups by.
-assert(bundle.includes('function placeGroups'))
+// One placement, one layout: the layered sugiyama pass decides where every node
+// goes. No skins, so there is no "which placement" branch left to disagree with.
+assert(bundle.includes('function sugiyama'))
 assert(bundle.includes("p.flowDir = 'ltr'"))
-assert(bundle.includes("var ports = p.routingPorts"))
-assert(bundle.includes("cddl-port-'+role+' cddl-port-'+port.side"))
-assert(bundle.includes('.cddl-port-top{left:50%;top:-25px'))
-assert(bundle.includes('.cddl-port-bottom{left:50%;top:auto;bottom:-25px'))
+// 出入口是左右各一个小圈：入在左、出在右，不同口。线两头停在这个圈心上。
+assert(bundle.includes("className: 'cddl-port cddl-port-in'"))
+assert(bundle.includes("className: 'cddl-port cddl-port-out'"))
+assert(bundle.includes('.cddl-port-in{left:-6px'))
+assert(bundle.includes('.cddl-port-out{right:-6px'))
+assert(bundle.includes('var PORT_OFFSET = 6'))
 // Two or three boxes across; the box stays the width of its widest name and
 // the width the row does not need goes into the gutters.
 assert(bundle.includes('WIDEST_ROW'))

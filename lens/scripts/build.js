@@ -33,8 +33,13 @@ const header = [
   '',
 ].join('\n')
 
+// `__CDD_BUILD__` 是给运行时代码用的占位符：调试栏要显示这次跑的是哪一版，
+// 而构建戳的唯一真相是 build.json。写死字面量迟早和 build.json 漂开
+// （之前 api.js 里就钉着 V1_20 的旧串），所以在这里统一替换。
 const body = manifest.order
-  .map(file => fs.readFileSync(path.join(SRC, file), 'utf8').replace(/\s*$/, '\n'))
+  .map(file => fs.readFileSync(path.join(SRC, file), 'utf8')
+    .replace(/\s*$/, '\n')
+    .replace(/__CDD_BUILD__/g, build))
   .join('\n')
 
 const bundle = header + '\n' + body

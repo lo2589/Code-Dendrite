@@ -26,25 +26,6 @@ window.__ModuleLoader__.load({
      * to land on top of a graph the user has already expanded by hand, which
      * is exactly what explore.focus does with it.
      */
-    function seatChain(graph, body) {
-      var seat = function (id, layer, tree, seed) {
-        var node = graph.nodes[id]
-        if (node === undefined) return
-        node.layer = layer
-        node.tree = tree
-        node.seed = seed === true
-      }
-      body.trees.forEach(function (tree, rank) {
-        tree.nodes.forEach(function (n) { seat(n.id, n.layer, rank, n.seed) })
-      })
-      // An island is a tree of one. It still needs somewhere to stand,
-      // and leaving it without a layer would drop the whole drawing back
-      // to file boxes over one unconnected anchor.
-      body.islands.forEach(function (n) {
-        seat(n.id, 0, body.trees.length, n.seed)
-      })
-    }
-
     /**
      * Everything that asks the host for something.
      *
@@ -58,60 +39,25 @@ window.__ModuleLoader__.load({
     function fetchMethods(ctx, engine, session, params) {
       return {
         /**
-         * The local picture in one request: the seeds, everything within `hops`
-         * of them both ways, and the trees that grew out of it.
-         *
-         * Asking hop by hop is what left the graph as a pile of anchors with no
-         * idea which layer any of them was on. The layer is the whole point, and
-         * only the side holding the edge tables can work it out.
-         * @param ids - the anchors to grow from; the session's edits, normally.
-         * @param hops - how far each seed reaches in each direction, 1 to 3.
-         * @returns the trees, largest-by-edits first, and the lone seeds.
-         */
-        chain: function (ids, hops) {
-          if (ids === undefined || ids.length === 0) {
-            shared.chain = { trees: [], islands: [] }
-            return Promise.resolve(shared.chain)
-          }
-          return api('/chain', params({ ids: ids.join(','), hops: String(hops || 1) }))
-            .then(function (body) {
-              shared.chain = body
-              // The stamp this graph was last seated against. Any later answer
-              // carrying a different one means the index moved under the drawing.
-              if (body.stamp !== undefined) shared.graphStamp = body.stamp
-              seatChain(shared.graph, body)
-              if (window.__cddLens !== undefined) {
-                window.__cddLens.chain = {
-                  seeds: body.seeds, hops: body.hops, islands: body.islands.length,
-                  trees: body.trees.map(function (t) {
-                    return { size: t.size, seeds: t.seeds, layers: t.layers.map(function (l) { return l.length }) }
-                  }),
-                }
-              }
-              publish()
-              return body
-            })
-        },
-
-        /**
          * Re-check every node on the graph against the index as it stands NOW.
          *
          * Triggered when any answer carries a stamp different from the one the
          * graph was seated against: anchors the rebuild dropped are removed
          * (not hidden — the code they named is gone), survivors get their
-         * counts refreshed, and the graph takes the new stamp. Layers are left
-         * alone here; re-seating is chain's job and it runs on the next focus.
+         * counts refreshed, and the graph takes the new stamp. Layers are
+         * recomputed by the layout itself, so nothing here re-seats anything.
          */
         revalidate: function () {
           if (shared.revalidating === true) return Promise.resolve()
           var ids = shared.graph.order.slice()
           if (ids.length === 0) return Promise.resolve()
           shared.revalidating = true
-          return apiPost('/verify', params({}), { ids: ids }).then(function (body) {
+          return apiPost('/recheck', params({}), { ids: ids }).then(function (body) {
             body.nodes.forEach(function (n) {
               if (n.missing === true) { removeNode(shared.graph, n.id); return }
               var node = shared.graph.nodes[n.id]
-              if (node !== undefined) node.anchor = n
+              // node 就是 anchor：整条替换，不留旧字段。
+              if (node !== undefined) shared.graph.nodes[n.id] = n
             })
             if (body.stamp !== undefined) shared.graphStamp = body.stamp
             shared.revalidating = false
@@ -202,7 +148,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    module.exports = { fetchMethods, seatChain }
+    module.exports = { fetchMethods }
     return module.exports
   },
 })

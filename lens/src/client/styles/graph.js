@@ -121,6 +121,7 @@ window.__ModuleLoader__.load({
       '.cddl-trace-source pre div{display:grid;grid-template-columns:31px minmax(0,1fr);gap:7px}',
       '.cddl-trace-source pre span{text-align:right;color:var(--dsw-alias-label-dimmed);user-select:none}',
       '.cddl-trace-source pre code{white-space:pre;color:var(--dsw-alias-label-secondary)}',
+      '.cddl-trace-missing{padding:7px;color:var(--dsw-alias-label-tertiary);font-size:10px}',
       '.cddl-trace-loading{padding:8px;color:var(--dsw-alias-label-caption);font-size:10px}',
       '.cddl-trace-locate,.cddl-trace-unresolved button{margin-top:6px;border:1px solid var(--dsw-alias-border-l3);border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);font:10px inherit;padding:3px 7px;cursor:pointer}',
       '.cddl-trace-unresolved{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--dsw-alias-label-caption)}',
@@ -156,17 +157,24 @@ window.__ModuleLoader__.load({
       '.cddl-node-shell{position:absolute}',
       // Gather flights only. Scoped to the window so panning or dragging a
       // settled drawing never lags; 260ms matches GATHER_MS in engine/gather.
-      '.cddl-gathering .cddl-node-shell{transition:left .26s ease,top .26s ease}',
+      // 节点位移**不做过渡**：线是由布局一次算出来的绝对坐标路径，节点却用
+      // CSS 慢慢飘过去，两边就永远差一截——看着就是「线没锁死在节点上，节点
+      // 挪走了线慢一点」。
+      //
+      // 想两个都动只有一个稳的办法：在 JS 里逐帧把节点和线一起插值。SVG 的
+      // d 属性做 CSS 过渡在不同浏览器上不可靠（命令序列一不一样就跳变），
+      // 而重算布局逐帧画在几百个节点上太贵。所以选择两边都**瞬间到位**：
+      // 同一帧里节点和线一起落地，端点永远钉在端口小圈上。
+      '.cddl-gathering .cddl-node-shell{transition:none}',
       '.cddl-node-flow{position:static;flex:none}',
       '.cddl-node-flow .cddl-port{display:none}',
-      '.cddl-port{position:absolute;top:50%;z-index:4;width:24px;height:20px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;transform:translateY(-50%);border-radius:4px;font:800 10px var(--ds-font-family-code,monospace);background:var(--dsw-alias-bg-layer-3);box-shadow:0 0 0 2px var(--dsw-alias-bg-base)}',
-      '.cddl-port-left{left:-29px}',
-      '.cddl-port-right{right:-29px}',
-      '.cddl-port-top{left:50%;top:-25px;transform:translateX(-50%)}',
-      '.cddl-port-bottom{left:50%;top:auto;bottom:-25px;transform:translateX(-50%)}',
-      '.cddl-port-in{color:var(--dsw-alias-state-business-primary);border:1px solid var(--dsw-alias-state-business-primary)}',
-      '.cddl-port-both{color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l3)}',
-      '.cddl-port-out{color:var(--dsw-alias-state-warn-primary);border:1px solid var(--dsw-alias-state-warn-primary)}',
+      // 出入口的小圈：入在左、出在右，各是一个实心小圆，外面一圈底色把它
+      // 从卡片边上"抠"出来。线两头就停在这个圈上，所以它必须看得见。
+      '.cddl-port{position:absolute;top:50%;z-index:4;width:11px;height:11px;box-sizing:border-box;border-radius:50%;transform:translateY(-50%);box-shadow:0 0 0 2px var(--dsw-alias-bg-layer-2)}',
+      '.cddl-port-in{left:-6px;background:var(--dsw-alias-state-business-primary)}',
+      '.cddl-port-out{right:-6px;background:var(--dsw-alias-state-warn-primary)}',
+      '.cddl-port-vtop{left:50%;top:-6px;transform:translateX(-50%)}',
+      '.cddl-port-vbottom{left:50%;top:auto;bottom:-6px;transform:translateX(-50%)}',
       '.cddl-node-actions{display:flex;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
@@ -174,6 +182,19 @@ window.__ModuleLoader__.load({
       '.cddl-node-actions .cddl-action-collapse:not(:disabled){color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-tertiary)}',
       '.cddl-node-actions button:hover:not(:disabled),.cddl-node-actions button.on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}',
       '.cddl-node-actions button:disabled{opacity:.34;cursor:default}',
+      // 展开按钮按关系挂：一个关系一种颜色，箭头、数字、线同色。
+      // 没有数据的关系不出现，所以这里不需要 :disabled 的灰样式。
+      '.cddl-node-actions .cddl-rel-arrow{font-weight:700}',
+      '.cddl-node-actions .cddl-rel-count{margin-left:2px;font-weight:700}',
+      '.cddl-node-actions .cddl-rel-name{margin-left:3px;font-size:8px;opacity:.6;letter-spacing:.02em}',
+      '.cddl-node-actions .cddl-rel-call{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-tertiary)}',
+      '.cddl-node-actions .cddl-rel-dataflow{color:var(--dsw-alias-state-warn-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
+      '.cddl-node-actions .cddl-rel-inherit{color:var(--dsw-alias-label-tertiary);border-color:var(--dsw-alias-border-l3)}',
+      '.cddl-node-actions .cddl-rel-dispatch{color:var(--dsw-alias-state-success-primary);border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary) 45%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-call.on{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 22%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-dataflow.on{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary) 22%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-inherit.on{background:color-mix(in srgb,var(--dsw-alias-label-tertiary) 22%,transparent)}',
+      '.cddl-node-actions button.cddl-rel-dispatch.on{background:color-mix(in srgb,var(--dsw-alias-state-success-primary) 22%,transparent)}',
       '.cddl-action-help{font-family:var(--ds-font-family-code,monospace);font-weight:600!important}',
       '.cddl-action-help-plus{color:var(--dsw-alias-state-business-primary)!important}',
       '.cddl-action-help-minus{color:var(--dsw-alias-state-warn-primary)!important}',

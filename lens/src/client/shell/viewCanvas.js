@@ -21,6 +21,8 @@ window.__ModuleLoader__.load({
     var Outline = __view_outline.Outline
     var __view_need_ndex = require('dsh-cdd-lens/view/needIndex')
     var NeedIndex = __view_need_ndex.NeedIndex
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var DebugBar = __runtime_debug.DebugBar
     var __view_node = require('dsh-cdd-lens/view/node')
     var GraphNode = __view_node.GraphNode
 
@@ -81,11 +83,11 @@ window.__ModuleLoader__.load({
             }, [
               h('defs', { key: 'd' }, [
                 h('marker', {
-                  key: 'a', id: 'cddl-arrow', markerWidth: 8, markerHeight: 8, refX: 6.5, refY: 3, orient: 'auto',
-                }, h('path', { d: 'M0,0 L6,3 L0,6 z' })),
+                  key: 'a', id: 'cddl-arrow', markerWidth: 11, markerHeight: 11, refX: 8, refY: 3.4, orient: 'auto',
+                }, h('path', { d: 'M0,0 L7,3.4 L0,6.8 z' })),
                 h('marker', {
-                  key: 'f', id: 'cddl-arrow-faded', markerWidth: 8, markerHeight: 8, refX: 6.5, refY: 3, orient: 'auto',
-                }, h('path', { d: 'M0,0 L6,3 L0,6 z' })),
+                  key: 'f', id: 'cddl-arrow-faded', markerWidth: 11, markerHeight: 11, refX: 8, refY: 3.4, orient: 'auto',
+                }, h('path', { d: 'M0,0 L7,3.4 L0,6.8 z' })),
               ]),
             ].concat(model.wires.map(function (wire) {
               return h('path', {
@@ -175,7 +177,12 @@ window.__ModuleLoader__.load({
         ]))
       }
 
-      return canvas
+      // 调试栏挂在画布外面、上面：它是个诊断窄栏，不该跟着画布缩放平移。
+      // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
+      return h('div', { className: 'cddl-stage-inner' }, [
+        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
+        h('div', { key: 'cv', className: 'cddl-canvaswrap' }, canvas),
+      ])
     }
 
     module.exports = { renderCanvas }

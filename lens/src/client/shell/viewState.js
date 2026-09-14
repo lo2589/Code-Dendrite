@@ -115,6 +115,23 @@ window.__ModuleLoader__.load({
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
+      /**
+       * 这个节点现在**看得见吗**（它的框整个落在可滚动视野内，留一点余量）。
+       *
+       * 展开只在这里返回 false 时才动视口：你点开一个就在眼前的节点，
+       * 画面不该动；点开一个滚出视野的节点，才需要把它带回来。
+       */
+      var onScreen = function (el, id, m, scale) {
+        if (el === null) return true
+        var target = m.nodes.filter(function (p) { return p.id === id })[0]
+        if (target === undefined) return false
+        var pad = 12
+        var left = target.x * scale, top = target.y * scale
+        var right = (target.x + target.w) * scale, bottom = (target.y + target.h) * scale
+        return left >= el.scrollLeft + pad && top >= el.scrollTop + pad
+          && right <= el.scrollLeft + el.clientWidth - pad
+          && bottom <= el.scrollTop + el.clientHeight - pad
+      }
       var centerOn = function (id, scale) {
         var el = canvasRef.current
         if (el === null) return
@@ -147,8 +164,18 @@ window.__ModuleLoader__.load({
         mode: 'fit',
         seq: 0,
       }
+      // 视口只在**真的有人请求**时才动。
+      //
+      // 以前这个 effect 的依赖里有 model.width / model.height，于是图一长大
+      // （展开一层、画布变高）它就重跑，把视口重新居中到选中节点——节点坐标
+      // 一个像素没动，整屏却在跳。用户看到的就是「展开之后乱跳」。
+      //
+      // 现在按请求序号走：同一个 seq 只消费一次，重画多少次视口都不动。
+      var lastSeq = useRef(-1)
       useEffect(function () {
         if (tab[0] !== 'graph' || model.nodes.length === 0) return
+        if (viewportRequest.seq === lastSeq.current) return
+        lastSeq.current = viewportRequest.seq
         var frame = window.requestAnimationFrame(function () {
           // Never auto-shrink. Fitting the whole canvas means dividing by its
           // HEIGHT, and a graph of any size is tall — the solve landed on 68%
@@ -161,10 +188,16 @@ window.__ModuleLoader__.load({
             var readable = Math.max(zoom[0], 1)
             if (zoom[0] !== readable) setZoom(readable)
             window.requestAnimationFrame(function () { centerOn(viewportRequest.id, readable) })
+          } else if (viewportRequest.mode === 'ensure') {
+            // 展开用这个：节点已经在视野里就什么都不做。展开一个新节点时视口
+            // 跳一下，看着就是「点了展开树乱跳」——真正跳的是视口不是节点。
+            if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) {
+              centerOn(viewportRequest.id, zoom[0])
+            }
           } else centerOn(viewportRequest.id, zoom[0])
         })
         return function () { window.cancelAnimationFrame(frame) }
-      }, [tab[0], viewportRequest.seq, model.width, model.height])
+      }, [tab[0], viewportRequest.seq])
 
       return { ctx: ctx, engine: engine, tab: tab, relations: relations, zoom: zoom, layoutRevision: layoutRevision, canvasRef: canvasRef, context: context, viewRef: viewRef, reserve: reserve, model: model, setZoom: setZoom, centerOn: centerOn, fit: fit, toggleRelation: toggleRelation }
     }

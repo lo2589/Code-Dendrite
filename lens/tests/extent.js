@@ -57,6 +57,9 @@ const side = {
   emptyGraph: B.require_('dsh-cdd-lens/graph/model').emptyGraph,
   addNode: B.require_('dsh-cdd-lens/graph/model').addNode,
   addEdge: B.require_('dsh-cdd-lens/graph/model').addEdge,
+  uiOf: B.require_('dsh-cdd-lens/graph/model').uiOf,
+  placeOf: B.require_('dsh-cdd-lens/graph/model').placeOf,
+  setPlace: B.require_('dsh-cdd-lens/graph/model').setPlace,
 }
 function build(side, seed) {
   const g = side.emptyGraph()
@@ -71,7 +74,7 @@ function build(side, seed) {
     ['c/util.js::orphan', 'orphan', 'c/util.js', 'function', 0],
   ]
   anchors.forEach(([id, symbol, file, kind, members], i) => {
-    side.addNode(g, { id, symbol, file, kind, members, start: i * 10 + 1, end: i * 10 + 9 })
+    side.addNode(g, { id, symbol, file, kind, members, line_start: i * 10 + 1, line_end: i * 10 + 9 })
   })
   g.rootId = seed.noRoot === true ? null : 'a/main.js::main'
   const edges = [
@@ -88,8 +91,9 @@ function build(side, seed) {
   g.edges.forEach(e => { e.always = true })
   // What ingest would have marked: these anchors are the session's own, and
   // both directions are expanded so the walk reaches the whole graph.
-  Object.keys(g.nodes).forEach(id => { Object.assign(g.nodes[id], { session: true, down: true, up: true }) })
-  g.nodes['c/util.js::orphan'].session = false
+  // 交互状态住在 graph.ui，不在 anchor 记录上。
+  Object.keys(g.nodes).forEach(id => { Object.assign(side.uiOf(g, id), { session: true, down: true, up: true }) })
+  side.uiOf(g, 'c/util.js::orphan').session = false
   if (seed.tiered) {
     var seats = {
       'a/main.js::main': [0, 0],
@@ -99,8 +103,9 @@ function build(side, seed) {
       'c/util.js::orphan': [0, 1],
     }
     Object.keys(seats).forEach(id => {
-      g.nodes[id].layer = seats[id][0]
-      g.nodes[id].tree = seats[id][1]
+      side.setPlace(g, id, Object.assign(side.placeOf(g, id) || {}, {
+        layer: seats[id][0], tree: seats[id][1],
+      }))
     })
   }
   const trace = {}

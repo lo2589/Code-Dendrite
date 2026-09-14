@@ -10,6 +10,8 @@ window.__ModuleLoader__.load({
     var __state_store = require('dsh-cdd-lens/state/store')
     var publish = __state_store.publish
     var shared = __state_store.shared
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     // Must match the .cddl-gathering transition in styles/graph.js — the CSS
     // owns how the flight looks, this owns how long the class stays on.
@@ -50,7 +52,8 @@ window.__ModuleLoader__.load({
       return {
         gather: function (id) {
           var node = shared.graph.nodes[id]
-          if (node === undefined) return Promise.resolve()
+          var ui = uiOf(shared.graph, id)
+          if (node === undefined || ui === null) return Promise.resolve()
           if (shared.gather !== null && shared.gather !== undefined && shared.gather.focus === id) {
             return Promise.resolve()
           }
@@ -60,12 +63,22 @@ window.__ModuleLoader__.load({
           stampFlight()
           publish()
           var loads = []
-          var anchor = node.anchor || {}
+          // node 就是 anchor：`up`/`down` 是索引给的计数，直接读。
           // `auto=true`：拉邻居，但不碰按钮状态。选中一个节点不等于替用户按了
           // 上下键——以前它直接写 node.up/node.down，于是你点中节点时两个按钮
           // 已经是"收起"态，你按的第一下其实是在收起来。
-          if (node.up !== true && node.autoUp !== true && anchor.up !== 0) loads.push(engine.expand(id, 'up', true))
-          if (node.down !== true && node.autoDown !== true && anchor.down !== 0) loads.push(engine.expand(id, 'down', true))
+          // 有哪几个关系就自动拉哪几个；只拉 call，避免选中一个节点就把
+          // dataflow / inherit 的邻居全倒进来（那是用户按按钮才该发生的事）。
+          var counts = node.peerCounts || {}
+          var call = counts.call
+          if (call !== undefined) {
+            if (ui.open['up:call'] !== true && ui.open['autoup:call'] !== true && call.up > 0) {
+              loads.push(engine.expand(id, 'up', true, 'call'))
+            }
+            if (ui.open['down:call'] !== true && ui.open['autodown:call'] !== true && call.down > 0) {
+              loads.push(engine.expand(id, 'down', true, 'call'))
+            }
+          }
           if (loads.length === 0) return Promise.resolve()
           return Promise.all(loads).then(function () {
             // The selection may have moved on while the neighbours loaded;

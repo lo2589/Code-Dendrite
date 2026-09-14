@@ -174,7 +174,7 @@ window.__ModuleLoader__.load({
           h(Search, { key: 'q', engine: engine }),
           h('div', { key: 'b', className: 'cddl-body' }, [body, h(Unresolved, { key: 'u' })]),
           h(Legend, { key: 'l' }),
-          h(Source, { key: 's' }),
+          h(Source, { key: 's', engine: engine }),
           h(History, { key: 'y' }),
         ]))
     }

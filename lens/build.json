@@ -1,4 +1,4 @@
 {
-  "build": "V1_27_CALL_EDGE_ONE_DIRECTION_001",
-  "note": "Single source of the build stamp. The host reads it from disk; the client bundle carries it inlined. /health compares the two so a stale bundle can never masquerade as a fresh one."
+  "build": "V1_30_WIRE_LOCK_EXPAND_LOG_003",
+  "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_30: 线与节点同帧到位（端点锁死端口小圈）、展开全链路 debug log、树选择器、贝塞尔、出入口小圈、箭头加密、展开锁视口。"
 }

@@ -23,12 +23,6 @@ window.__ModuleLoader__.load({
     var SKIN_KEY = 'cdd-lens.skin.v1'
     // Restored once, before anything draws, so the first frame is already the
     // drawing this browser last asked for rather than a flash of the other one.
-    if (shared.skin === undefined) {
-      try {
-        var savedSkin = window.localStorage.getItem(SKIN_KEY)
-        shared.skin = savedSkin === 'tiers' || savedSkin === 'pcb' || savedSkin === 'flow' ? savedSkin : 'auto'
-      } catch (e) { shared.skin = 'auto' }
-    }
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var clearNodePositions = __state_persist.clearNodePositions
     var __view_panels = require('dsh-cdd-lens/view/panels')
@@ -54,11 +48,6 @@ window.__ModuleLoader__.load({
 
       // Kept per browser: which drawing someone prefers is a reading habit, not
       // a property of the repository.
-      var setSkin = function (value) {
-        shared.skin = value
-        try { window.localStorage.setItem(SKIN_KEY, value) } catch (e) { /* optional */ }
-        publish()
-      }
 
       return h('div', { className: 'cddl-toolbar', key: 't' }, [
           h('div', { key: 'seg', className: 'cddl-seg' }, [
@@ -66,25 +55,32 @@ window.__ModuleLoader__.load({
             h('button', { key: 'o', className: tab[0] === 'outline' ? 'on' : '', onClick: function () { tab[1]('outline') } }, '目录'),
             h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: function () { tab[1]('draw') } }, 'cdd draw'),
           ]),
-          // All three drawings have always existed as data; only the chooser
-          // used to decide between two of them. Layers read as a call chain,
-          // file boxes read as a board, flow reads as direction — which one
-          // answers your question is not something the data knows.
+          // 树选择器。规则文档 §1.3 定义了四棵树；这里就是选它看哪一棵。
+          //   直接树 = 1 度树：seed 之间直接有边，中间不插点
+          //   anchor 树：单个 anchor 周围直接相连的邻居，也不插点
+          //   2 度树：允许一个中间点把两个 seed 接起来
+          //   edit 树：只管 edit 过的那批 anchor
+          // 「全部」不套任何树，把图里现有的都画出来。
           tab[0] !== 'graph' ? null
-            : h('div', { key: 'skin', className: 'cddl-seg cddl-skin', 'aria-label': '图的形态' },
-              [['auto', '自动'], ['tiers', '分层'], ['pcb', 'PCB'], ['flow', '流向']].map(function (pair) {
-                var value = pair[0]
-                return h('button', {
-                  key: value,
-                  className: (shared.skin || 'auto') === value ? 'on' : '',
-                  'aria-pressed': (shared.skin || 'auto') === value ? 'true' : 'false',
-                  title: value === 'tiers' ? '按调用层级排成列'
-                    : value === 'pcb' ? '按文件分盒子，走线像电路板'
-                    : value === 'flow' ? '按调用方向分列，线走层间预留的通道'
-                    : '有层级信息就分层，没有就用文件盒',
-                  onClick: function () { setSkin(value) },
-                }, pair[1])
-              })),
+            : h('div', { key: 'tree', className: 'cddl-seg cddl-tree', 'aria-label': '看哪棵树' },
+              [['all', '全部'], ['anchor', 'anchor 树'], ['degree1', '1 度树'], ['degree2', '2 度树'], ['edit', 'edit 树']]
+                .map(function (pair) {
+                  var value = pair[0]
+                  return h('button', {
+                    key: value,
+                    className: (shared.treeMode || 'all') === value ? 'on' : '',
+                    'aria-pressed': (shared.treeMode || 'all') === value ? 'true' : 'false',
+                    title: value === 'degree1' ? 'seed 之间直接有边的那些，中间不插点'
+                      : value === 'degree2' ? '允许一个中间点把两个 seed 接起来'
+                      : value === 'edit' ? '只看这次会话 edit 过的 anchor'
+                      : value === 'anchor' ? '当前选中 anchor 周围直接相连的邻居'
+                      : '图里现有的全部画出来',
+                    onClick: function () {
+                      shared.treeMode = value
+                      publish()
+                    },
+                  }, pair[1])
+                })),
           h(Search, { key: 'q', engine: engine }),
           h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系筛选' },
             ['call', 'dataflow', 'inherit', 'impact', 'dispatch'].map(function (name) {

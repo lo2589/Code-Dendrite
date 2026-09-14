@@ -143,11 +143,11 @@ shared.outline = undefined
       nodes: [
         {
           id: 'a', x: 10, y: 30, w: 70, h: 45,
-          node: { anchor: { id: 'a', symbol: 'a', file: 'a.js', kind: 'function', start: 1, end: 4, up: 0, down: 1 } },
+          node: { id: 'a', symbol: 'a', file: 'a.js', kind: 'function', line_start: 1, line_end: 4, up: 0, down: 1 },
         },
         {
           id: 'b', x: 120, y: 30, w: 70, h: 45,
-          node: { anchor: { id: 'b', symbol: 'b', file: 'b.js', kind: 'function', start: 5, end: 8, up: 1, down: 0 } },
+          node: { id: 'b', symbol: 'b', file: 'b.js', kind: 'function', line_start: 5, line_end: 8, up: 1, down: 0 },
         },
       ],
       wires: [{ id: 'a→b:call', d: 'M10,10 L120,10', type: 'call', from: 'a', to: 'b' }],
@@ -177,12 +177,14 @@ shared.outline = undefined
   const { makeEngine } = require_('dsh-cdd-lens/engine/engine')
   const anchor = {
     id: 'a.py::bridge', symbol: 'bridge', file: 'a.py', kind: 'function',
-    start: 2, end: 6, up: 4, down: 5, members: 3,
+    line_start: 2, line_end: 6, members: 3,
+    peerCounts: { call: { up: 4, down: 5 } },
   }
   shared.graph = model.emptyGraph()
   model.addNode(shared.graph, anchor)
-  shared.graph.nodes[anchor.id].bridge = true
-  shared.graph.nodes[anchor.id].synthetic = true
+  const bridgeUI = model.uiOf(shared.graph, anchor.id)
+  bridgeUI.bridge = true
+  bridgeUI.synthetic = true
   shared.graph.rootId = anchor.id
   shared.selected = null
   shared.trace = {}
@@ -211,10 +213,62 @@ shared.outline = undefined
     'bridge tree row must render disabled hop buttons')
 
   const engine = makeEngine({ on: () => () => {}, emit: () => {} })
-  engine.expand(anchor.id, 'down')
-  assert.strictEqual(shared.graph.nodes[anchor.id].down, false, 'bridge expand guard must not mark down open')
-  assert.strictEqual(shared.graph.nodes[anchor.id].loading, undefined, 'bridge expand guard must not enter loading')
+  engine.expand(anchor.id, 'down', null, 'call')
+  assert.strictEqual(bridgeUI.open['down:call'], undefined,
+    'bridge expand guard must not mark down open')
+  assert.strictEqual(bridgeUI.loading, null, 'bridge expand guard must not enter loading')
   console.log('✓ ' + '桥接节点'.padEnd(10) + '只解释连接，不再展开上下游')
+})()
+
+// 「有几个关系挂几个」：一个 anchor 有几个关系就挂几个按钮，各带各的数字，
+// 没有数据的关系一个都不出现——不画箭头、不写 0。
+;(function buttonsPerRelation() {
+  const { GraphNode } = require_('dsh-cdd-lens/view/node')
+  const anchor = {
+    id: 'a.py::f', symbol: 'f', file: 'a.py', kind: 'function', line_start: 1, line_end: 9, members: 0,
+    peerCounts: {
+      call: { up: 8, down: 2 },
+      inherit: { up: 3, down: 1 },
+      // dataflow / dispatch / impact 故意不给：它们不许出现
+    },
+  }
+  shared.graph = model.emptyGraph()
+  model.addNode(shared.graph, anchor)
+  shared.graph.rootId = anchor.id
+  shared.selected = null
+  shared.trace = {}
+  shared.turn = 1
+
+  const buttons = []
+  const walk = n => {
+    if (!n || typeof n !== 'object') return
+    if (n.type === 'button' && n.props && n.props['data-relation']) {
+      buttons.push({
+        rel: n.props['data-relation'],
+        count: Number(n.props['data-count']),
+        cls: String(n.props.className || ''),
+      })
+    }
+    ;(n.kids || []).forEach(walk)
+  }
+  walk(GraphNode({
+    engine: {}, zoom: 1,
+    p: { id: anchor.id, x: 0, y: 0, w: 180, h: 80, node: shared.graph.nodes[anchor.id] },
+  }))
+
+  const rels = buttons.map(b => b.rel)
+  const counts = buttons.map(b => b.count)
+  // call 上下各一个、inherit 上下各一个 = 4 个按钮；dataflow/dispatch/impact 一个都没有。
+  assert.strictEqual(buttons.length, 4, 'one button per relation per direction, absent ones omitted')
+  assert(!rels.includes('dataflow') && !rels.includes('dispatch') && !rels.includes('impact'),
+    'a relation with no data renders no button and no zero')
+  assert.deepEqual(counts.slice().sort((a, b) => a - b), [1, 2, 3, 8], 'each button carries its own count')
+  // 不同关系不同颜色：类名里带关系名，样式按关系给色。
+  assert(buttons.filter(b => b.rel === 'call').every(b => b.cls.includes('cddl-rel-call')),
+    'call buttons carry the call colour class')
+  assert(buttons.filter(b => b.rel === 'inherit').every(b => b.cls.includes('cddl-rel-inherit')),
+    'inherit buttons carry the inherit colour class')
+  console.log('✓ ' + '按关系挂按钮'.padEnd(10) + 'call ↑8↓2 · inherit ↑3↓1 · 其余不出现')
 })()
 
 // 用真的 engine 渲染，不用手捏的。

@@ -24,6 +24,8 @@ window.__ModuleLoader__.load({
     var short = __view_record.short
     var stateOf = __view_record.stateOf
     var turnLabel = __view_record.turnLabel
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     // ---- the vertical tree (floating panel) --------------------------------
 
@@ -47,23 +49,30 @@ window.__ModuleLoader__.load({
         if (seen[id] || !shown[id]) return
         seen[id] = true
         var node = graph.nodes[id]
+        var ui = uiOf(graph, id) || {}
         if (node === undefined) return
         // Callers of an expanded node render ABOVE it at the same depth,
         // whichever direction the walk arrived from. Gating this on the arrival
         // direction meant pressing ↑ on anything below the root added the nodes
         // and drew none of them — the button looked dead.
-        if (node.up) {
+        var openUp = Object.keys(ui.open).some(function (k) {
+          return k.indexOf('up:') === 0 && ui.open[k] === true
+        })
+        if (openUp) {
           graph.edges.forEach(function (e) {
             if (e.to === id) walk(e.from, depth, 'up')
           })
         }
         rows.push({ id: id, depth: depth, node: node })
-        if (node.members && node.memberList !== undefined) {
-          node.memberList.forEach(function (member) {
+        if (ui.members && ui.memberList !== undefined) {
+          ui.memberList.forEach(function (member) {
             rows.push({ id: member.id, depth: depth + 1, member: true, anchor: member })
           })
         }
-        if (node.down) {
+        var openDown = Object.keys(ui.open).some(function (k) {
+          return k.indexOf('down:') === 0 && ui.open[k] === true
+        })
+        if (openDown) {
           graph.edges.forEach(function (e) {
             if (e.from === id) walk(e.to, depth + 1, 'down')
           })
@@ -103,15 +112,16 @@ window.__ModuleLoader__.load({
           h('i', { key: 'l' }), '碰过但代码里没有边 · 不连', h('i', { key: 'r' }),
         ])
       }
-      var anchor = row.member ? row.anchor : row.node.anchor
+      var anchor = row.member ? row.anchor : row.node
       var record = stateOf(row.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === row.id
-      var synthetic = row.node !== undefined && (row.node.synthetic === true || row.node.bridge === true)
+      var ui = row.node !== undefined ? (uiOf(shared.graph, row.id) || {}) : {}
+      var synthetic = row.node !== undefined && (ui.synthetic === true || ui.bridge === true)
       var cls = 'cddl-node'
         + (selected ? ' cddl-sel' : '')
         + (faded ? ' cddl-faded' : '')
-        + (row.node !== undefined && row.node.bridge === true ? ' cddl-bridge' : '')
+        + (row.node !== undefined && ui.bridge === true ? ' cddl-bridge' : '')
         + (row.islandRow ? ' cddl-island' : '')
 
       var kids = [
@@ -121,7 +131,7 @@ window.__ModuleLoader__.load({
         kids.push(h('button', {
           key: 't', className: 'cddl-twist', title: anchor.members + ' 个成员',
           onClick: function (e) { e.stopPropagation(); engine.members(row.id) },
-        }, row.node.members ? '▾' : '▸'))
+        }, ui.members ? '▾' : '▸'))
       } else {
         kids.push(h('span', { key: 't', className: 'cddl-twist' }, row.member ? '·' : ''))
       }
@@ -134,7 +144,7 @@ window.__ModuleLoader__.load({
       if (!row.member && !synthetic && anchor.members > 0) {
         kids.push(h('span', { key: 'k', className: 'cddl-kind' }, '类 ' + anchor.members))
       }
-      if (row.node !== undefined && row.node.bridge === true) {
+      if (row.node !== undefined && ui.bridge === true) {
         kids.push(h('span', {
           key: 'br', className: 'cddl-kind cddl-bridgetag',
           title: 'agent 没打开过它。它出现在这里，是因为代码里它把上下两个碰过的 anchor 连起来了。',
@@ -143,40 +153,46 @@ window.__ModuleLoader__.load({
       var badge = turnLabel(record)
       if (badge !== null) kids.push(React.cloneElement(badge, { key: 'b' }))
       if (faded) kids.push(h('span', { key: 'f', className: 'cddl-kind' }, '压缩'))
-      var hop = function (dir, count, label) {
-        var disabled = count === 0 || synthetic
-        // A zero count is a fact about the index, not a button. Leaving it
-        // clickable makes every press look broken; disabling it says the index
-        // has no such edge, which is the actual answer.
+      var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+      var hop = function (direction, rel, count) {
+        var slot = direction + ':' + rel
+        var open = ui.open[slot] === true
+        // 桥接点不许继续展开：它是布局借来的中间点，不是 agent 打开过的 anchor。
+        var disabled = synthetic
         return h('button', {
-          key: dir,
+          key: slot,
           disabled: disabled,
+          'data-relation': rel,
+          'data-count': count,
           title: synthetic
             ? '桥接节点只解释连接，不继续展开'
-            : count === 0
-            ? (dir === 'u' ? '索引里没有谁用它' : '索引里它没用任何东西')
-            : ((row.node && row.node[dir === 'u' ? 'up' : 'down'] ? '收起' : '展开')
-              + (dir === 'u' ? '：谁在用它（' : '：它在用谁（') + count + '）'),
-          className: (row.node && row.node[dir === 'u' ? 'up' : 'down'] ? 'on' : '')
-            + (disabled ? ' cddl-off' : ''),
+            : ((open ? '收起' : '展开') + (direction === 'up' ? '：谁在用它（' : '：它在用谁（') + count + '）'
+              + ' · ' + rel + '\n按住 Shift 点：一路展开到底'),
+          className: 'cddl-rel-' + rel + (open ? ' on' : '') + (disabled ? ' cddl-off' : ''),
           onClick: function (e) {
             e.stopPropagation()
             if (disabled) return
-            var direction = dir === 'u' ? 'up' : 'down'
-            if (row.node && row.node[direction]) engine.collapse(row.id, direction)
-            else engine.expand(row.id, direction)
+            if (open) { engine.collapse(row.id, direction, rel); return }
+            if (e.shiftKey) engine.walk(row.id, direction, rel, 4)
+            else engine.expand(row.id, direction, null, rel)
           },
-        }, label + count)
+        }, (direction === 'up' ? '↑' : '↓') + count)
       }
-      kids.push(h('span', { key: 'h', className: 'cddl-hop' }, [
-        hop('u', anchor.up, '↑'),
-        hop('d', anchor.down, '↓'),
+      var hopButtons = []
+      REL_ORDER.forEach(function (rel) {
+        var c = (anchor.peerCounts || {})[rel]
+        // 没有数据的关系不出现——不画箭头、不写 0。
+        if (c === undefined) return
+        if (c.up > 0) hopButtons.push(hop('up', rel, c.up))
+        if (c.down > 0) hopButtons.push(hop('down', rel, c.down))
+      })
+      kids.push(h('span', { key: 'h', className: 'cddl-hop' }, hopButtons.concat([
         h('button', {
           key: 'p', title: '固定',
-          className: row.node && row.node.pinned ? 'on' : '',
+          className: ui.pinned ? 'on' : '',
           onClick: function (e) { e.stopPropagation(); engine.pin(row.id) },
-        }, row.node && row.node.pinned ? '●' : '○'),
-      ]))
+        }, ui.pinned ? '●' : '○'),
+      ])))
 
       return h('div', {
         className: cls,
@@ -195,7 +211,7 @@ window.__ModuleLoader__.load({
       var lastFile = null
       rows.forEach(function (row, i) {
         if (row.gap) { out.push(h(TreeRow, { key: 'gap' + i, row: row, engine: engine })); lastFile = null; return }
-        var anchor = row.member ? row.anchor : row.node.anchor
+        var anchor = row.member ? row.anchor : row.node
         if (anchor.file !== lastFile) {
           lastFile = anchor.file
           out.push(h('div', {

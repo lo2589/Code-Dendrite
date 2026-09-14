@@ -9,6 +9,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
 
     /**
      * Which relations get a wire: a trunk by default, the rest on demand.
@@ -33,9 +35,22 @@ window.__ModuleLoader__.load({
       // ones. This is the flyline idea from board layout, where the same
       // problem has the same answer — except a router must connect every net
       // and we may simply not draw one.
+      // 一条边算不算「打开」：这条边自己的关系类型对应的那个按钮开没开。
+      // 展开状态按「方向:关系」存（ui.open['down:call']），所以必须看边的类型，
+      // 不能只看方向——点开 call 的 ↓ 不该把 inherit 的边也点亮。
+      var opened = function (ui, prefix, types) {
+        if (ui === null || ui === undefined || ui.open === undefined) return false
+        return types.some(function (t) {
+          return ui.open[prefix + ':' + t] === true
+        })
+      }
       var drawable = graph.edges.filter(function (e) {
-        return byId[e.from] !== undefined && byId[e.to] !== undefined
-          && (activeFocus !== null || e.always || graph.nodes[e.from].down || graph.nodes[e.to].up)
+        var fromUI = uiOf(graph, e.from)
+        var toUI = uiOf(graph, e.to)
+        if (byId[e.from] === undefined || byId[e.to] === undefined) return false
+        if (activeFocus !== null || e.always) return true
+        var types = e.types || ['call']
+        return opened(fromUI, 'down', types) || opened(toUI, 'up', types)
       })
       var chosen = drawable
       var hiddenCount = 0

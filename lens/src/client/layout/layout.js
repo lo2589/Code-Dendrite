@@ -1,145 +1,173 @@
 // dsh-cdd-lens — One graph in, one drawing out: the stages in order.
 //
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
+// 只有一条路径，没有皮肤。分层由 layout/sugiyama 自己算——不再问服务端要 `/chain`。
+//
+// 这条管线是照 /Users/a1/Workspace/WORKSPACE/visual_map 重写的：
+//   数据(graph) → 分层布局(sugiyama) → 边折线(polylines) → emit 成 SVG 路径
+// visual_map 里布局与布线解耦，靠的是 `edge.bendPoints` 这一个契约；这里也一样，
+// sugiyama 把跨层边的拐点算好放进 pts，emit 只管照着画。
 window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/layout/layout',
   factory: (require) => {
     var module = { exports: {} }
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var uiOf = __graph_model.uiOf
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+    var fact = __runtime_debug.fact
+    var placeOf = __graph_model.placeOf
+    var setPlace = __graph_model.setPlace
     var __layout_prep = require('dsh-cdd-lens/layout/prep')
     var layoutScope = __layout_prep.layoutScope
-    var rankFiles = __layout_prep.rankFiles
-    var orientFlow = __layout_prep.orientFlow
-    var __layout_space = require('dsh-cdd-lens/layout/space')
-    var fitExtent = __layout_space.fitExtent
-    var shiftPlacement = __layout_space.shiftPlacement
-    var shiftDrawing = __layout_space.shiftDrawing
-    var separateOverlaps = __layout_space.separateOverlaps
-    var reclaimStrays = __layout_space.reclaimStrays
-    var restackBoxes = __layout_space.restackBoxes
-    var __layout_camera = require('dsh-cdd-lens/layout/camera')
-    var cameraLayout = __layout_camera.cameraLayout
     var __layout_metrics = require('dsh-cdd-lens/layout/metrics')
     var boxMetrics = __layout_metrics.boxMetrics
-    var __skins_tiers_route = require('dsh-cdd-lens/skins/tiers/route')
-    var routeTiers = __skins_tiers_route.routeTiers
-    var __layout_skin = require('dsh-cdd-lens/layout/skin')
-    var skinFor = __layout_skin.skinFor
-    var __state_store_skin = require('dsh-cdd-lens/state/store')
-    var sharedSkin = __state_store_skin.shared
-    var __skins_tiers_group = require('dsh-cdd-lens/skins/tiers/group')
-    var placeTiers = __skins_tiers_group.placeTiers
-    var __skins_pcb_group = require('dsh-cdd-lens/skins/pcb/group')
-    var placeBoxes = __skins_pcb_group.placeBoxes
-    var __skins_pcb_route = require('dsh-cdd-lens/skins/pcb/route')
-    var routeBoard = __skins_pcb_route.routeBoard
-    var reemitBoard = __skins_pcb_route.reemitBoard
-    var __skins_flow_group = require('dsh-cdd-lens/skins/flow/group')
-    var placeFlow = __skins_flow_group.placeFlow
-    var __skins_flow_route = require('dsh-cdd-lens/skins/flow/route')
-    var routeFlow = __skins_flow_route.routeFlow
-    var reemitFlow = __skins_flow_route.reemitFlow
-    var __layout_channels = require('dsh-cdd-lens/layout/channels')
-    var buildChannels = __layout_channels.buildChannels
-    var __routing_select = require('dsh-cdd-lens/routing/select')
-    var chooseEdges = __routing_select.chooseEdges
+    var __layout_sugiyama = require('dsh-cdd-lens/layout/sugiyama')
+    var sugiyama = __layout_sugiyama.sugiyama
+    var __layout_space = require('dsh-cdd-lens/layout/space')
+    var reclaimStrays = __layout_space.reclaimStrays
+    var separateOverlaps = __layout_space.separateOverlaps
+    var fitExtent = __layout_space.fitExtent
+    var shiftDrawing = __layout_space.shiftDrawing
     var __layout_gather = require('dsh-cdd-lens/layout/gather')
     var applyGather = __layout_gather.applyGather
     var freeGatherDragged = __layout_gather.freeGatherDragged
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
+    var __routing_select = require('dsh-cdd-lens/routing/select')
+    var chooseEdges = __routing_select.chooseEdges
+    var __routing_emit = require('dsh-cdd-lens/routing/emit')
+    var emitWires = __routing_emit.emitWires
 
     /**
      * Turn one graph into one drawing.
      *
-     * Every step is a file of its own: what is on screen, how it ranks, how
-     * big the boxes are, where they go, which way each node faces, where the
-     * corridors are, which relations earn a wire, and how those wires are
-     * routed and emitted. Routing is the last stage and the only one the skin
-     * decides, so replacing it replaces nothing else.
-     * @param graph - nodes and edges to draw.
-     * @param relationFilter - relation kinds the viewer left switched on.
-     * @param avail - the canvas viewport width in CSS pixels.
-     * @returns nodes, wires, labels, junctions, arrows, file boxes and size.
+     * @param graph - nodes and edges to draw。
+     * @param relationFilter - relation kinds the viewer left switched on。
+     * @param avail - the canvas viewport width in CSS pixels。
+     * @returns nodes, wires, labels, junctions, arrows, file boxes and size。
      */
     function layout(graph, relationFilter, avail) {
-      if (graph.rootId === null) return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
-      var scope = layoutScope(graph)
-      var rank = rankFiles(graph, relationFilter, scope)
-      var metrics = boxMetrics(graph, scope, avail)
-      // Layers when `/chain` has said where everything goes, file boxes or
-      // direction columns when it has not — or whichever of the three the
-      // viewer asked for. They cannot be mixed: half a drawing laid out by
-      // relation and half by directory is harder to read than either alone.
-      var skin = skinFor(graph, scope.included, sharedSkin.skin || 'auto')
-      var place = skin === 'tiers' ? placeTiers(graph, scope, metrics)
-        : skin === 'flow' ? placeFlow(graph, scope, metrics)
-        : placeBoxes(graph, scope, metrics)
-      cameraLayout(graph, scope, place, rank, metrics)
-      // A node dragged out of a running gather is out of its frame too —
-      // before the restack, which would seat it again.
-      freeGatherDragged(place)
-      // Hand-placed coordinates are written in verbatim above, so this is the
-      // first point at which a box can be on top of another, or off on its own
-      // in an empty quarter because the layout changed shape under a saved
-      // point. Pull the strays in first, then push apart what now collides.
-      reclaimStrays(place, metrics, avail)
-      separateOverlaps(place, metrics)
-      // Frames stay in their grid slots; a drag reorders what is inside one.
-      restackBoxes(place, metrics)
-      // The gather overlay seats the selected node's callers and callees
-      // beside it — after the restack, so a frame cannot take a gathered node
-      // back, and before orientation and routing read the positions. With no
-      // selection gathered it moves nothing and every skin draws as before.
-      applyGather(graph, place, metrics)
-      // The grid placed these boxes; deriving them again from where the
-      // anchors ended up threw that away — and it ran after the separation
-      // pass, so two files whose anchors had drifted together produced two
-      // boxes on top of each other.
-      var orient = orientFlow(graph, scope, place, metrics, avail)
-      metrics.canvasWidth = orient.canvasWidth
-      place.canvasY = orient.canvasY
-      var channels = buildChannels(place, metrics)
-      var edges = chooseEdges(graph, scope, orient)
-      // Declared for both paths on purpose. These used to be `var`s inside the
-      // else, which hoists them: the layered path then reached a `route` that
-      // was always `undefined`, and the shift below threw on it — blanking the
-      // whole view for any drawing that happened to need moving.
-      var route = null
-      var drawn
-      if (skin === 'tiers') {
-        // Layered drawings get a router that knows about layers: the gap under
-        // a row is the only place a wire may run sideways, so a wire never
-        // crosses a node it has nothing to do with.
-        drawn = routeTiers(edges, orient, relationFilter, metrics)
-        route = drawn.route
-      } else if (skin === 'flow') {
-        // Flow drawings get a router that knows about the corridors the
-        // placement reserved between the columns: the only places a wire may
-        // run at all.
-        var flow = routeFlow(edges, orient, relationFilter, metrics)
-        route = flow.route
-        drawn = flow.drawn
-      } else {
-        var board = routeBoard(edges, orient, relationFilter, metrics, channels)
-        route = board.route
-        drawn = board.drawn
+      if (graph.rootId === null) {
+        note('layout', 'rootId=null，没有起点可用（nodes=' + Object.keys(graph.nodes).length + '）')
+        return { nodes: [], wires: [], labels: [], junctions: [], arrows: [], rows: [], files: [], width: 0, height: 0 }
       }
-      // The size comes from what was drawn. If any of it landed off the top
-      // left, move the whole drawing into view and emit it again there —
-      // routing does not change, only where its origin sits.
+      var scope = layoutScope(graph)
+      var metrics = boxMetrics(graph, scope, avail)
+
+      // ---- 会话自己的边要画出来，不管有没有人按过按钮 ----
+      //
+      // 这是删掉 /among 之后必须补上的一件事：那条路由以前给 bridge 边打
+      // `always`。没有它，一个刚 ingest 出来的图里每条边两端都没被按过，
+      // select.js 就把它们全部滤掉——画面上就是「一堆卡片，一根线都没有」。
+      //
+      // 判据不是「谁打的标记」，而是这个节点本身有没有被这次会话碰过：
+      // 两个 anchor 都是会话自己的，它们之间的关系就是这次会话要看的答案。
+      graph.edges.forEach(function (e) {
+        if (e.always === true) return
+        var fromUI = uiOf(graph, e.from)
+        var toUI = uiOf(graph, e.to)
+        var fromSession = fromUI !== null && (fromUI.session === true || fromUI.explored === true)
+        var toSession = toUI !== null && (toUI.session === true || toUI.explored === true)
+        if (fromSession && toSession) e.always = true
+      })
+
+      // ---- 分层布局：消环 → 分层 → 排序 → 坐标，一次全出 ----
+      var laid = sugiyama(graph, scope.included, metrics, function (id) {
+        var known = placeOf(graph, id)
+        // 只认已经真正画过的那一次位置。node 上没有位置 = 它还没上过屏幕。
+        if (known === null || typeof known.x !== 'number' || typeof known.y !== 'number') return null
+        return known
+      })
+      var place = {
+        placed: laid.placed,
+        rows: [],
+        canvasY: laid.canvasY,
+      }
+
+      // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
+      // 注意顺序：先应用保存的位置，再分离重叠——反过来的话保存的位置会被覆盖。
+      applySavedPositions(graph, place, shared.nodePositions || {})
+      freeGatherDragged(place)
+      reclaimStrays(place, metrics, avail)
+
+      var orient = { byId: {} }
+      place.placed.forEach(function (p) { orient.byId[p.id] = p })
+
+      // 选中节点的上下游坐到它旁边，收拢之后才推重叠——反过来的话
+      // 收拢列里刚排好的卡片会被分离过程推走。
+      applyGather(graph, place, metrics)
+      separateOverlaps(place, metrics)
+
+      // ---- 布线：哪条边值得画 ----
+      var edges = chooseEdges(graph, scope, orient)
+      var picked = {}
+      edges.chosen.forEach(function (e) { picked[e.from + '\u0000' + e.to] = true })
+
+      // ---- 出线：sugiyama 的折线按 id 挂上关系类型，再交给 emit ----
+      var polylines = laid.polylines.filter(function (line) {
+        return picked[line.from + '\u0000' + line.to] === true
+      })
+      var kept = {}
+      polylines.forEach(function (p) { kept[p.from] = true; kept[p.to] = true })
+      // 被 select 滤掉的边不画，但线两端的节点仍然要留着。
+      var hops = { hSegs: new Map(), segments: [] }
+      var drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
+
+      // ---- 尺寸：从画出来的东西反推 ----
+      // 手工坐标可能把某个节点放到负坐标（画布原点左边/上边）。那时整张图
+      // 往右下挪一屏边距，挪完再重新出线——布线不变，只是原点移了位置。
       var fit = fitExtent(place, drawn, metrics)
       if (fit.dx > 0 || fit.dy > 0) {
-        shiftDrawing(place, route, fit.dx, fit.dy)
-        drawn = reemitBoard(route, orient, metrics)
+        shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
+        orient.byId = {}
+        place.placed.forEach(function (p) { orient.byId[p.id] = p })
+        drawn = emitWires({ polylines: polylines, hSegs: hops.hSegs, WIRE_CORNER: metrics.WIRE_CORNER, ARROW_EVERY: metrics.ARROW_EVERY }, hops)
         fit = fitExtent(place, drawn, metrics)
       }
+      // 把这一次画出来的坐标记回 graph.layout，下一次展开时它们就是「已经在
+      // 屏幕上的位置」，会被冻结，不再因为新节点进来而整体跳变。
+      place.placed.forEach(function (p) {
+        setPlace(graph, p.id, {
+          x: p.x, y: p.y, w: p.w, h: p.h, layer: p.layer,
+          ports: p.ports,
+        })
+      })
+
+      var maxX = fit.maxX, maxY = fit.maxY
+
+      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (laid.layers || 0) + 'L')
+      note('layout', 'in=' + Object.keys(graph.nodes).length + ' edges=' + graph.edges.length
+        + ' -> placed=' + place.placed.length + ' wires=' + drawn.wires.length + ' layers=' + laid.layers)
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
         junctions: drawn.junctions, arrows: drawn.arrows, unrouted: drawn.unrouted,
-        rows: place.rows || [], files: place.fileBoxes,
-        width: Math.max(avail || 0, fit.maxX + metrics.PAD),
-        height: Math.max(360, fit.maxY + metrics.PAD),
+        rows: [], files: [],
+        layers: laid.layers,
+        crossings: laid.crossings,
+        width: Math.max(avail || 0, maxX + metrics.PAD),
+        height: Math.max(360, maxY + metrics.PAD),
       }
+    }
+
+    /**
+     * 手工拖过的坐标原样写上。
+     *
+     * 分层布局先给出建议位置，用户拖过的那一个覆盖它——不然每次重画都会把用户
+     * 摆好的东西弹回去。
+     */
+    function applySavedPositions(graph, place, positions) {
+      if (positions === null || positions === undefined) return
+      place.placed.forEach(function (p) {
+        var at = positions[p.id]
+        if (at === undefined || typeof at.x !== 'number' || typeof at.y !== 'number') return
+        p.x = at.x
+        p.y = at.y
+        p.manual = true
+        p.ports = {
+          in: { x: p.x, y: p.y + p.h / 2 },
+          out: { x: p.x + p.w, y: p.y + p.h / 2 },
+        }
+      })
     }
 
     module.exports = { layout }
