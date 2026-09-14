@@ -17,6 +17,8 @@ window.__ModuleLoader__.load({
     var module = { exports: {} }
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var placeOf = __graph_model.placeOf
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
     var BIG = 10
     var PORT_OFFSET = 0.5
     var SECTION_GAP = 36
@@ -187,7 +189,14 @@ window.__ModuleLoader__.load({
         size[id] = drawn > 0 ? metrics.sizeOf(id, drawn) : metrics.sizeOf(id)
         if (size[id].w > widest) widest = size[id].w
       })
-      return { cardW: drawn > 0 ? drawn : widest, size: size }
+      var cardW = drawn > 0 ? drawn : widest
+      // 浏览器里真画出来的高度（同一个卡片宽量的）优先：按 CSS 估的高度估小了，卡片会撑出文件框、压到下一个框。
+      var measured = shared.cardHeights || {}
+      Object.keys(size).forEach(function (id) {
+        var m = measured[id]
+        if (m && Math.abs(m.w - cardW) < 1 && m.h > 0) size[id] = { w: size[id].w, h: m.h }
+      })
+      return { cardW: cardW, size: size }
     }
 
     /**

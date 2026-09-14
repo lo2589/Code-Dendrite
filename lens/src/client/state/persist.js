@@ -93,7 +93,8 @@ window.__ModuleLoader__.load({
     // User-authored node positions are the durable layout. Automatic focus
     // layout is derived in memory and never writes this table, so leaving a
     // highlighted chain restores the exact picture the user arranged.
-    var NODE_POSITIONS_KEY = 'cdd-lens.node-positions.v1'
+    // v2：换成文件框网格后，分层排版时代存下的拖动坐标（x 可能到 3000+）不能再用，会把节点甩出文件框、压到别的框上。
+    var NODE_POSITIONS_KEY = 'cdd-lens.node-positions.v2'
 
     function readAllNodePositions() {
       try {

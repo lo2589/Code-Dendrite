@@ -107,7 +107,8 @@ window.__ModuleLoader__.load({
         var ui = graph.ui[id]
         if (ui && ui.members && ui.memberList) memberRows += ui.memberList.length + 1
       })
-      return [graph.order.length, graph.edges.length, avail || 0, memberRows].join('|')
+      // cardHeightsRev：浏览器量到卡片实际高度和估的不一样时加 1，文件框要按实际高度重排。
+      return [graph.order.length, graph.edges.length, avail || 0, memberRows, shared.cardHeightsRev || 0].join('|')
     }
 
     function structure(graph, avail) {

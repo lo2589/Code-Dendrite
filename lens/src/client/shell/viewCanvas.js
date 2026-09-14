@@ -106,7 +106,7 @@ window.__ModuleLoader__.load({
         ]))
       }
 
-      // 调试栏放在画布下面（用户：「你放最底下吧」），sticky 贴住可视区底部：画布再长也不用滚到底才看见。
+      // 调试栏默默放在最底下、跟着内容走（用户：「log默默放最底层就好不要浮在上面占屏幕位置」）。
       // 它不跟着画布缩放；关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
         h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),

@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_50_EDIT_TIMER_001
+// build: V1_51_NO_OVERLAP_001
 // parts: 43
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_50_EDIT_TIMER_001'
+    var BUILD = 'V1_51_NO_OVERLAP_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -160,7 +160,6 @@ __cddLocal.load({
         style: {
           fontSize: '10px', lineHeight: '1.45', padding: '4px 8px',
           borderTop: '1px solid var(--dsw-alias-border-l2)',
-          position: 'sticky', bottom: 0, left: 0, zIndex: 5,
           background: 'var(--dsw-alias-bg-layer-3)',
           color: 'var(--dsw-alias-label-secondary)',
           fontFamily: 'var(--ds-font-family-code,monospace)',
@@ -708,7 +707,8 @@ __cddLocal.load({
     // User-authored node positions are the durable layout. Automatic focus
     // layout is derived in memory and never writes this table, so leaving a
     // highlighted chain restores the exact picture the user arranged.
-    var NODE_POSITIONS_KEY = 'cdd-lens.node-positions.v1'
+    // v2：换成文件框网格后，分层排版时代存下的拖动坐标（x 可能到 3000+）不能再用，会把节点甩出文件框、压到别的框上。
+    var NODE_POSITIONS_KEY = 'cdd-lens.node-positions.v2'
 
     function readAllNodePositions() {
       try {
@@ -5100,6 +5100,8 @@ __cddLocal.load({
     var module = { exports: {} }
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var placeOf = __graph_model.placeOf
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
     var BIG = 10
     var PORT_OFFSET = 0.5
     var SECTION_GAP = 36
@@ -5270,7 +5272,14 @@ __cddLocal.load({
         size[id] = drawn > 0 ? metrics.sizeOf(id, drawn) : metrics.sizeOf(id)
         if (size[id].w > widest) widest = size[id].w
       })
-      return { cardW: drawn > 0 ? drawn : widest, size: size }
+      var cardW = drawn > 0 ? drawn : widest
+      // 浏览器里真画出来的高度（同一个卡片宽量的）优先：按 CSS 估的高度估小了，卡片会撑出文件框、压到下一个框。
+      var measured = shared.cardHeights || {}
+      Object.keys(size).forEach(function (id) {
+        var m = measured[id]
+        if (m && Math.abs(m.w - cardW) < 1 && m.h > 0) size[id] = { w: size[id].w, h: m.h }
+      })
+      return { cardW: cardW, size: size }
     }
 
     /**
@@ -5423,7 +5432,8 @@ __cddLocal.load({
         var ui = graph.ui[id]
         if (ui && ui.members && ui.memberList) memberRows += ui.memberList.length + 1
       })
-      return [graph.order.length, graph.edges.length, avail || 0, memberRows].join('|')
+      // cardHeightsRev：浏览器量到卡片实际高度和估的不一样时加 1，文件框要按实际高度重排。
+      return [graph.order.length, graph.edges.length, avail || 0, memberRows, shared.cardHeightsRev || 0].join('|')
     }
 
     function structure(graph, avail) {
@@ -6428,6 +6438,30 @@ __cddLocal.load({
         return layout(shared.graph, undefined, availWidth[0])
       }, [shared.revision, layoutRevision[0], availWidth[0]])
 
+      // 量浏览器里真画出来的卡片高度：和排版用的高度差 1px 以上就记下来、重排一次（只在真的变了时，不会来回跳）。
+      // 按 CSS 估的高度估小了（按钮换行、名字折行），卡片会撑出文件框、压到下一个框。
+      useEffect(function () {
+        var el = canvasRef.current
+        if (el === null || typeof el.querySelectorAll !== 'function') return
+        var byId = {}
+        model.nodes.forEach(function (p) { byId[p.id] = p })
+        shared.cardHeights = shared.cardHeights || {}
+        var changed = 0
+        el.querySelectorAll('.cddl-node-shell[data-node-id]').forEach(function (shell) {
+          var p = byId[shell.getAttribute('data-node-id')]
+          var h = shell.offsetHeight
+          if (p === undefined || !(h > 0) || Math.abs(h - p.h) <= 1) return
+          var known = shared.cardHeights[p.id]
+          if (known && known.h === h && Math.abs(known.w - p.w) < 1) return
+          shared.cardHeights[p.id] = { w: p.w, h: h }
+          changed += 1
+        })
+        if (changed === 0) return
+        require('dsh-cdd-lens/runtime/debug').note('layout', '量到 ' + changed + ' 张卡片实际高度和估的不一样，按实际高度重排文件框')
+        shared.cardHeightsRev = (shared.cardHeightsRev || 0) + 1
+        publish()
+      }, [model])
+
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
@@ -6607,7 +6641,7 @@ __cddLocal.load({
         ]))
       }
 
-      // 调试栏放在画布下面（用户：「你放最底下吧」），sticky 贴住可视区底部：画布再长也不用滚到底才看见。
+      // 调试栏默默放在最底下、跟着内容走（用户：「log默默放最底层就好不要浮在上面占屏幕位置」）。
       // 它不跟着画布缩放；关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
         h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),

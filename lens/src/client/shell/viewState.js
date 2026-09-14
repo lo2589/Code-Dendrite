@@ -93,6 +93,30 @@ window.__ModuleLoader__.load({
         return layout(shared.graph, undefined, availWidth[0])
       }, [shared.revision, layoutRevision[0], availWidth[0]])
 
+      // 量浏览器里真画出来的卡片高度：和排版用的高度差 1px 以上就记下来、重排一次（只在真的变了时，不会来回跳）。
+      // 按 CSS 估的高度估小了（按钮换行、名字折行），卡片会撑出文件框、压到下一个框。
+      useEffect(function () {
+        var el = canvasRef.current
+        if (el === null || typeof el.querySelectorAll !== 'function') return
+        var byId = {}
+        model.nodes.forEach(function (p) { byId[p.id] = p })
+        shared.cardHeights = shared.cardHeights || {}
+        var changed = 0
+        el.querySelectorAll('.cddl-node-shell[data-node-id]').forEach(function (shell) {
+          var p = byId[shell.getAttribute('data-node-id')]
+          var h = shell.offsetHeight
+          if (p === undefined || !(h > 0) || Math.abs(h - p.h) <= 1) return
+          var known = shared.cardHeights[p.id]
+          if (known && known.h === h && Math.abs(known.w - p.w) < 1) return
+          shared.cardHeights[p.id] = { w: p.w, h: h }
+          changed += 1
+        })
+        if (changed === 0) return
+        require('dsh-cdd-lens/runtime/debug').note('layout', '量到 ' + changed + ' 张卡片实际高度和估的不一样，按实际高度重排文件框')
+        shared.cardHeightsRev = (shared.cardHeightsRev || 0) + 1
+        publish()
+      }, [model])
+
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
