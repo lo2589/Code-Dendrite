@@ -43,6 +43,7 @@ window.__ModuleLoader__.load({
       var symLine = pxFrom(css, '.cddl-gnode .cddl-sym', 'line-height')
       var actionsGap = pxFrom(css, '.cddl-node-actions', 'margin-top')
       var actionsRow = pxFrom(css, '.cddl-node-actions button', 'height')
+      var actionsWrapGap = pxFrom(css, '.cddl-node-actions', 'gap')
       var membersTop = pxFrom(css, '.cddl-members', 'margin-top')
       var membersPad = pxFrom(css, '.cddl-members', 'padding-top')
       var memberPad = pxFrom(css, '.cddl-m', 'padding')
@@ -58,6 +59,8 @@ window.__ModuleLoader__.load({
       return {
         symLine: symLine,
         base: border * 2 + pad * 2 + symLine + actionsGap + actionsRow,
+        // 按钮换到下一行多出来的高度：一行按钮高 + 行间距（.cddl-node-actions 的 gap）。
+        actionRow: actionsRow + or(actionsWrapGap, 4),
         // A member row is its own padding twice plus one line of text; the
         // divider above the list is a border plus the padding either side.
         membersChrome: or(membersTop, 6) + border + or(membersPad, 5),

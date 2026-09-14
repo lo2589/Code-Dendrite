@@ -178,7 +178,7 @@ window.__ModuleLoader__.load({
       '.cddl-port-out{right:-6px;background:var(--dsw-alias-state-warn-primary)}',
       '.cddl-port-vtop{left:50%;top:-6px;transform:translateX(-50%)}',
       '.cddl-port-vbottom{left:50%;top:auto;bottom:-6px;transform:translateX(-50%)}',
-      '.cddl-node-actions{display:flex;gap:4px;margin-top:4px;z-index:2}',
+      '.cddl-node-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
       '.cddl-node-actions button{min-width:26px;height:19px;padding:0 5px;border-radius:5px;cursor:pointer;font:700 11px var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-state-business-tertiary)}',

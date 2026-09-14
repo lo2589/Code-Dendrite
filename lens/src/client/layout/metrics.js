@@ -11,8 +11,36 @@ window.__ModuleLoader__.load({
     var cardBox = __layout_cardBox.cardBox
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
 
     var SYMBOL_FONT = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    // 卡片上的名字实际是 13.5px/500（.cddl-gnode .cddl-sym）：按它量，不按 11.5px 量。
+    var CARD_FONT = '500 13.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    // 卡片宽只看自己的名字，上下限固定：一个长名字不再把整张图的卡片都撑宽。
+    var CARD_MIN = 170
+    var CARD_MAX = 260
+    var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+
+    /** 按钮一行放不下就换行：按 node.js 画的按钮（箭头 + 数字 + 关系名，再加 pin）估宽，数出几行。 */
+    function actionRows(id, width) {
+      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var widths = []
+      REL_ORDER.forEach(function (rel) {
+        ['up', 'down'].forEach(function (dir) {
+          var n = counts[rel + dir]
+          if (n > 0) widths.push(Math.max(26, 12 + 6.6 * (1 + String(n).length) + 5 + 4.8 * rel.length))
+        })
+      })
+      widths.push(32)
+      var room = width - 22
+      var rows = 1
+      var used = 0
+      widths.forEach(function (w) {
+        if (used > 0 && used + 4 + w > room) { rows += 1; used = w } else used += (used > 0 ? 4 : 0) + w
+      })
+      return rows
+    }
     var measurer = null
     var measured = {}
 
@@ -197,19 +225,16 @@ window.__ModuleLoader__.load({
         var node = graph.nodes[id]
         var ui = uiOf(graph, id) || {}
         var text = label[id] === undefined ? shortSymbol(node.symbol) : label[id]
-        var badge = 46
-        var chrome = 22 + 14 + 16
-        // Keep one small readability gutter between the symbol and its badges;
-        // exact text width left `dispatch_command` wrapping at the underscore.
-        var own = Math.ceil(textWidth(text, SYMBOL_FONT)) + badge + chrome + 72
-        var width = Math.max(150, Math.min(NODE_W, widthLimit || NODE_W, own))
+        // 名字宽 + 右边行号 / 类标记的位置；夹在 170–260 之间，超出的名字在卡片里折行。
+        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
+        var nameW = Math.ceil(textWidth(text, CARD_FONT))
+        var width = Math.round(Math.max(CARD_MIN, Math.min(CARD_MAX, widthLimit || CARD_MAX, nameW + reserved)))
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
-        var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
-        var wrapped = (lines - 1) * CARD.symLine
+        var lines = Math.max(1, Math.ceil(nameW / textRoom))
+        var wrapped = (lines - 1) * CARD.symLine + (actionRows(id, width) - 1) * CARD.actionRow
         return {
           // Never wider than the space there is, never so narrow the buttons
           // underneath do not fit.

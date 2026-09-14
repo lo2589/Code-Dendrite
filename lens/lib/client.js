@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_45_FILE_GRID_001
+// build: V1_46_CARD_WIDTH_001
 // parts: 43
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_45_FILE_GRID_001'
+    var BUILD = 'V1_46_CARD_WIDTH_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -3327,7 +3327,7 @@ __cddLocal.load({
       '.cddl-port-out{right:-6px;background:var(--dsw-alias-state-warn-primary)}',
       '.cddl-port-vtop{left:50%;top:-6px;transform:translateX(-50%)}',
       '.cddl-port-vbottom{left:50%;top:auto;bottom:-6px;transform:translateX(-50%)}',
-      '.cddl-node-actions{display:flex;gap:4px;margin-top:4px;z-index:2}',
+      '.cddl-node-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
       '.cddl-node-actions button{min-width:26px;height:19px;padding:0 5px;border-radius:5px;cursor:pointer;font:700 11px var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-state-business-tertiary)}',
@@ -3441,6 +3441,7 @@ __cddLocal.load({
       var symLine = pxFrom(css, '.cddl-gnode .cddl-sym', 'line-height')
       var actionsGap = pxFrom(css, '.cddl-node-actions', 'margin-top')
       var actionsRow = pxFrom(css, '.cddl-node-actions button', 'height')
+      var actionsWrapGap = pxFrom(css, '.cddl-node-actions', 'gap')
       var membersTop = pxFrom(css, '.cddl-members', 'margin-top')
       var membersPad = pxFrom(css, '.cddl-members', 'padding-top')
       var memberPad = pxFrom(css, '.cddl-m', 'padding')
@@ -3456,6 +3457,8 @@ __cddLocal.load({
       return {
         symLine: symLine,
         base: border * 2 + pad * 2 + symLine + actionsGap + actionsRow,
+        // 按钮换到下一行多出来的高度：一行按钮高 + 行间距（.cddl-node-actions 的 gap）。
+        actionRow: actionsRow + or(actionsWrapGap, 4),
         // A member row is its own padding twice plus one line of text; the
         // divider above the list is a border plus the padding either side.
         membersChrome: or(membersTop, 6) + border + or(membersPad, 5),
@@ -3482,8 +3485,36 @@ __cddLocal.load({
     var cardBox = __layout_cardBox.cardBox
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
 
     var SYMBOL_FONT = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    // 卡片上的名字实际是 13.5px/500（.cddl-gnode .cddl-sym）：按它量，不按 11.5px 量。
+    var CARD_FONT = '500 13.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    // 卡片宽只看自己的名字，上下限固定：一个长名字不再把整张图的卡片都撑宽。
+    var CARD_MIN = 170
+    var CARD_MAX = 260
+    var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+
+    /** 按钮一行放不下就换行：按 node.js 画的按钮（箭头 + 数字 + 关系名，再加 pin）估宽，数出几行。 */
+    function actionRows(id, width) {
+      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var widths = []
+      REL_ORDER.forEach(function (rel) {
+        ['up', 'down'].forEach(function (dir) {
+          var n = counts[rel + dir]
+          if (n > 0) widths.push(Math.max(26, 12 + 6.6 * (1 + String(n).length) + 5 + 4.8 * rel.length))
+        })
+      })
+      widths.push(32)
+      var room = width - 22
+      var rows = 1
+      var used = 0
+      widths.forEach(function (w) {
+        if (used > 0 && used + 4 + w > room) { rows += 1; used = w } else used += (used > 0 ? 4 : 0) + w
+      })
+      return rows
+    }
     var measurer = null
     var measured = {}
 
@@ -3668,19 +3699,16 @@ __cddLocal.load({
         var node = graph.nodes[id]
         var ui = uiOf(graph, id) || {}
         var text = label[id] === undefined ? shortSymbol(node.symbol) : label[id]
-        var badge = 46
-        var chrome = 22 + 14 + 16
-        // Keep one small readability gutter between the symbol and its badges;
-        // exact text width left `dispatch_command` wrapping at the underscore.
-        var own = Math.ceil(textWidth(text, SYMBOL_FONT)) + badge + chrome + 72
-        var width = Math.max(150, Math.min(NODE_W, widthLimit || NODE_W, own))
+        // 名字宽 + 右边行号 / 类标记的位置；夹在 170–260 之间，超出的名字在卡片里折行。
+        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
+        var nameW = Math.ceil(textWidth(text, CARD_FONT))
+        var width = Math.round(Math.max(CARD_MIN, Math.min(CARD_MAX, widthLimit || CARD_MAX, nameW + reserved)))
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
-        var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
-        var wrapped = (lines - 1) * CARD.symLine
+        var lines = Math.max(1, Math.ceil(nameW / textRoom))
+        var wrapped = (lines - 1) * CARD.symLine + (actionRows(id, width) - 1) * CARD.actionRow
         return {
           // Never wider than the space there is, never so narrow the buttons
           // underneath do not fit.
