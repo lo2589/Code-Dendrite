@@ -1,50 +1,104 @@
-# CodeDendrite：基于 AST 的代码因果导航系统
+English | [简体中文](README.zh-CN.md)
 
-**用静态分析替代向量搜索。**
+# CodeDendrite: AST-based causal code navigation
 
-检索找的是「长得像的代码」，导航要的是「连得上的代码」。一个调用你函数的函数，跟你的函数在文本上一点都不像——这正是相似度在调用链问题上必然失手的地方。CodeDendrite 不猜相似度，它把仓库解析成一张有因果边的图，然后让你顺着边走。
+**Static analysis instead of vector search.**
+
+Retrieval finds code that *looks alike*. Navigation needs code that is *connected*. A function that calls yours looks nothing like yours in text — which is exactly where similarity search is bound to fail on call-chain questions. CodeDendrite doesn't guess at similarity: it parses a repository into a graph of causal edges and lets you walk along them.
 
 ---
 
-## 当前状态
+## Status
 
-| 项 | 值 |
+| Item | Value |
 |---|---|
-| 结构 | `src/` 下五层，`mcp/`、`skills/` 与 `src/` 同层 |
-| 索引 | **9336 个 anchor / 12223 条因果边** |
-| 边构成 | call 6594 · dataflow 5185 · impact 291 · inherit 92 · dispatch 61 |
-| 测试 | 237 passed |
+| Layout | Five layers under `src/`; `mcp/` and `skills/` sit next to `src/` |
+| Requirements | Python ≥ 3.10; the core uses the standard library only |
+| Index | Not committed to git. After cloning, run `cdd rebuild` first; see counts with `cdd count` / `cdd status` |
 
 ---
 
-## 目录
+## Installation
 
-| 路径 | 内容 |
+**Option 1: run from source (no install)**
+
+```bash
+git clone https://github.com/lo2589/Code-Dendrite
+cd Code-Dendrite
+python3 src/usage/cli/cdd rebuild . --virtual     # build the index first: every read command except peek needs it
+python3 src/usage/cli/cdd count
+```
+
+`src/usage/cli/cdd` puts `src/` on the subprocess `PYTHONPATH` by itself; no extra setup is needed.
+
+**Option 2: install as the `cdd` command**
+
+```bash
+pip install .                 # use pip install -e . for development
+cdd rebuild /path/to/project --virtual
+```
+
+**Optional dependencies** (declared in `pyproject.toml`):
+
+```bash
+pip install '.[mcp]'          # the MCP server needs the mcp package
+pip install '.[test]'         # running the tests needs pytest
+```
+
+**MCP server**: once `mcp` is installed, add this to `.mcp.json`:
+
+```json
+{
+  "codedendrite": {
+    "command": "python3",
+    "args": ["/path/to/Code-Dendrite/mcp/server.py", "--root", "/path/to/project"]
+  }
+}
+```
+
+The project that `--root` points to must have been indexed with `cdd rebuild`.
+
+**lens plugin** (optional, only useful with DeepSeek Harness): `lens/scripts/install.sh`. Override the harness repo path, profile and port with `DSH_REPO`, `PROFILE` and `DSH_PORT`. The node path and the harness restart script inside the script are hard-coded to the author's machine; edit those two lines before using it elsewhere.
+
+---
+
+## Layout
+
+| Path | Contents |
 |---|---|
-| `src/scanner/` | **语言扫描器**：源码 → 符号 / 行号 / 导入 / 调用点。`language/`（24 种语言路由 + 各语言适配器）、`calls/`、`hashing/`、`project/`、`store/`、`structure/` |
-| `src/analyzer/` | **分析器**：符号 → 锚点身份 + 因果边。`identity/`（结构哈希与漂移）、`anchors/`、`inherit/`、`dataflow/`、`dynamic/`、`path/`、`control_flow/`、`ui/`、`shared/` |
-| `src/api/` | **对外查询面**：`inspector/`、`navigator/`、`query/`、`relations/` |
-| `src/usage/` | **使用面**：`cli/`、`packets/`、`workflow/`、`profiles/`、`tools/`、`repair/`、`structure/`、`analyze/` |
-| `src/view/` | **可视化**：`browser/`、`code_map/`、`relations/`、`timeline/`、`module_tree/`、`pipeline/`、`html/` |
-| `lens/` | DSH 插件 `dsh-cdd-lens`：会话轨迹侧栏 + 可交互的锚点图（node 包，独立于 `src/`） |
-| `lens-pcb/` | lens 的并行分支（PCB 形态布局），build 戳独立 |
-| `mcp/` | MCP 服务器：把上面几层暴露成工具 |
-| `skills/` | 给 agent 的三个 skill：`cdd-understand`（理解项目）、`cdd-rebuild`（拓扑重构）、`cdd-learn`（分层带学） |
-| `src/tests/` | 测试与夹具 |
+| `src/scanner/` | **Language scanner**: source → symbols / line numbers / imports / call sites. `language/` (23 extensions routed by file extension across 23 LanguageSpecs — actual capability depth per spec is measured by the [language support matrix](#language-support-matrix) below; 17 specs reach call-edge depth, 3 stop at symbol detection, 3 are recognized but not parsed), `calls/`, `hashing/`, `project/`, `store/`, `structure/` |
+| `src/analyzer/` | **Analyzer**: symbols → anchor identity + causal edges. `identity/` (structural hashing and drift), `anchors/`, `inherit/`, `dataflow/`, `dynamic/`, `path/`, `control_flow/`, `ui/`, `shared/` |
+| `src/api/` | **Query surface**: `inspector/`, `navigator/`, `query/`, `relations/` |
+| `src/usage/` | **Usage surface**: `cli/`, `packets/`, `workflow/`, `profiles/`, `tools/`, `repair/`, `structure/`, `analyze/` |
+| `src/view/` | **Visualization**: `browser/`, `code_map/`, `relations/`, `timeline/`, `module_tree/`, `pipeline/`, `html/` |
+| `lens/` | DSH plugin `dsh-cdd-lens`: a session trajectory sidebar + an interactive anchor graph (a node package, independent of `src/`) |
+| `lens-pcb/` | A parallel branch of lens (PCB-style layout) with its own build stamp |
+| `mcp/` | MCP server: exposes the layers above as tools |
+| `skills/` | Three agent skills: `cdd-understand` (understand a project), `cdd-rebuild` (topology refactoring), `cdd-learn` (layer-by-layer guided learning) |
+| `src/tests/` | Tests and fixtures |
 
-依赖单向：`scanner` → `analyzer` → `api` → `usage` / `view`。
+Main dependency direction: `scanner` → `analyzer` → `api` → `usage` / `view`. A few reverse imports remain: `scanner` imports type definitions from `analyzer.shared.legacy`, `analyzer/anchors/scanning.py` imports `usage.analyze`, `api/__init__.py` imports `usage`, and `api/analysis.py` imports `view.html`.
 
 ---
 
-## 入口 → 打穿
+## From entry point to implementation
 
-入口是 `mcp/server.py::call_tool`。一条命令把它打穿到实现层：
+The entry point is `mcp/server.py::call_tool`. Once the index is built, one command drills it down to the implementation layer:
 
 ```bash
 python3 src/usage/cli/cdd chain "mcp/server.py::call_tool" --depth 5
 ```
 
-输出 **55 个节点**，穿透 mcp → usage → analyzer 三层（`mcp/` 16 个、`src/usage/` 36 个、`src/analyzer/` 4 个）：
+The chain crosses three layers: mcp → usage → analyzer. The output is a **tree expansion**: a function called from several places is printed once at each place, so "lines" and "distinct functions" are two different numbers:
+
+| Layer | Lines | Distinct functions |
+|---|---:|---:|
+| `mcp/` | 15 | 10 |
+| `src/usage/` | 36 | 13 |
+| `src/analyzer/` | 4 | 1 |
+| Total | **55** | **24** |
+
+The most repeated function is `_anchor_attr` (14 times). Full output (all 55 lines):
 
 ```
 Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
@@ -58,75 +112,157 @@ Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
     [2] resolve_task_anchor  src/usage/packets/task_context_packet/anchor.py:113
       [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
       [3] _bounded_matches  src/usage/packets/task_context_packet/anchor.py:78
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
       [3] _match_sort_key  src/usage/packets/task_context_packet/anchor.py:68
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+        [4] _is_test_file  src/usage/packets/task_context_packet/plugin.py:119
     [2] build_level0  src/usage/packets/task_context_packet/anchor.py:275
+      [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
     [2] build_level1  src/usage/packets/task_context_packet/anchor.py:336
+      [3] _find_anchor_area  src/usage/packets/task_context_packet/anchor.py:328
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _find_anchor_module  src/usage/packets/task_context_packet/plugin.py:123
     [2] build_level2  src/usage/packets/task_context_packet/anchor.py:422
+      [3] _build_edge_indexes  src/usage/packets/task_context_packet/anchor.py:250
+      [3] _score_related_symbol  src/usage/packets/task_context_packet/anchor.py:391
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _find_anchor_module  src/usage/packets/task_context_packet/plugin.py:123
+  [1] tool_symbol  mcp/server.py:112
+    [2] _anchors  mcp/server.py:47
+      [3] load_anchors  src/analyzer/anchors/core_load.py:33
+    [2] _relations  mcp/server.py:54
+    [2] resolve_task_anchor  src/usage/packets/task_context_packet/anchor.py:113
+      [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _bounded_matches  src/usage/packets/task_context_packet/anchor.py:78
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _match_sort_key  src/usage/packets/task_context_packet/anchor.py:68
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+        [4] _is_test_file  src/usage/packets/task_context_packet/plugin.py:119
+    [2] build_anchor_packet  src/usage/packets/task_context_packet/anchor.py:622
+      [3] _build_edge_indexes  src/usage/packets/task_context_packet/anchor.py:250
+      [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+  [1] tool_search  mcp/server.py:126
+    [2] _anchors  mcp/server.py:47
+      [3] load_anchors  src/analyzer/anchors/core_load.py:33
+    [2] resolve_task_anchor  src/usage/packets/task_context_packet/anchor.py:113
+      [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _bounded_matches  src/usage/packets/task_context_packet/anchor.py:78
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+      [3] _match_sort_key  src/usage/packets/task_context_packet/anchor.py:68
+        [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
+        [4] _is_test_file  src/usage/packets/task_context_packet/plugin.py:119
+  [1] tool_impact  mcp/server.py:150
+    [2] _relations  mcp/server.py:54
+    [2] _anchors  mcp/server.py:47
+      [3] load_anchors  src/analyzer/anchors/core_load.py:33
+  [1] tool_modules  mcp/server.py:194
+    [2] _project_summary  mcp/server.py:73
 ```
 
-**这条链是索引现场算出来的，不是手抄的**：跑同一条命令应当得到同一个起点、同一组文件名，数字随代码变。
+**This chain is computed from the index, not copied by hand**: the numbers above come from the index as of 2026-09-14. Running the same command should give the same starting point and the same set of files; line counts, function counts and line numbers change with the code.
 
 ---
 
-## 命令
+## Commands
 
-`cdd` 的实体是 `src/usage/cli/cdd`（无扩展名的 Python 脚本，靠 shebang 执行）。
+`cdd` is `src/usage/cli/cdd` (a Python script without an extension, run via its shebang). The examples below run it from source; after installing, replace `python3 src/usage/cli/cdd` with `cdd`.
 
 ```bash
 cd <repo>
-python3 src/usage/cli/cdd status                  # 索引位置、数量、时间
-python3 src/usage/cli/cdd rebuild . --virtual     # 全量重建（本仓库约 35 秒）
-python3 src/usage/cli/cdd update .                # 增量更新
-python3 src/usage/cli/cdd peek <文件>             # 现场解析一个文件，不需要索引
+python3 src/usage/cli/cdd status                  # index location, counts, timestamps
+python3 src/usage/cli/cdd rebuild . --virtual     # full rebuild
+python3 src/usage/cli/cdd update .                # incremental update; builds fully the first time
+python3 src/usage/cli/cdd count                   # count of each causal edge type
+python3 src/usage/cli/cdd peek <file>             # parse one file on the spot, no index needed
 python3 src/usage/cli/cdd chain <anchor> --depth 12
-python3 src/usage/cli/cdd callers <anchor>        # 上行：谁在用它
+python3 src/usage/cli/cdd callers <anchor>        # upward: who uses it
 python3 src/usage/cli/cdd chain2context <anchor> --budget 40000 --output ctx.md
-python3 src/usage/cli/cdd draw                    # 生成浏览器版目录浏览器
-python3 src/usage/cli/cdd modules <关键词>        # 语义模块
+python3 src/usage/cli/cdd draw                    # generate the browser-based directory explorer
+python3 src/usage/cli/cdd modules <keyword>       # semantic modules
 ```
 
-`chain2context` 把一条链上所有 anchor 连源码组装成可投喂的上下文；超预算的 anchor 单列一栏，不静默丢。
+`chain2context` assembles every anchor on a chain, together with its source code, into context ready to feed to a model. Anchors that exceed the budget are listed in a separate section instead of being silently dropped.
 
 ---
 
-## 五种因果关系
+## Five causal relations
 
-本仓库自身实测（`cdd count`）：
+Counts vary with the code and the scan scope; use `cdd count` for current values.
 
-| 类型 | 数量 | 含义 |
-|------|------:|------|
-| `call` | 6594 | A 调用 B |
-| `dataflow` | 5185 | A 的输出流入 B 的输入 |
-| `impact` | 291 | ≥2 个模块依赖同一目标，改它会波及这些模块 |
-| `inherit` | 92 | 子类继承父类 |
-| `dispatch` | 61 | 注册表 / 装饰器 / HTTP 路由分发 |
+| Type | Meaning |
+|------|------|
+| `call` | A calls B |
+| `dataflow` | A's output flows into B's input |
+| `impact` | ≥2 modules depend on the same target, so changing it affects all of them |
+| `inherit` | A subclass inherits from a parent class |
+| `dispatch` | Registry / decorator / HTTP route dispatch |
 
-边一律**静态可解析才建**。解析不到的不会编一个出来——`cdd callers` 对方法零结果时会提示未解析的候选调用点，而不是报告「没人用」。
+Edges are built **only when they can be resolved statically**. Nothing is invented for what can't be resolved: when `cdd callers` finds zero callers for a method, it reports the unresolved candidate call sites instead of claiming "nobody uses it".
 
-### 锚点的颗粒度
+### Language support matrix
 
-锚点只到**模块顶层 def 与类方法**。函数体里再嵌套的 `def`（局部 helper、闭包工厂）不单独成锚点：它们的调用边全部记在母函数的 `callees` 下，打开母函数源码就拿到了，没有需要再追问的独立身份。三个例子印证这条规则：
+The scanner routes 23 file extensions through `src/scanner/language/registry.py`. They are **not** all parsed at the same depth — capability is split into three tiers, each measured by `src/tests/tests/test_lang_support_matrix_v1_48.py` against the fixtures in `src/tests/fixtures/lang_matrix/`. The matrix table below is guarded by a drift test (`test_readme_matrix_matches_fixtures`): changing a tier requires updating the test in lock-step.
 
-- `src/analyzer/anchors/core_load.py::load_anchors` 内的 `_coerce_callers` / `_coerce_callees`——索引里没有它们的 anchor 条目，但 `load_anchors.callees` 留了字符串痕迹
-- `src/usage/packets/task_context_packet/anchor.py::build_anchor_packet` 内的 `_related`——同上
-- 这不是漏识别，是锚点生成器只走 `tree.body`（顶层 + 类方法层）的设计取舍
+| Tier | Capability | Specs (count) | What you get |
+|------|------------|---------------|--------------|
+| T1 | Symbols + call edges | 17 | `parse_paths` yields ≥2 anchors per fixture; the caller anchor records a `helper` callee |
+| T2 | Symbols only (generic / component) | 3 | ≥1 anchor; no call-edge guarantee |
+| T3 | Recognized but not parsed | 3 | `language_for_path` returns a spec; `parse_paths` produces zero anchors (yaml / json / toml — they exist so the indexer doesn't trip on them, but the analyzer is `None`) |
+
+| Tier | Spec | Fixture | Anchor count (measured) |
+|------|------|---------|-------------------------|
+| T1 | python | `a.py` | 2 |
+| T1 | typescript | `b.ts` | 2 |
+| T1 | javascript | `c.js` | 2 |
+| T1 | cpp | `d.cpp` | 2 |
+| T1 | java | `e.java` | 3 |
+| T1 | kotlin | `f.kt` | 2 |
+| T1 | go | `g.go` | 2 |
+| T1 | rust | `h.rs` | 2 |
+| T1 | swift | `i.swift` | 2 |
+| T1 | php | `j.php` | 2 |
+| T1 | ruby | `k.rb` | 2 |
+| T1 | html | `l.html` | 2 |
+| T1 | csharp | `m.cs` | 3 |
+| T1 | shell | `p.sh` | 2 |
+| T1 | powershell | `q.ps1` | 2 |
+| T1 | vue | `r.vue` | 2 |
+| T1 | svelte | `s.svelte` | 2 |
+| T2 | scala | `n.scala` | 1 |
+| T2 | objective-c | `o.m` | 3 |
+| T2 | sql | `t.sql` | 2 |
+| T3 | yaml | `u.yaml` | 0 |
+| T3 | json | `v.json` | 0 |
+| T3 | toml | `w.toml` | 0 |
+
+When you change an adapter's depth — adding call edges to scala, teaching the indexer about yaml structure, splitting cpp into a real parser — the test file's tier table is the contract: move the spec, fix the fixture, and the matrix here follows.
+
+### Anchor granularity
+
+Anchors go down to **module-level `def`s and class methods** only. A `def` nested inside a function body (a local helper, a closure factory) does not get its own anchor: its call edges are recorded under the enclosing function's `callees`, and opening the enclosing function's source gives you all of it — there is no separate identity worth querying. Three examples of this rule:
+
+- `_coerce_callers` / `_coerce_callees` inside `src/analyzer/anchors/core_load.py::load_anchors` — the index has no anchor entries for them, but `load_anchors.callees` keeps string traces of them
+- `_related` inside `src/usage/packets/task_context_packet/anchor.py::build_anchor_packet` — same as above
+- This is not a missed detection; it is a design choice: the anchor generator only walks `tree.body` (module level + class-method level)
 
 ---
 
-## 测试
+## Tests
 
 ```bash
 cd <repo>
+pip install '.[test]'
 PYTHONPATH=src python3 -m pytest src/tests src/tests/tests -q
 ```
 
 ---
 
-## 生成物
+## Generated artifacts
 
-这些是产物，不手改，改了要用 `cdd rebuild` 重生：
+These are build outputs. Don't edit them by hand; regenerate them with `cdd rebuild`:
 
-- `.codedendrite/` — anchors.json / relations.json / module_tree*.json / 各种 .html
-- `.code_genome_db.json`、`.code_hash_db.json`（带 `.lock`）
+- `.codedendrite/` — anchors.json / relations.json / module_tree*.json / various .html files
+- `.code_genome_db.json`, `.code_hash_db.json` (with `.lock` files)
 
-`.codedendrite_ignore` 控制扫描排除范围（当前排除 `.cache/`、`backup/`，以及 lens 的打包产物 `lib/`、设计稿、playwright 产物）。
+`.codedendrite_ignore` controls what the scan excludes (currently `.cache/`, `backup/`, `doc/`, the `lib/` build output and `design/` mockups of `lens/` and `lens-pcb/`, and `lens/output/`).
