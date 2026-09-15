@@ -77,6 +77,7 @@ window.__ModuleLoader__.load({
       // DSH owns overlay layer 20. Keep the persistent rail below that layer,
       // while its reserved #root margin keeps it visible beside normal Chat.
       '.cddl-trajectory{position:fixed;right:0;top:var(--cddl-trajectory-top,0);bottom:0;z-index:var(--cddl-trajectory-layer,18);box-sizing:border-box;pointer-events:auto;display:flex;flex-direction:column;min-width:280px;max-width:520px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l3);box-shadow:-8px 0 24px rgba(0,0,0,.16);font-family:var(--dsw-font-family,inherit)}',
+      'body:has(.cddl-trajectory[data-cdd-view="open"]) .cddl-trajectory[data-cdd-view="closed"]{display:none}',
       '.cddl-trajectory-resize{position:absolute;left:-6px;top:0;bottom:0;width:12px;cursor:ew-resize;z-index:5}',
       '.cddl-trajectory-resize:hover{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 24%,transparent)}',
       '.cddl-trajectory-head{height:56px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);flex:none}',

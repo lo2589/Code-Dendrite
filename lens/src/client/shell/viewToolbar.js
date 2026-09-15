@@ -60,14 +60,20 @@ window.__ModuleLoader__.load({
         }))
     }
 
-    /** edit 保留几轮：每个节点自己的计时器，edit 一次加 N 轮，每过一轮减 1，到 0 不再算 edit 过。 */
-    function editKeepInput(engine) {
-      var keep = engine.view().editKeep || 7
-      return h('label', { key: 'keep', className: 'cddl-meta cddl-editkeep', title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' }, [
-        'edit 保留 ',
+    var KEEP_INPUTS = {
+      editKeep: { label: 'edit 保留 ', fallback: 7, title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' },
+      readKeep: { label: 'read 保留 ', fallback: 3, title: '看过的节点第一次留 N 轮，再看一次加 1 轮，每过一轮减 1，到 0 就不显示' },
+    }
+
+    /** 保留几轮的数字框。@param field - 'editKeep'（edit 一次加 N 轮）| 'readKeep'（第一次看留 N 轮，再看 +1）。 */
+    function keepInput(engine, field) {
+      var spec = KEEP_INPUTS[field]
+      var keep = engine.view()[field] || spec.fallback
+      return h('label', { key: field, className: 'cddl-meta cddl-editkeep', title: spec.title }, [
+        spec.label,
         h('input', {
-          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-edit-keep': keep, style: { width: '44px' },
-          onChange: function (event) { engine.setEditKeep(event.target.value) },
+          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-keep': field, style: { width: '44px' },
+          onChange: function (event) { engine.setKeep(field, event.target.value) },
         }),
         ' 轮',
       ])
@@ -106,7 +112,8 @@ window.__ModuleLoader__.load({
           h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: clicked('cdd draw', function () { tab[1]('draw') }) }, 'cdd draw'),
         ]),
         tab[0] !== 'graph' ? null : treeSelector(engine),
-        tab[0] !== 'graph' ? null : editKeepInput(engine),
+        tab[0] !== 'graph' ? null : keepInput(engine, 'editKeep'),
+        tab[0] !== 'graph' ? null : keepInput(engine, 'readKeep'),
         h(Search, { key: 'q', engine: engine }),
         relationSelector(engine),
         h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },

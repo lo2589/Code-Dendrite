@@ -1,4 +1,4 @@
 {
-  "build": "V1_56_FOLD_UPSTREAM_001",
+  "build": "V1_57_READ_KEEP_RAIL_001",
   "note": "Single source of the build stamp; scripts/build.js substitutes __CDD_BUILD__. V1_37: 前端只按 /screen 画——按钮只改视图状态 {tree,rels,pins,opens}，节点/边/按钮数字全部来自计算单元；删掉 visible/prep/select/camera 四个前端过滤；树开关显示「N节点/M关系」；不在树里的 seed 堆在树下面；pin 计数器不减；点线只高亮前后节点。"
 }

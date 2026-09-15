@@ -4,8 +4,8 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_56_FOLD_UPSTREAM_001
-// parts: 44
+// build: V1_57_READ_KEEP_RAIL_001
+// parts: 45
 
 ;(function () {
 var __cddHost = window.__ModuleLoader__
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_56_FOLD_UPSTREAM_001'
+    var BUILD = 'V1_57_READ_KEEP_RAIL_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -1531,6 +1531,58 @@ __cddLocal.load({
   },
 })
 
+// dsh-cdd-lens — 工具栏上两个保留轮数的数字框。
+//   editKeep：每个节点自己的计时器，edit 一次加 N 轮，过一轮减 1（默认 7）
+//   readKeep：看过的节点第一次留 N 轮，再看 +1，过一轮减 1（默认 3）
+//   用户：「算了搞个可以设置的数字吧」「edit和read都可以设置嘛」
+// 默认值和 compute/evidence.js 同一个；设过的数存在浏览器里，下次打开还是它。
+__cddLocal.load({
+  id: 'dsh-cdd-lens/engine/keep',
+  factory: (require) => {
+    var module = { exports: {} }
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+
+    var KEEPS = {
+      editKeep: { key: 'cdd-lens.edit-keep.v1', fallback: 7, label: 'edit 保留' },
+      readKeep: { key: 'cdd-lens.read-keep.v1', fallback: 3, label: 'read 保留' },
+    }
+
+    /** 上次在工具栏设过的数，没设过就是默认。@param field - 'editKeep' | 'readKeep' */
+    function savedKeep(field) {
+      try {
+        var n = Number(window.localStorage.getItem(KEEPS[field].key))
+        if (Number.isInteger(n) && n >= 1 && n <= 99) return n
+      } catch (e) { /* 浏览器存储可选 */ }
+      return KEEPS[field].fallback
+    }
+
+    /** 视图里这一项现在是几轮。 */
+    function keepOf(view, field) {
+      return view[field] || KEEPS[field].fallback
+    }
+
+    /**
+     * 改一项保留轮数：不在 1–99 记 log 不改；改了存进浏览器。
+     * @returns 真的改了返回 true（调用方据此重算屏幕）。
+     */
+    function applyKeep(view, field, value) {
+      var spec = KEEPS[field]
+      if (spec === undefined) return false
+      var n = Math.round(Number(value))
+      if (!(n >= 1 && n <= 99)) { note('btn', '✗ ' + spec.label + '轮数要在 1–99：' + value); return false }
+      if (view[field] === n) return false
+      note('btn', '设置 ' + spec.label + ' ' + keepOf(view, field) + ' → ' + n + ' 轮')
+      view[field] = n
+      try { window.localStorage.setItem(spec.key, String(n)) } catch (e) { /* 浏览器存储可选 */ }
+      return true
+    }
+
+    module.exports = { KEEPS, savedKeep, keepOf, applyKeep }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — 按钮 → 图。每一步都记带时间的 log（runtime/debug）。
 //
 // 展开（点 ⬆️ / ⬇️）走直线：
@@ -1560,6 +1612,10 @@ __cddLocal.load({
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
+    var __engine_keep = require('dsh-cdd-lens/engine/keep')
+    var savedKeep = __engine_keep.savedKeep
+    var keepOf = __engine_keep.keepOf
+    var applyKeep = __engine_keep.applyKeep
 
     var RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
     var TREES = ['degree1', 'degree2', 'edit']
@@ -1569,21 +1625,10 @@ __cddLocal.load({
     var shortId = function (id) { return String(id).split('::').pop() }
     var kb = function (bytes) { return (bytes / 1024).toFixed(0) + 'KB' }
 
-    var EDIT_KEEP_KEY = 'cdd-lens.edit-keep.v1'
-
-    /** edit 一次保留几轮：上次在工具栏设过的数，没设过是 7（和 compute/evidence.js 同一个默认）。 */
-    function savedEditKeep() {
-      try {
-        var n = Number(window.localStorage.getItem(EDIT_KEEP_KEY))
-        if (Number.isInteger(n) && n >= 1 && n <= 99) return n
-      } catch (e) { /* 浏览器存储可选 */ }
-      return 7
-    }
-
     function defaultView() {
       var rels = {}
       RELATIONS.forEach(function (r) { rels[r] = true })
-      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep(), openFiles: [] }
+      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedKeep('editKeep'), readKeep: savedKeep('readKeep'), openFiles: [] }
     }
 
     function viewOf() {
@@ -1724,7 +1769,7 @@ __cddLocal.load({
         var t0 = Date.now()
         var known = shared.anchorCacheStamp === undefined ? [] : Object.keys(cacheOf())
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
-          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · edit 保留 ' + (view.editKeep || 7) + ' 轮 · 已缓存 anchor ' + known.length)
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · edit 保留 ' + keepOf(view, 'editKeep') + ' 轮 · read 保留 ' + keepOf(view, 'readKeep') + ' 轮 · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
           if (!Array.isArray(body.nodes)) {
             note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
@@ -1827,16 +1872,9 @@ __cddLocal.load({
           return engine.refresh()
         },
 
-        /** edit 保留几轮：每个节点自己的计时器，edit 一次加这么多轮，过一轮减 1。 */
-        setEditKeep: function (value) {
-          var n = Math.round(Number(value))
-          if (!(n >= 1 && n <= 99)) { note('btn', '✗ edit 保留轮数要在 1–99：' + value); return Promise.resolve() }
-          var view = viewOf()
-          if (view.editKeep === n) return Promise.resolve()
-          note('btn', '设置 edit 保留 ' + (view.editKeep || 7) + ' → ' + n + ' 轮')
-          view.editKeep = n
-          try { window.localStorage.setItem(EDIT_KEEP_KEY, String(n)) } catch (e) { /* 浏览器存储可选 */ }
-          return engine.refresh()
+        /** edit / read 保留几轮（见 engine/keep.js）。@param field - 'editKeep' | 'readKeep'。 */
+        setKeep: function (field, value) {
+          return applyKeep(viewOf(), field, value) ? engine.refresh() : Promise.resolve()
         },
 
         /** 文件框 + / −：点开看这个文件的全部节点，再点折叠回只留层级高的和 pin 的。@param key - 'tree:文件' 或 'side:文件'。 */
@@ -3265,6 +3303,7 @@ __cddLocal.load({
       // DSH owns overlay layer 20. Keep the persistent rail below that layer,
       // while its reserved #root margin keeps it visible beside normal Chat.
       '.cddl-trajectory{position:fixed;right:0;top:var(--cddl-trajectory-top,0);bottom:0;z-index:var(--cddl-trajectory-layer,18);box-sizing:border-box;pointer-events:auto;display:flex;flex-direction:column;min-width:280px;max-width:520px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l3);box-shadow:-8px 0 24px rgba(0,0,0,.16);font-family:var(--dsw-font-family,inherit)}',
+      'body:has(.cddl-trajectory[data-cdd-view="open"]) .cddl-trajectory[data-cdd-view="closed"]{display:none}',
       '.cddl-trajectory-resize{position:absolute;left:-6px;top:0;bottom:0;width:12px;cursor:ew-resize;z-index:5}',
       '.cddl-trajectory-resize:hover{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 24%,transparent)}',
       '.cddl-trajectory-head{height:56px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);flex:none}',
@@ -6206,6 +6245,8 @@ __cddLocal.load({
         className: 'cddl-trajectory' + (collapsed ? ' is-collapsed' : ''),
         style: { width: width + 'px' },
         'data-cdd-trajectory': 'persistent',
+        // 两个插件都挂这条侧栏、叠在同一个位置：谁的图开着显示谁（代码窗口在它里面），另一条藏起来，见 styles/graph.js。
+        'data-cdd-view': shared.viewMounted > 0 ? 'open' : 'closed',
       }, [
         h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
         // The source lives here, not over the graph. This edge is one place
@@ -6902,14 +6943,20 @@ __cddLocal.load({
         }))
     }
 
-    /** edit 保留几轮：每个节点自己的计时器，edit 一次加 N 轮，每过一轮减 1，到 0 不再算 edit 过。 */
-    function editKeepInput(engine) {
-      var keep = engine.view().editKeep || 7
-      return h('label', { key: 'keep', className: 'cddl-meta cddl-editkeep', title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' }, [
-        'edit 保留 ',
+    var KEEP_INPUTS = {
+      editKeep: { label: 'edit 保留 ', fallback: 7, title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' },
+      readKeep: { label: 'read 保留 ', fallback: 3, title: '看过的节点第一次留 N 轮，再看一次加 1 轮，每过一轮减 1，到 0 就不显示' },
+    }
+
+    /** 保留几轮的数字框。@param field - 'editKeep'（edit 一次加 N 轮）| 'readKeep'（第一次看留 N 轮，再看 +1）。 */
+    function keepInput(engine, field) {
+      var spec = KEEP_INPUTS[field]
+      var keep = engine.view()[field] || spec.fallback
+      return h('label', { key: field, className: 'cddl-meta cddl-editkeep', title: spec.title }, [
+        spec.label,
         h('input', {
-          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-edit-keep': keep, style: { width: '44px' },
-          onChange: function (event) { engine.setEditKeep(event.target.value) },
+          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-keep': field, style: { width: '44px' },
+          onChange: function (event) { engine.setKeep(field, event.target.value) },
         }),
         ' 轮',
       ])
@@ -6948,7 +6995,8 @@ __cddLocal.load({
           h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: clicked('cdd draw', function () { tab[1]('draw') }) }, 'cdd draw'),
         ]),
         tab[0] !== 'graph' ? null : treeSelector(engine),
-        tab[0] !== 'graph' ? null : editKeepInput(engine),
+        tab[0] !== 'graph' ? null : keepInput(engine, 'editKeep'),
+        tab[0] !== 'graph' ? null : keepInput(engine, 'readKeep'),
         h(Search, { key: 'q', engine: engine }),
         relationSelector(engine),
         h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },

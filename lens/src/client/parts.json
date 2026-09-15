@@ -11,6 +11,7 @@
     "engine/selection.js",
     "engine/ingest.js",
     "engine/gather.js",
+    "engine/keep.js",
     "engine/screen.js",
     "engine/engine.js",
     "session/trace.js",

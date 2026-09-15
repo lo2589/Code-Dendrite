@@ -27,6 +27,10 @@ window.__ModuleLoader__.load({
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
+    var __engine_keep = require('dsh-cdd-lens/engine/keep')
+    var savedKeep = __engine_keep.savedKeep
+    var keepOf = __engine_keep.keepOf
+    var applyKeep = __engine_keep.applyKeep
 
     var RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
     var TREES = ['degree1', 'degree2', 'edit']
@@ -36,21 +40,10 @@ window.__ModuleLoader__.load({
     var shortId = function (id) { return String(id).split('::').pop() }
     var kb = function (bytes) { return (bytes / 1024).toFixed(0) + 'KB' }
 
-    var EDIT_KEEP_KEY = 'cdd-lens.edit-keep.v1'
-
-    /** edit 一次保留几轮：上次在工具栏设过的数，没设过是 7（和 compute/evidence.js 同一个默认）。 */
-    function savedEditKeep() {
-      try {
-        var n = Number(window.localStorage.getItem(EDIT_KEEP_KEY))
-        if (Number.isInteger(n) && n >= 1 && n <= 99) return n
-      } catch (e) { /* 浏览器存储可选 */ }
-      return 7
-    }
-
     function defaultView() {
       var rels = {}
       RELATIONS.forEach(function (r) { rels[r] = true })
-      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedEditKeep(), openFiles: [] }
+      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedKeep('editKeep'), readKeep: savedKeep('readKeep'), openFiles: [] }
     }
 
     function viewOf() {
@@ -191,7 +184,7 @@ window.__ModuleLoader__.load({
         var t0 = Date.now()
         var known = shared.anchorCacheStamp === undefined ? [] : Object.keys(cacheOf())
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
-          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · edit 保留 ' + (view.editKeep || 7) + ' 轮 · 已缓存 anchor ' + known.length)
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · edit 保留 ' + keepOf(view, 'editKeep') + ' 轮 · read 保留 ' + keepOf(view, 'readKeep') + ' 轮 · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
           if (!Array.isArray(body.nodes)) {
             note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
@@ -294,16 +287,9 @@ window.__ModuleLoader__.load({
           return engine.refresh()
         },
 
-        /** edit 保留几轮：每个节点自己的计时器，edit 一次加这么多轮，过一轮减 1。 */
-        setEditKeep: function (value) {
-          var n = Math.round(Number(value))
-          if (!(n >= 1 && n <= 99)) { note('btn', '✗ edit 保留轮数要在 1–99：' + value); return Promise.resolve() }
-          var view = viewOf()
-          if (view.editKeep === n) return Promise.resolve()
-          note('btn', '设置 edit 保留 ' + (view.editKeep || 7) + ' → ' + n + ' 轮')
-          view.editKeep = n
-          try { window.localStorage.setItem(EDIT_KEEP_KEY, String(n)) } catch (e) { /* 浏览器存储可选 */ }
-          return engine.refresh()
+        /** edit / read 保留几轮（见 engine/keep.js）。@param field - 'editKeep' | 'readKeep'。 */
+        setKeep: function (field, value) {
+          return applyKeep(viewOf(), field, value) ? engine.refresh() : Promise.resolve()
         },
 
         /** 文件框 + / −：点开看这个文件的全部节点，再点折叠回只留层级高的和 pin 的。@param key - 'tree:文件' 或 'side:文件'。 */

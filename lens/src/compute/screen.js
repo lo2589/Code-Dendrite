@@ -1,7 +1,8 @@
 // dsh-cdd-lens — 计算单元 4：状态 → 屏幕。界面上有什么只由这里决定，其他地方不许再过滤。
 //
-// state = { turn, tree, rels: {call:bool,…}, pins: [{ id, at, until }], opens: [{ id, rel, dir }], editKeep }
+// state = { turn, tree, rels: {call:bool,…}, pins: [{ id, at, until }], opens: [{ id, rel, dir }], editKeep, readKeep }
 //   editKeep：edit 一次加几轮（默认 7，界面上可设），每个节点自己计时，见 evidence.seedsAt
+//   readKeep：看过的节点第一次留几轮（默认 3，界面上可设），再看 +1
 //   pins ：人为固定（含搜索），优先级最高。pin 期间计数器不减、取消 pin 后再减（见 evidence.seedsAt）；
 //          开什么树加进什么树，和屏幕上的节点有什么边连什么边。兼容 pinned: [id]（从一开始就 pin 着）。
 // 顺序（固定）：选中的树 → 加 pin → 展开 → pin 连边 → 旁边（不在树里的 seed，堆到树下面）
@@ -10,7 +11,7 @@
 'use strict'
 
 const { RELATIONS, peers } = require('./anchors.js')
-const { seedsAt, normalizeEditKeep } = require('./evidence.js')
+const { seedsAt, normalizeEditKeep, normalizeReadKeep } = require('./evidence.js')
 const { resolveAll } = require('./resolve.js')
 const { TREES, edgeKey, addEdge, treeFor } = require('./trees.js')
 const { foldBoxes } = require('./fold.js')
@@ -34,7 +35,7 @@ function normalizeState(ctx, state, events) {
   const pinned = [...new Set(pins.filter(p => p.at <= turn && (p.until === null || turn < p.until)).map(p => p.id))].sort()
   // openFiles：点开（+）的文件框，键见 fold.boxKey。
   const openFiles = Array.isArray(state.openFiles) ? state.openFiles.filter(k => typeof k === 'string') : []
-  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens, editKeep: normalizeEditKeep(state.editKeep), openFiles }
+  return { turns, turn, tree: TREES.includes(state.tree) ? state.tree : 'degree2', rels, pins, pinned, opens, editKeep: normalizeEditKeep(state.editKeep), readKeep: normalizeReadKeep(state.readKeep), openFiles }
 }
 
 /** 一棵树在所有选中关系上的并集。 */
@@ -132,7 +133,7 @@ function buttonsFor(ctx, ids, rels) {
 function computeScreen(ctx, events, state, known) {
   const st = normalizeState(ctx, state || {}, events)
   const have = new Set(Array.isArray(known) ? known : [])
-  const seedState = seedsAt(events, st.turn, st.pins, { editKeep: st.editKeep })
+  const seedState = seedsAt(events, st.turn, st.pins, { editKeep: st.editKeep, readKeep: st.readKeep })
   const rels = RELATIONS.filter(r => st.rels[r])
   const { layer, expansions, side, folds } = screenLayer(ctx, st, st.tree, seedState)
   const nodes = [...layer.nodes].sort()
@@ -144,7 +145,7 @@ function computeScreen(ctx, events, state, known) {
   }
   const screen = {
     turn: st.turn, turns: st.turns, tree: st.tree, rels: st.rels, pinned: st.pinned,
-    seeds: seedState.seeds.size, edited: [...seedState.edited].sort(), editKeep: st.editKeep,
+    seeds: seedState.seeds.size, edited: [...seedState.edited].sort(), editKeep: st.editKeep, readKeep: st.readKeep,
     editTimer: Object.fromEntries(seedState.editTimer),
     counter: Object.fromEntries(seedState.counter), faded: seedState.faded.length,
     nodes, side, edges: layer.edges,

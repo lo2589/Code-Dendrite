@@ -5,7 +5,8 @@
 //   edit ：没有行号，带上改后 / 改前文本里第一行 ≥12 字符的内容作为定位键
 //   grep、glob、bash 等：不是证据
 // 轮次：只有发生了 read/edit/write 的 turn 才算一轮（没有就是状态没变）。
-// 计数器（#032）：查看过的节点初始 3，再看 +1，过一轮 -1，到 0 不显示。
+// 计数器（#032）：查看过的节点初始 readKeep（界面上可设，默认 3），再看 +1，过一轮 -1，到 0 不显示。
+//   用户：「edit和read都可以设置嘛」
 // edit 计时器：每个节点自己的，edit 一次 +editKeep 轮（界面上可设，默认 7），过一轮 -1，到 0 不再算 edit 过。
 //   用户：「edit树，每隔7轮删，还是带个计时器吧」「+7」「算了搞个可以设置的数字吧」「只管节点啊，自己管自己」
 // 两个计数自己管自己：edit 计时到 0 时「看过」计数器还 > 0，照旧是普通 seed。if pin，两个都不减。
@@ -86,11 +87,22 @@ function touchesFromEvents(events) {
 }
 
 const EDIT_KEEP_DEFAULT = 7
+const READ_KEEP_DEFAULT = 3
 
-/** edit 一次加几轮：1–99 的整数，别的一律回到默认 7。 */
-function normalizeEditKeep(value) {
+/** 保留轮数：1–99 的整数，别的一律回到 fallback。 */
+function normalizeKeep(value, fallback) {
   const n = Number(value)
-  return Number.isInteger(n) && n >= 1 && n <= 99 ? n : EDIT_KEEP_DEFAULT
+  return Number.isInteger(n) && n >= 1 && n <= 99 ? n : fallback
+}
+
+/** edit 一次加几轮：不合法回到 7。 */
+function normalizeEditKeep(value) {
+  return normalizeKeep(value, EDIT_KEEP_DEFAULT)
+}
+
+/** 看过的节点第一次留几轮：1–99 的整数，不合法回到 3。 */
+function normalizeReadKeep(value) {
+  return normalizeKeep(value, READ_KEEP_DEFAULT)
 }
 
 /** 过一轮：每个节点自己减自己的，pin 着的不减，到 0 的删掉并记进 faded。 */
@@ -105,11 +117,12 @@ function tick(map, pinned, faded) {
  * 截止到 turn 的 seed。
  * @param events - resolve 之后的证据：[{ turn, verb, anchors }]。
  * @param pins - [{ id, at, until }]：if pin，不减（取消 pin 之后的轮次照常减）。
- * @param options - { editKeep }：edit 一次加几轮（默认 7）。
- * @returns seeds（edit 计时 > 0 ∪ 计数器 > 0）、edited、editTimer、counter、editKeep、rounds、faded。
+ * @param options - { editKeep, readKeep }：edit 一次加几轮（默认 7）；第一次看留几轮（默认 3），再看 +1。
+ * @returns seeds（edit 计时 > 0 ∪ 计数器 > 0）、edited、editTimer、counter、editKeep、readKeep、rounds、faded。
  */
 function seedsAt(events, turn, pins = [], options = {}) {
   const editKeep = normalizeEditKeep(options.editKeep)
+  const readKeep = normalizeReadKeep(options.readKeep)
   const rounds = [...new Set(events.map(e => e.turn))].filter(t => t <= turn).sort((a, b) => a - b)
   const counter = new Map()
   const editTimer = new Map()
@@ -125,14 +138,14 @@ function seedsAt(events, turn, pins = [], options = {}) {
       if (e.turn !== t) continue
       for (const id of e.anchors) {
         if (e.verb === 'edit') editTimer.set(id, (editTimer.get(id) || 0) + editKeep)
-        else counter.set(id, counter.has(id) ? counter.get(id) + 1 : 3)
+        else counter.set(id, counter.has(id) ? counter.get(id) + 1 : readKeep)
         faded.delete(id)
       }
     }
   })
   const edited = new Set(editTimer.keys())
   const seeds = new Set([...edited, ...counter.keys()])
-  return { seeds, edited, editTimer, counter, editKeep, rounds: rounds.length, faded: [...faded].filter(id => !seeds.has(id)) }
+  return { seeds, edited, editTimer, counter, editKeep, readKeep, rounds: rounds.length, faded: [...faded].filter(id => !seeds.has(id)) }
 }
 
-module.exports = { keyLine, touchesFromEvents, seedsAt, normalizeEditKeep, EDIT_KEEP_DEFAULT }
+module.exports = { keyLine, touchesFromEvents, seedsAt, normalizeEditKeep, normalizeReadKeep, EDIT_KEEP_DEFAULT, READ_KEEP_DEFAULT }

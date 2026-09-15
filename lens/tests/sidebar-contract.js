@@ -84,6 +84,9 @@ const overlayStart = bundle.indexOf('function LensOverlay')
 const overlayEnd = bundle.indexOf('module.exports', overlayStart)
 const overlayBody = bundle.slice(overlayStart, overlayEnd)
 assert(bundle.includes('data-cdd-trajectory'))
+// 两个插件的侧栏叠在一起：谁的图开着显示谁，代码窗口在开着的那条里
+assert(bundle.includes("'data-cdd-view': shared.viewMounted > 0 ? 'open' : 'closed'"), 'the rail says whether its own graph view is open')
+assert(bundle.includes('body:has(.cddl-trajectory[data-cdd-view="open"]) .cddl-trajectory[data-cdd-view="closed"]{display:none}'), 'a rail whose view is closed hides under one whose view is open')
 // The rail overlays the margin beside the conversation; it does NOT push the
 // page aside. Reserving room squeezed the graph — the thing the panel exists to
 // show — and on any tab where the rail did not paint, the reserved band was

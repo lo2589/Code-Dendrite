@@ -474,6 +474,8 @@ window.__ModuleLoader__.load({
         className: 'cddl-trajectory' + (collapsed ? ' is-collapsed' : ''),
         style: { width: width + 'px' },
         'data-cdd-trajectory': 'persistent',
+        // 两个插件都挂这条侧栏、叠在同一个位置：谁的图开着显示谁（代码窗口在它里面），另一条藏起来，见 styles/graph.js。
+        'data-cdd-view': shared.viewMounted > 0 ? 'open' : 'closed',
       }, [
         h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
         // The source lives here, not over the graph. This edge is one place

@@ -134,7 +134,7 @@ check('搜索 pin 连上的旁边 seed 进树', pinX.nodes.includes(A('h')) && p
 
 // 5b edit 计时器：每个节点自己管自己，edit 一次 +editKeep 轮（默认 7，可设），过一轮 -1，到 0 不再算 edit；pin 不减
 {
-  const { seedsAt, normalizeEditKeep } = require(path.join(__dirname, '..', 'src', 'compute', 'evidence.js'))
+  const { seedsAt, normalizeEditKeep, normalizeReadKeep } = require(path.join(__dirname, '..', 'src', 'compute', 'evidence.js'))
   const rounds = (n, extra) => Array.from({ length: n }, (_, i) => ({ turn: i + 1, verb: 'read', anchors: ['z.py::tick'] })).concat(extra)
   const ev = rounds(12, [{ turn: 1, verb: 'edit', anchors: ['e.py::a'] }])
   check('edit 默认留 7 轮：T7 剩 1、T8 不再算 edit', seedsAt(ev, 7).editTimer.get('e.py::a') === 1 && !seedsAt(ev, 8).edited.has('e.py::a'))
@@ -145,8 +145,16 @@ check('搜索 pin 连上的旁边 seed 进树', pinX.nodes.includes(A('h')) && p
   const both = rounds(12, [{ turn: 1, verb: 'edit', anchors: ['e.py::a'] }, { turn: 6, verb: 'read', anchors: ['e.py::a'] }])
   check('两个计数自己管自己：edit 到 0 时看过的还在 → 仍是 seed', !seedsAt(both, 8).edited.has('e.py::a') && seedsAt(both, 8).seeds.has('e.py::a'))
   check('设置不合法回到 7', normalizeEditKeep(0) === 7 && normalizeEditKeep(100) === 7 && normalizeEditKeep('x') === 7 && normalizeEditKeep(3) === 3)
-  const withKeep = screen({ turn: 5, tree: 'edit', editKeep: 2 })
-  check('屏幕带 editKeep 和每个节点的 edit 计时', withKeep.editKeep === 2 && withKeep.editTimer !== null && typeof withKeep.editTimer === 'object')
+  // read 也能设（用户：「edit和read都可以设置嘛」）：第一次看留 readKeep 轮，再看还是 +1
+  const reads = rounds(12, [{ turn: 1, verb: 'read', anchors: ['r.py::b'] }])
+  check('read 默认第一次留 3 轮：T3 还在、T4 不在', seedsAt(reads, 3).seeds.has('r.py::b') && !seedsAt(reads, 4).seeds.has('r.py::b'))
+  check('read 可以设：readKeep=5 → T5 还在、T6 不在', seedsAt(reads, 5, [], { readKeep: 5 }).seeds.has('r.py::b') && !seedsAt(reads, 6, [], { readKeep: 5 }).seeds.has('r.py::b'))
+  const reread = rounds(12, [{ turn: 1, verb: 'read', anchors: ['r.py::b'] }, { turn: 2, verb: 'read', anchors: ['r.py::b'] }])
+  check('再看一次还是 +1，不是 +readKeep（readKeep=5：T2 = 5 − 1 + 1 = 5）', seedsAt(reread, 2, [], { readKeep: 5 }).counter.get('r.py::b') === 5)
+  check('read 设置不合法回到 3', normalizeReadKeep(0) === 3 && normalizeReadKeep(100) === 3 && normalizeReadKeep('x') === 3 && normalizeReadKeep(9) === 9)
+  check('两个设置互不影响：readKeep=20 不改 edit 计时', seedsAt(ev, 7, [], { readKeep: 20 }).editTimer.get('e.py::a') === 1 && seedsAt(reads, 3, [], { editKeep: 20 }).counter.get('r.py::b') === 1)
+  const withKeep = screen({ turn: 5, tree: 'edit', editKeep: 2, readKeep: 4 })
+  check('屏幕带 editKeep、readKeep 和每个节点的 edit 计时', withKeep.editKeep === 2 && withKeep.readKeep === 4 && withKeep.editTimer !== null && typeof withKeep.editTimer === 'object')
 }
 
 // 6 展开
