@@ -5,6 +5,9 @@ __pycache__/
 .cache/
 .screenshot/
 backup/
+.playwright-cli/
+output/playwright/
+lens/output/playwright/
 
 # ── 文档不进仓 ────────────────────────────────────────────────
 # 唯一进仓的文档是根 README；夹具不是文档，缺了 test_issue_evidence_packet 会挂。
@@ -26,7 +29,7 @@ backup/
 # ── 本机文件 ──────────────────────────────────────────────────
 CLAUDE.md
 .DS_Store
-
+*.
 # 测试用的临时项目（test_integration.py 会就地造一个）
 backend/
 doc/*
