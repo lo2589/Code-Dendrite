@@ -42,9 +42,16 @@ def _anchors():
     }
 
 
+METHOD_DECORATOR_ISSUE = """`method_decorator` should preserve the wrapped function's attributes.
+
+Calling method_decorator(login_required) on a class method currently loses
+`__name__` and custom attributes. The implementation is in
+django/utils/decorators.py and should keep the wrapper metadata intact.
+"""
+
+
 def test_full_issue_path_disambiguates_duplicate_symbol():
-    issue = (Path(__file__).parent / "fixtures" / "issue_evidence_method_decorator.md").read_text()
-    packet = generate_issue_evidence_packet(issue, anchors=_anchors())
+    packet = generate_issue_evidence_packet(METHOD_DECORATOR_ISSUE, anchors=_anchors())
 
     assert packet["version"] == VERSION
     assert packet["navigation"]["status"] == "resolved"
