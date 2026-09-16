@@ -6,7 +6,7 @@ Usage (add to .mcp.json):
   {
     "codedendrite": {
       "command": "python",
-      "args": ["/path/to/CodeDendrite/mcp_server.py", "--root", "."]
+      "args": ["/path/to/CodeDendrite/mcp/server.py", "--root", "."]
     }
   }
 """
@@ -18,10 +18,10 @@ import json
 import os
 import sys
 
-# ensure CD is importable
+# 各层包（analyzer / usage ...）的根是 src/，不设 PYTHONPATH 也要能导入
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PARENT = os.path.dirname(_HERE)
-for _p in (_HERE, _PARENT):
+for _p in (_HERE, _PARENT, os.path.join(_PARENT, "src")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
