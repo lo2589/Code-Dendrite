@@ -9,6 +9,15 @@ backup/
 output/playwright/
 lens/output/playwright/
 
+# ── 图片默认不进仓：截图/审计图属于临时产物（去 .cache/ 或 .screenshot/）──
+# 例外：展示图和 README/代码实际引用的图，放 assets/ 才进仓。
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+!/assets/**
+
 # ── 文档不进仓 ────────────────────────────────────────────────
 # 唯一进仓的文档是根 README；夹具不是文档，缺了 test_issue_evidence_packet 会挂。
 # 注意：pattern 后面不能跟行尾注释，会连注释一起当 pattern。

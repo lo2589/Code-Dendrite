@@ -10,7 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 
-# 装完就能直接 `cdd xxx`：实体是 src/usage/cli/cdd，入口是 usage.cli.main。
+# 核心只用标准库；MCP 服务器和测试各自按需装。
+[project.optional-dependencies]
+mcp = ["mcp"]
+test = ["pytest"]
+
+# 装完就能直接 `cdd xxx`：实体是 src/usage/cli/cdd，入口是 usage.cli.human:main。
 [project.scripts]
 cdd = "usage.cli.human:main"
 
