@@ -114,7 +114,14 @@ def extract_dispatches_from_file(file_path: str, root: str = ".") -> List[Dict]:
 
 def find_string_dispatches(root: str, only_files: Optional[List[str]] = None) -> List[Dict]:
     """
-    扫描项目根目录下所有 Python 文件，提取 dispatch 边。
+    扫描项目根目录下的 source 文件，提取 dispatch 边。
+
+    支持的文件类型：
+    - .py：Python AST 提取（if/elif 字符串比较，原行为）
+    - .js/.jsx/.ts/.tsx：switch/case、对象字面量 dispatch
+    - .go：switch/case、http.HandleFunc 路由
+    - .java：switch/case、@RequestMapping 注解路由
+    - .kt/.kts：when 表达式
 
     Args:
         root: 项目根目录
@@ -133,14 +140,26 @@ def find_string_dispatches(root: str, only_files: Optional[List[str]] = None) ->
     root_path = Path(root)
     edges = []
 
+    # 后缀白名单：避免被无关文件拖累
+    _SUPPORTED_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx",
+                       ".go", ".java", ".kt", ".kts"}
+
     if only_files is not None:
         wanted = {str(item).replace("\\", "/").lstrip("./") for item in only_files}
         for rel in sorted(wanted):
             fp = root_path / rel
-            if fp.suffix != ".py" or not fp.exists() or not ignore.should_scan(fp):
+            if fp.suffix.lower() not in _SUPPORTED_EXTS \
+                    or not fp.exists() or not ignore.should_scan(fp):
                 continue
             try:
-                edges.extend(extract_dispatches_from_file(str(fp), root))
+                if fp.suffix == ".py":
+                    edges.extend(extract_dispatches_from_file(str(fp), root))
+                else:
+                    # 多语言 dispatch 提取：best-effort，错误返回 []
+                    from scanner.calls.string_dispatch.dispatches_per_language import (
+                        extract_dispatches_for_path,
+                    )
+                    edges.extend(extract_dispatches_for_path(str(fp), root))
             except Exception as ex:
                 print(f"[string_dispatch] 跳过文件 {fp}: {ex}")
         return edges
@@ -150,13 +169,20 @@ def find_string_dispatches(root: str, only_files: Optional[List[str]] = None) ->
         dirnames[:] = [d for d in dirnames if ignore.should_scan(dp / d / "_x.py")]
 
         for fname in filenames:
-            if not fname.endswith('.py'):
-                continue
             fp = dp / fname
+            if fp.suffix.lower() not in _SUPPORTED_EXTS:
+                continue
             if not ignore.should_scan(fp):
                 continue
             try:
-                edges.extend(extract_dispatches_from_file(str(fp), root))
+                if fp.suffix == ".py":
+                    edges.extend(extract_dispatches_from_file(str(fp), root))
+                else:
+                    # 多语言 dispatch 提取：best-effort，错误返回 []
+                    from scanner.calls.string_dispatch.dispatches_per_language import (
+                        extract_dispatches_for_path,
+                    )
+                    edges.extend(extract_dispatches_for_path(str(fp), root))
             except Exception as ex:
                 print(f"[string_dispatch] 跳过文件 {fp}: {ex}")
     return edges
