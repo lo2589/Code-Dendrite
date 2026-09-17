@@ -68,6 +68,7 @@ def get_downward_chain(
     max_depth: int = 6,
     active_registry_keys: Optional[set[str]] = None,
     yaml_profile: Optional[dict] = None,
+    include_candidates: bool = False,
 ) -> List[dict]:
     """
     从 symbol 出发，沿 callees 方向往下追，返回整条下行调用树。
@@ -76,6 +77,14 @@ def get_downward_chain(
     同一节点可以出现在不同父节点之下；只在当前路径内防环。这样菱形
     调用图不会因为全局去重而丢掉 ``A -> B`` 这类真实父子关系。
 
+    Args:
+        include_candidates: 是否把**未解析的属性调用**（``receiver.method()``）
+            作为候选节点一并返回。这些调用没有 canonical id，按设计不进
+            调用图（见 analyzer/anchors/resolve.py 的说明：接收者类型在
+            Python AST 上通常无法证明），所以它们默认不出现。打开后，只在
+            该叶子名在整个索引里**唯一**时才给出，并标
+            ``resolution="candidate"``，与真实边区分。默认 False，行为不变。
+
     Returns:
         [
           {"symbol": "main",         "file": "main.py", "line": 10, "depth": 0},
@@ -83,6 +92,7 @@ def get_downward_chain(
           ...
         ]
         depth=0 是入口本身，depth 越大越往下。
+        候选节点额外带 ``resolution="candidate"`` / ``candidate_reason`` / ``call_line``。
     """
     from analyzer.anchors import get_anchor, load_anchors
     from api.relations import flatten_virtual
@@ -91,6 +101,17 @@ def get_downward_chain(
         all_anchors = load_anchors(root)
     except Exception:
         all_anchors = {}
+
+    # 叶子名 → 唯一 anchor。只用于未解析属性调用的候选提示：名字在索引里
+    # 唯一才有提示价值，同名多解一律不给（那种"提示"只会把人带偏）。
+    unique_by_leaf: dict[str, object] = {}
+    if include_candidates:
+        grouped: dict[str, list] = {}
+        for candidate_anchor in all_anchors.values():
+            if candidate_anchor.is_virtual:
+                continue
+            grouped.setdefault(candidate_anchor.symbol.rsplit(".", 1)[-1], []).append(candidate_anchor)
+        unique_by_leaf = {name: found[0] for name, found in grouped.items() if len(found) == 1}
 
     registered_by_key: dict[str, list] = {}
     for registered_anchor in all_anchors.values():
@@ -281,6 +302,26 @@ def get_downward_chain(
                 "registry_key": dependency_key,
                 "registry_template": "yaml_dependency",
             })
+        if include_candidates:
+            for site in sites:
+                if not isinstance(site, dict) or site.get("call_kind") != "attribute":
+                    continue
+                if site.get("resolution") == "exact":
+                    continue
+                leaf = str(site.get("target") or "").rsplit(".", 1)[-1].strip()
+                hinted = unique_by_leaf.get(leaf)
+                if hinted is None or hinted.id in seen or hinted.id == anchor.id:
+                    continue
+                seen.add(hinted.id)
+                result.append({
+                    "id": hinted.id,
+                    "symbol": hinted.symbol,
+                    "file": hinted.file,
+                    "line": hinted.line_start,
+                    "resolution": "candidate",
+                    "candidate_reason": "unresolved-attribute-call",
+                    "call_line": site.get("line"),
+                })
         return result
 
     entry_anchor = get_anchor(symbol, root)
@@ -300,6 +341,10 @@ def get_downward_chain(
         node_id = node["id"]
         chain.append({**node, "depth": depth, "parent_id": parent_id})
         if depth >= max_depth:
+            return
+        # 候选节点是"值得看一眼"的提示，不是被证明的边：不沿着它继续展开。
+        # 否则一个类名候选（如 Flask）会把整个框架子树拖进链里。
+        if node.get("resolution") == "candidate":
             return
         next_path = path + (node_id,)
         for child in callees_of(node):

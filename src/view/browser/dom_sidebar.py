@@ -434,6 +434,13 @@ class CompoundGraph {
         this.drag=this.snByNid[g.dataset.nid]; // methods map to parent class simNode
       });
     }
+    // 点连线 = 跳到子节点（连线的 t 端），与直接点该节点同义。
+    this.eg.addEventListener('click',e=>{
+      const p=e.target.closest('[data-to]'); if(!p) return; e.stopPropagation();
+      const to=p.dataset.to;
+      if(!to||!this.snByNid[to]) return;   // 图上没有这个节点就不动
+      this.sel=to; this._render(); if(this.onSel) this.onSel(this.sel);
+    });
   }
 
   _applyT(){this.zg.setAttribute('transform',`translate(${this.cx+this.tx},${this.cy+this.ty}) scale(${this.sc})`);}
@@ -596,7 +603,11 @@ class CompoundGraph {
       const dash=e.ext?'stroke-dasharray="5 3"':'';
       const mk=e.ext?'are':'ar';
       const op=hl?1:0.55;
-      eh+=`<path d="M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${sw}" ${dash} marker-end="url(#${mk})" opacity="${op}"/>`;
+      // 连线可点：带着两端 id 落进 SVG，点击即跳到子节点（连线的 t 端）。
+      // 细线只有 1.2px，命中区靠一条透明加粗的同路径兜住。
+      const pathD=`M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+      eh+=`<path data-from="${escA(e.s)}" data-to="${escA(e.t)}" d="${pathD}" fill="none" stroke="transparent" stroke-width="10" style="cursor:pointer"><title>${escX(shortN(e.s))} → ${escX(shortN(e.t))}</title></path>`;
+      eh+=`<path d="${pathD}" fill="none" stroke="${col}" stroke-width="${sw}" ${dash} marker-end="url(#${mk})" opacity="${op}" pointer-events="none"/>`;
     }
     this.eg.innerHTML=eh;
 
