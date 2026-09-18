@@ -4,8 +4,8 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_57_READ_KEEP_RAIL_001
-// parts: 45
+// build: V1_58_POSITION_HASH_WINDOW_001
+// parts: 46
 
 ;(function () {
 var __cddHost = window.__ModuleLoader__
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_57_READ_KEEP_RAIL_001'
+    var BUILD = 'V1_58_POSITION_HASH_WINDOW_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -753,6 +753,132 @@ __cddLocal.load({
   },
 })
 
+// dsh-cdd-lens — 位置：一次查看的坐标，以及它和现在这份代码的关系。
+//
+// 轨迹栏按「位置」记，不按 anchor 记：谁在第几轮第几步碰到了哪个 anchor。同一个
+// anchor 被看两次就是两条位置 —— 它们各有各的时刻，各记各的 hash。
+//
+//   位置 id = <session>|<turn>|<step>|<anchorId>
+//
+// 分隔符用 `|`：session 是 UUID（十六进制 + `-`），turn / step 是整数，这三段里
+// 不可能出现 `|`。anchorId 放最后一段，它自带 `/`、`:`、`.` 都不参与切分 —— 解析
+// 时只切前三个 `|`，剩下整段就是 anchorId。
+//
+// 每个位置存一个 hash：抓的那一刻这个 anchor 的代码哈希，之后永不改写。任何时候
+// 拿它跟现在的对，就知道这个位置过期没有。抓的时候就没抓住的（行对不上、隔了太
+// 久才补算）hash 是空串，判不了 —— 空串不是"没过期"，是"不知道"。
+//
+// ## 读窗口
+//
+// harness 的 read 结果 `meta.lines` 是 `ReadFileLine[]`（`{ number, text }`），
+// **不是行数**（packages/core/tools/src/presentation.ts::ReadResultView）。以前两处
+// 用 `Number.isInteger(meta.lines)` 判断，数组恒为 false，于是窗口整个算错：一类
+// 退化成"只有第一行"，一类退化成"整个文件"。readWindow 是那两处唯一的算法。
+__cddLocal.load({
+  id: 'dsh-cdd-lens/session/position',
+  factory: (require) => {
+    var module = { exports: {} }
+
+    var SEP = '|'
+
+    /** `<session>|<turn>|<step>|<anchorId>`。anchorId 放最后，它自带的 `|` 不影响解析。 */
+    function positionId(session, turn, step, anchorId) {
+      return [
+        session === undefined || session === null ? '' : String(session),
+        String(turn),
+        String(step),
+        String(anchorId),
+      ].join(SEP)
+    }
+
+    function parsePositionId(pid) {
+      var parts = String(pid).split(SEP)
+      if (parts.length < 4) return null
+      return {
+        session: parts[0],
+        turn: Number(parts[1]),
+        step: Number(parts[2]),
+        anchorId: parts.slice(3).join(SEP),
+      }
+    }
+
+    /** 读回来的那几行原文。不是数组就是没有（老记录、非 read、非 meta 事件）。 */
+    function windowLines(meta) {
+      var lines = meta === null || meta === undefined ? undefined : meta.lines
+      return Array.isArray(lines) ? lines : null
+    }
+
+    /**
+     * 一次 read 的 `[from, to]`。
+     *
+     * 正常一定走 `meta.lines` 这条：取最后一行的 `number` 当终点。没有数组时才退回
+     * `limit` / 整文件 —— `-1` 是"读到文件尾"在线上各处的写法。
+     */
+    function readWindow(meta, args) {
+      var m = meta || {}
+      var a = args || {}
+      var from = Number.isInteger(m.offset) ? m.offset : (Number.isInteger(a.offset) ? a.offset : 1)
+      var lines = windowLines(m)
+      if (lines !== null && lines.length > 0) {
+        var last = lines[lines.length - 1]
+        var to = Number.isInteger(last.number) ? last.number : from + lines.length - 1
+        return { from: from, to: to }
+      }
+      if (Number.isInteger(m.lines)) return { from: from, to: from + m.lines - 1 }
+      if (Number.isInteger(a.limit)) return { from: from, to: from + a.limit - 1 }
+      return { from: from, to: -1 }
+    }
+
+    /**
+     * 位置过期没有。
+     *
+     * `unknown` 不是"没过期"，是判不了：抓的时候 hash 就没抓住。
+     */
+    function staleOf(stored, current) {
+      if (typeof stored !== 'string' || stored === '') return 'unknown'
+      if (typeof current !== 'string' || current === '') return 'unknown'
+      return stored === current ? 'ok' : 'stale'
+    }
+
+    function intOrNull(value) {
+      return Number.isInteger(value) ? value : null
+    }
+
+    /**
+     * 这次查看读到了这个 anchor 的多少。
+     *
+     * 读窗口和 anchor 是两个区间，读到的部分就是**它们的交集**：`[max(start,from),
+     * min(end,to)]`。实测 535 次 read 里只有 28% 是整文件读，其余首尾至少有一端切
+     * 在函数中间，所以"完整落在窗口里"是少数。
+     *
+     * 不完整**不是**"没碰到" —— 它照样是一条位置，照样记。这里只是把"只扫到尾巴
+     * 11 行"和"整只读过"分开，好让界面上不是同一件事。
+     *
+     * @returns null 表示算不出来（anchor 没有行号，或窗口本身没有行号）。
+     */
+    function coverageOf(anchor, from, to) {
+      var a = anchor || {}
+      var start = intOrNull(a.start !== undefined ? a.start : a.line_start)
+      var end = intOrNull(a.end !== undefined ? a.end : a.line_end)
+      var lo = intOrNull(from)
+      // `-1` 是"读到文件尾"在线上各处的写法。
+      var hi = to === -1 ? Infinity : intOrNull(to)
+      if (start === null || end === null || lo === null || hi === null) return null
+      var readFrom = Math.max(start, lo)
+      var readTo = Math.min(end, hi)
+      if (readTo < readFrom) return null
+      return {
+        readFrom: readFrom, readTo: readTo,
+        span: readTo - readFrom + 1, total: end - start + 1,
+        complete: start >= lo && end <= hi,
+      }
+    }
+
+    module.exports = { SEP, positionId, parsePositionId, readWindow, windowLines, staleOf, coverageOf }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — Folding a session transcript into anchor touches.
 //
 // One module of the browser half. The parts are concatenated in dependency
@@ -762,6 +888,9 @@ __cddLocal.load({
   id: 'dsh-cdd-lens/session/trajectory',
   factory: (require) => {
     var module = { exports: {} }
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var readWindow = __session_position.readWindow
+    var windowLines = __session_position.windowLines
 
     // ---- folding the session, off the Trajectory target --------------------
     //
@@ -816,16 +945,13 @@ __cddLocal.load({
       if (verb === 'read') {
         var file = (meta && meta.path) || args.file_path
         if (typeof file !== 'string') return out
-        var from = (meta && Number.isInteger(meta.offset)) ? meta.offset
-          : (Number.isInteger(args.offset) ? args.offset : 1)
-        var span = (meta && Number.isInteger(meta.lines)) ? meta.lines
-          : (Number.isInteger(args.limit) ? args.limit : null)
-        // No limit means the agent opened the whole file, which is most reads.
-        // -1 says so on the wire; resolving such a read to whatever anchor
-        // contains line 1 finds nothing (line 1 is imports) and was why a
-        // session that read eight files drew an empty graph.
+        var window = readWindow(meta, args)
+        // The window's own text rides along: it is the only copy of the code as
+        // it stood at this step, and the trajectory row shows that copy rather
+        // than today's file.
         out.push({
-          path: file, from: from, to: span === null ? -1 : from + span - 1,
+          path: file, from: window.from, to: window.to,
+          lines: windowLines(meta),
           text: null, verb: verb, tool: name, running: running, approx: false,
         })
         return out
@@ -922,7 +1048,10 @@ __cddLocal.load({
         if (touches.length === 0) return
         var turn = turnOf(seq)
         if (turn > maxTurn) maxTurn = turn
-        calls.push({ key: block.callId, seq: seq, turn: turn, touches: touches, running: running })
+        // `time` 是这一步落地的时刻（epoch ms）。位置记 hash 时要拿它判断这一步是
+        // 不是 lens 正在看的时候发生的：回放一份旧会话，那些 step 早于我们开始看，
+        // 那时候的代码我们没见过，hash 也就无从抓起。
+        calls.push({ key: block.callId, seq: seq, turn: turn, touches: touches, running: running, time: block.time })
       }
 
       nodes.forEach(function (node) {
@@ -1283,6 +1412,10 @@ __cddLocal.load({
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var positionId = __session_position.positionId
+    var windowLines = __session_position.windowLines
+    var coverageOf = __session_position.coverageOf
 
     /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
     function stepsOf(snap) {
@@ -1323,8 +1456,24 @@ __cddLocal.load({
       record.events.push(event)
     }
 
+    /** 这个 anchor 现在记录在索引里的 hash（拿不到就是空串）。 */
+    function currentHash(call, anchor) {
+      var hash = typeof anchor.hash === 'string' ? anchor.hash : ''
+      if (hash === '') return ''
+      // 位置要记的是"抓的那一刻这个 anchor 的代码"。只有这一步发生在 lens 真的在看
+      // 这个会话之后，索引里的那份才等于那一刻的代码。回放旧会话时索引描述的是今天
+      // 的文件，拿今天的 hash 冒充当时的，这个位置就会假装"没过期"—— 那是假话，
+      // 所以这种位置存空串：判不了，不是没过期。
+      var since = shared.watchSince
+      if (!Number.isFinite(since)) return ''
+      var at = call.time
+      // 还在跑的调用没有落地时刻，它就是此刻。
+      if (!Number.isFinite(at)) return hash
+      return at >= since ? hash : ''
+    }
+
     /** 解析结果 → 每个 anchor 一条轨迹记录；落不到 anchor 的文件照实列出，不丢。 */
-    function foldTrace(snap) {
+    function foldTrace(snap, sessionId) {
       var stepOf = stepsOf(snap)
       var byAnchor = {}
       var unresolved = {}
@@ -1334,11 +1483,20 @@ __cddLocal.load({
           if (hit === undefined) return
           var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
           if (hit.anchors.length === 0) { noteUnresolved(unresolved, call, touch, hit, at); return }
+          // 这个 step 抓下来的那几行原文。轨迹栏展开看的就是它，不是今天的文件 ——
+          // 位置记的是"那一刻看到的代码"，现在文件什么样是另一件事（看过期标记）。
+          var lines = windowLines(touch)
           hit.anchors.forEach(function (anchor) {
             noteAnchor(byAnchor, call, anchor, {
               turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
               approx: touch.approx === true || hit.approx === true,
               onSurface: call.remembered !== false, working: call.running === true,
+              // 位置 id：这次查看的坐标。同一 anchor 被看多次 → 多条位置，各有各的 hash。
+              pid: positionId(sessionId, call.turn, at.step, anchor.id),
+              // 抓的那一刻这个 anchor 的 hash，之后永不改写。空串 = 没抓住。
+              hash: currentHash(call, anchor),
+              lines: lines,
+              coverage: coverageOf(anchor, touch.from, touch.to),
             })
           })
         })
@@ -1414,7 +1572,7 @@ __cddLocal.load({
           })
 
           var after = function () {
-            var folded = foldTrace(snap)
+            var folded = foldTrace(snap, session())
             shared.trace = folded.byAnchor
             shared.unresolved = folded.unresolved
             shared.order = rankOf(snap)
@@ -2123,6 +2281,9 @@ __cddLocal.load({
           shared.outline = undefined
           shared.fileCache = {}
           shared.sourceCache = {}
+          // 从这个时刻起我们真的在看这个会话：只有在此之后落地的 step，它的 hash 才
+          // 是"抓的时候"那个。再早的都是回放，那时候的代码我们没看见（见 ingest）。
+          shared.watchSince = Date.now()
           publish()
           if (id === undefined || id === null) return
           // A diagnostic handle, deliberately kept: when the graph is empty the
@@ -2186,6 +2347,8 @@ __cddLocal.load({
     var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var staleOf = __session_position.staleOf
 
     // ---- presentation helpers ---------------------------------------------
 
@@ -2259,7 +2422,46 @@ __cddLocal.load({
       return parts.length <= 2 ? file : '…/' + parts.slice(-2).join('/')
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short }
+    // ---- 位置：这一刻的 anchor 和现在的关系 ----------------------------------
+
+    /**
+     * 这个 anchor **现在**的 hash。
+     *
+     * 图上节点的记录就是当前索引里的记录（`/screen` 发的），anchor 缓存同理 ——
+     * 两边描述的都是"现在的代码"。都没有就返回空串：那一位判不了过期。
+     */
+    function currentHashOf(id) {
+      var nodes = shared.graph === undefined || shared.graph === null ? undefined : shared.graph.nodes
+      var node = nodes === undefined || nodes === null ? undefined : nodes[id]
+      if (node !== undefined && node !== null && typeof node.hash === 'string') return node.hash
+      var cached = (shared.anchorCache || {})[id]
+      if (cached !== undefined && cached !== null && typeof cached.hash === 'string') return cached.hash
+      return ''
+    }
+
+    /**
+     * 这个位置过期没有：存下来的 hash 和现在的对不上，就是这份代码在那之后改过。
+     *
+     * @param row - 一条位置（轨迹栏的行，或 anchor 记录里的一条经历）。
+     * @param id - 它属于哪个 anchor。轨迹栏的行自己带 `id`；「经历」面板的一条经历不带
+     *   （它挂在 anchor 记录下面），所以调用方要把 anchor id 传进来。
+     *
+     * 空 hash 是**判不了**，不是没过期 —— 抓的时候就没抓住（回放旧会话、anchor 本来
+     * 就没有 hash），这种情况不打过期标记，因为打了就是编。
+     */
+    function expiredOf(row, id) {
+      if (row === undefined || row === null) return false
+      var anchorId = id === undefined ? row.id : id
+      return staleOf(row.hash, currentHashOf(anchorId)) === 'stale'
+    }
+
+    /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
+    function partialOf(row) {
+      var cover = row === undefined || row === null ? undefined : row.coverage
+      return cover !== undefined && cover !== null && cover.complete === false
+    }
+
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, partialOf }
     return module.exports
   },
 })
@@ -2640,6 +2842,8 @@ __cddLocal.load({
     var dotClass = __view_record.dotClass
     var short = __view_record.short
     var stateOf = __view_record.stateOf
+    var expiredOf = __view_record.expiredOf
+    var partialOf = __view_record.partialOf
 
     // ---- source ------------------------------------------------------------
 
@@ -2706,13 +2910,23 @@ __cddLocal.load({
       return h('div', { className: 'cddl-hist' }, [
         h('h4', { key: 'h' }, '这个 anchor 的经历'),
       ].concat(record.events.map(function (event, i) {
-        return h('div', { key: i, className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') }, [
+        // 每一条经历就是一个位置：那一刻存的 hash 和现在的对不上，就是过期。
+        var expired = expiredOf(event, shared.selected)
+        var partial = partialOf(event)
+        return h('div', {
+          key: i,
+          className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') + (expired ? ' cddl-expired' : ''),
+          'data-cdd-position-id': event.pid || '',
+          'data-cdd-position-stale': expired ? 'stale' : 'ok',
+        }, [
           h('span', { key: 't', className: 'cddl-t' }, 'T' + event.turn),
           h('span', { key: 'd', className: dotClass({ state: event.working ? 'working' : event.verb === 'edit' ? 'edited' : 'viewed' }) }),
           h('span', { key: 'x' }, event.tool
             + (event.working ? ' · 正在执行' : '')
             + (event.approx ? ' · 行号近似' : '')
             + (event.onSurface ? '' : ' · 已被压缩')),
+          expired ? h('span', { key: 's', className: 'cddl-hist-tag' }, '过期') : null,
+          partial ? h('span', { key: 'p', className: 'cddl-hist-tag cddl-hist-part' }, '部分') : null,
           event.agent ? h('span', { key: 'a', className: 'cddl-agent' }, event.agent) : null,
           event.reason ? h('span', { key: 'r', className: 'cddl-reason' }, event.reason) : null,
         ])
@@ -3338,8 +3552,12 @@ __cddLocal.load({
       '.cddl-trace-step-rows{display:flex;flex-direction:column;gap:4px;min-width:0}',
       '.cddl-trace-anchor{border:1px solid var(--dsw-alias-border-l2);border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-1)}',
       '.cddl-trace-anchor.is-open{border-color:var(--dsw-alias-border-l4)}',
-      '.cddl-trace-anchor-main{width:100%;min-height:31px;display:grid;grid-template-columns:12px 8px minmax(0,1fr) auto;align-items:center;gap:6px;padding:5px 7px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left}',
+      '.cddl-trace-expired{border-color:var(--dsw-alias-state-warn-primary)}',
+      '.cddl-trace-anchor-main{width:100%;min-height:31px;display:grid;grid-template-columns:12px 8px minmax(0,1fr) auto auto auto;align-items:center;gap:6px;padding:5px 7px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left}',
       '.cddl-trace-anchor-main:hover{background:var(--dsw-alias-interactive-bg-hover)}',
+      '.cddl-trace-expired-tag,.cddl-trace-partial-tag{font-size:8px;line-height:1;padding:2px 4px;border-radius:3px;white-space:nowrap}',
+      '.cddl-trace-expired-tag{color:var(--dsw-alias-state-warn-primary);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
+      '.cddl-trace-partial-tag{color:var(--dsw-alias-label-dimmed);border:1px solid var(--dsw-alias-border-l3)}',
       '.cddl-trace-chevron{font-size:10px;color:var(--dsw-alias-label-caption)}',
       '.cddl-trace-dot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}',
       '.cddl-trace-edited .cddl-trace-dot{background:var(--dsw-alias-state-warn-primary)}',
@@ -5794,6 +6012,9 @@ __cddLocal.load({
     var makeEngine = __engine_engine.makeEngine
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
     var openDockBesideChat = __shell_chatSeat.openDockBesideChat
+    var __view_record = require('dsh-cdd-lens/view/record')
+    var expiredOf = __view_record.expiredOf
+    var partialOf = __view_record.partialOf
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
     var EXPANDED_KEY = 'cdd-lens.trajectory-expanded.v1'
@@ -5818,6 +6039,8 @@ __cddLocal.load({
             key: key, id: id, turn: event.turn, step: step,
             verb: event.verb, tool: event.tool, working: event.working === true,
             agent: event.agent, reason: event.reason,
+            // 位置：这一刻的坐标、这一刻的 hash、这一刻抓到的源码。
+            pid: event.pid, hash: event.hash, lines: event.lines, coverage: event.coverage,
           }
           rows[key] = rows[key] === undefined ? row : stronger(rows[key], row)
         })
@@ -6035,6 +6258,41 @@ __cddLocal.load({
       return Math.max(0, Number(source.end) - Number(source.start) + 1)
     }
 
+    /** 这一步抓下来的那几行（ReadFileLine[]）。没有就不是 read，交给现抓那条路。 */
+    function capturedLines(row) {
+      return Array.isArray(row.lines) && row.lines.length > 0 ? row.lines : null
+    }
+
+    /**
+     * 位置展开看的源码：**那一步抓下来的那份**。
+     *
+     * 位置记的是"当时看到的代码"，所以这里优先画 step 带回来的原文；只有拿不到
+     * 原文时（edit、老记录）才退回现抓的当前源码，并说明那是现在的文件。
+     */
+    function StepSnippet(props) {
+      var row = props.row
+      var lines = capturedLines(row)
+      if (lines === null) return h(SourceSnippet, { id: row.id, current: true })
+      var first = Number.isInteger(lines[0].number) ? lines[0].number : 1
+      var last = Number.isInteger(lines[lines.length - 1].number) ? lines[lines.length - 1].number : first + lines.length - 1
+      return h('div', { className: 'cddl-trace-source', 'data-cdd-step-source': row.pid || row.key }, [
+        h('div', { key: 'when', className: 'cddl-trace-path' },
+          '第 ' + row.turn + ' 轮第 ' + row.step + ' 步抓到的 · ' + first + '–' + last + ' · ' + lines.length + ' 行'),
+        h('pre', {
+          key: 'code',
+          'data-cdd-source-start': first,
+          'data-cdd-source-end': last,
+          'data-cdd-source-lines': lines.length,
+        }, lines.map(function (line, i) {
+          var n = Number.isInteger(line.number) ? line.number : first + i
+          return h('div', { key: n }, [
+            h('span', { key: 'n' }, n),
+            h('code', { key: 'c' }, line.text === '' ? ' ' : line.text),
+          ])
+        })),
+      ])
+    }
+
     function SourceSnippet(props) {
       var source = (shared.sourceCache || {})[props.id]
       if (source === undefined) return h('div', { className: 'cddl-trace-loading' }, '读取源码…')
@@ -6047,7 +6305,8 @@ __cddLocal.load({
       var count = sourceLineCount(source)
       return h('div', { className: 'cddl-trace-source' }, [
         h('div', { key: 'path', className: 'cddl-trace-path', title: source.file },
-          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'),
+          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'
+          + (props.current === true ? ' · 现在的文件' : '')),
         h('pre', {
           key: 'code',
           'data-cdd-source-id': source.id || props.id,
@@ -6078,9 +6337,15 @@ __cddLocal.load({
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
       var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
+      // 位置过期：这一刻存的 hash 和现在的对不上，说明这份代码在那之后改过。
+      var expired = expiredOf(row)
+      // 只读到一部分（窗口切在函数中间）。不完整不是"没碰到"，仍然是一条位置。
+      var partial = partialOf(row)
       return h('article', {
-        className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : ''),
+        className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : '') + (expired ? ' cddl-trace-expired' : ''),
         'data-cdd-anchor-id': row.id || '',
+        'data-cdd-position-id': row.pid || row.key,
+        'data-cdd-position-stale': expired ? 'stale' : 'ok',
       }, [
         h('button', {
           key: 'main', className: 'cddl-trace-anchor-main',
@@ -6090,6 +6355,8 @@ __cddLocal.load({
           h('span', { key: 'chev', className: 'cddl-trace-chevron' }, props.expanded ? '▾' : '▸'),
           h('span', { key: 'dot', className: 'cddl-trace-dot' }),
           h('span', { key: 'label', className: 'cddl-trace-label', title: row.id || row.file }, label),
+          expired ? h('span', { key: 'expired', className: 'cddl-trace-expired-tag', title: '第 ' + row.turn + ' 轮看的那份代码之后改过了' }, '过期') : null,
+          partial ? h('span', { key: 'partial', className: 'cddl-trace-partial-tag', title: '这次只读到 ' + row.coverage.span + '/' + row.coverage.total + ' 行' }, '部分') : null,
           h('span', { key: 'state', className: 'cddl-trace-state' }, verbOf(row)),
         ]),
         props.expanded ? h('div', { key: 'detail', className: 'cddl-trace-detail' }, [
@@ -6098,7 +6365,7 @@ __cddLocal.load({
               h('span', { key: 'why' }, row.reason || '未匹配到 Anchor'),
               h('button', { key: 'insert', onClick: function () { insertPath(row.file) } }, '插入路径'),
             ])
-            : h(SourceSnippet, { key: 'source', id: row.id }),
+            : h(StepSnippet, { key: 'source', row: row }),
           row.id !== null ? h('button', {
             key: 'locate', className: 'cddl-trace-locate',
             'data-locate-anchor-id': row.id,
@@ -6135,12 +6402,13 @@ __cddLocal.load({
 
       // Expanded rows survive reloads. Their in-memory source cache does not,
       // so restore the data as well as the chevron instead of leaving a
-      // permanent empty "读取源码…" panel after refresh.
+      // permanent empty "读取源码…" panel after refresh. A row that carries its
+      // own captured text needs no fetch: that copy is what it shows.
       useEffect(function () {
         rows.forEach(function (row) {
-          if (row.id !== null && expanded[row.key] === true && (shared.sourceCache || {})[row.id] === undefined) {
-            engine.source(row.id)
-          }
+          if (row.id === null || expanded[row.key] !== true) return
+          if (capturedLines(row) !== null) return
+          if ((shared.sourceCache || {})[row.id] === undefined) engine.source(row.id)
         })
       }, [rows.length, Object.keys(expanded).join('|')])
 
@@ -6218,7 +6486,8 @@ __cddLocal.load({
         if (next[row.key]) delete next[row.key]
         else {
           next[row.key] = true
-          if (row.id !== null) engine.source(row.id)
+          // 有那一步原文的，画的本来就是它，不必再去抓当前文件。
+          if (row.id !== null && capturedLines(row) === null) engine.source(row.id)
         }
         saveExpanded(next)
         setExpanded(next)
@@ -7472,6 +7741,9 @@ __cddLocal.load({
       '.cddl-unres h4{margin:0 0 5px;font-size:10.5px;color:var(--dsw-alias-label-caption);font-weight:500}',
       '.cddl-unrow{display:flex;align-items:center;gap:7px;padding:1px 0;opacity:.75}',
       '.cddl-hrow{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dsw-alias-label-tertiary);padding:1px 0}',
+      '.cddl-hrow.cddl-expired{color:var(--dsw-alias-label-secondary)}',
+      '.cddl-hist-tag{font-size:8px;line-height:1;padding:2px 4px;border-radius:3px;white-space:nowrap;color:var(--dsw-alias-state-warn-primary);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
+      '.cddl-hist-tag.cddl-hist-part{color:var(--dsw-alias-label-dimmed);border-color:var(--dsw-alias-border-l3)}',
       '.cddl-agent{font-family:var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary)}',
       '.cddl-reason{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary)}',
       '.cddl-t{font-family:var(--ds-font-family-code,monospace);font-size:10px;color:var(--dsw-alias-label-caption);width:26px;flex:none}',
