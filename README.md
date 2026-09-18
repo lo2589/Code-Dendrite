@@ -1,6 +1,6 @@
 English | [简体中文](README.zh-CN.md)
 
-# CodeDendrite: AST-based causal code navigation
+# CodeDendrite: causal code navigation from static analysis
 
 **Static analysis instead of vector search.**
 
@@ -14,6 +14,7 @@ Retrieval finds code that *looks alike*. Navigation needs code that is *connecte
 |---|---|
 | Layout | Five layers under `src/`; `mcp/` and `skills/` sit next to `src/` |
 | Requirements | Python ≥ 3.10; the core uses the standard library only |
+| Parsing | Python through the standard-library `ast` module; every other language through lightweight, dependency-free pattern-matching adapters, so their symbols and call edges are heuristic. Depth per language: [language support matrix](#language-support-matrix) |
 | Index | Not committed to git. After cloning, run `cdd rebuild` first; see counts with `cdd count` / `cdd status` |
 
 ---
