@@ -23,6 +23,9 @@ window.__ModuleLoader__.load({
     var makeEngine = __engine_engine.makeEngine
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
     var openDockBesideChat = __shell_chatSeat.openDockBesideChat
+    var __view_record = require('dsh-cdd-lens/view/record')
+    var expiredOf = __view_record.expiredOf
+    var partialOf = __view_record.partialOf
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
     var EXPANDED_KEY = 'cdd-lens.trajectory-expanded.v1'
@@ -47,6 +50,8 @@ window.__ModuleLoader__.load({
             key: key, id: id, turn: event.turn, step: step,
             verb: event.verb, tool: event.tool, working: event.working === true,
             agent: event.agent, reason: event.reason,
+            // 位置：这一刻的坐标、这一刻的 hash、这一刻抓到的源码。
+            pid: event.pid, hash: event.hash, lines: event.lines, coverage: event.coverage,
           }
           rows[key] = rows[key] === undefined ? row : stronger(rows[key], row)
         })
@@ -264,6 +269,41 @@ window.__ModuleLoader__.load({
       return Math.max(0, Number(source.end) - Number(source.start) + 1)
     }
 
+    /** 这一步抓下来的那几行（ReadFileLine[]）。没有就不是 read，交给现抓那条路。 */
+    function capturedLines(row) {
+      return Array.isArray(row.lines) && row.lines.length > 0 ? row.lines : null
+    }
+
+    /**
+     * 位置展开看的源码：**那一步抓下来的那份**。
+     *
+     * 位置记的是"当时看到的代码"，所以这里优先画 step 带回来的原文；只有拿不到
+     * 原文时（edit、老记录）才退回现抓的当前源码，并说明那是现在的文件。
+     */
+    function StepSnippet(props) {
+      var row = props.row
+      var lines = capturedLines(row)
+      if (lines === null) return h(SourceSnippet, { id: row.id, current: true })
+      var first = Number.isInteger(lines[0].number) ? lines[0].number : 1
+      var last = Number.isInteger(lines[lines.length - 1].number) ? lines[lines.length - 1].number : first + lines.length - 1
+      return h('div', { className: 'cddl-trace-source', 'data-cdd-step-source': row.pid || row.key }, [
+        h('div', { key: 'when', className: 'cddl-trace-path' },
+          '第 ' + row.turn + ' 轮第 ' + row.step + ' 步抓到的 · ' + first + '–' + last + ' · ' + lines.length + ' 行'),
+        h('pre', {
+          key: 'code',
+          'data-cdd-source-start': first,
+          'data-cdd-source-end': last,
+          'data-cdd-source-lines': lines.length,
+        }, lines.map(function (line, i) {
+          var n = Number.isInteger(line.number) ? line.number : first + i
+          return h('div', { key: n }, [
+            h('span', { key: 'n' }, n),
+            h('code', { key: 'c' }, line.text === '' ? ' ' : line.text),
+          ])
+        })),
+      ])
+    }
+
     function SourceSnippet(props) {
       var source = (shared.sourceCache || {})[props.id]
       if (source === undefined) return h('div', { className: 'cddl-trace-loading' }, '读取源码…')
@@ -276,7 +316,8 @@ window.__ModuleLoader__.load({
       var count = sourceLineCount(source)
       return h('div', { className: 'cddl-trace-source' }, [
         h('div', { key: 'path', className: 'cddl-trace-path', title: source.file },
-          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'),
+          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'
+          + (props.current === true ? ' · 现在的文件' : '')),
         h('pre', {
           key: 'code',
           'data-cdd-source-id': source.id || props.id,
@@ -307,9 +348,15 @@ window.__ModuleLoader__.load({
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
       var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
+      // 位置过期：这一刻存的 hash 和现在的对不上，说明这份代码在那之后改过。
+      var expired = expiredOf(row)
+      // 只读到一部分（窗口切在函数中间）。不完整不是"没碰到"，仍然是一条位置。
+      var partial = partialOf(row)
       return h('article', {
-        className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : ''),
+        className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : '') + (expired ? ' cddl-trace-expired' : ''),
         'data-cdd-anchor-id': row.id || '',
+        'data-cdd-position-id': row.pid || row.key,
+        'data-cdd-position-stale': expired ? 'stale' : 'ok',
       }, [
         h('button', {
           key: 'main', className: 'cddl-trace-anchor-main',
@@ -319,6 +366,8 @@ window.__ModuleLoader__.load({
           h('span', { key: 'chev', className: 'cddl-trace-chevron' }, props.expanded ? '▾' : '▸'),
           h('span', { key: 'dot', className: 'cddl-trace-dot' }),
           h('span', { key: 'label', className: 'cddl-trace-label', title: row.id || row.file }, label),
+          expired ? h('span', { key: 'expired', className: 'cddl-trace-expired-tag', title: '第 ' + row.turn + ' 轮看的那份代码之后改过了' }, '过期') : null,
+          partial ? h('span', { key: 'partial', className: 'cddl-trace-partial-tag', title: '这次只读到 ' + row.coverage.span + '/' + row.coverage.total + ' 行' }, '部分') : null,
           h('span', { key: 'state', className: 'cddl-trace-state' }, verbOf(row)),
         ]),
         props.expanded ? h('div', { key: 'detail', className: 'cddl-trace-detail' }, [
@@ -327,7 +376,7 @@ window.__ModuleLoader__.load({
               h('span', { key: 'why' }, row.reason || '未匹配到 Anchor'),
               h('button', { key: 'insert', onClick: function () { insertPath(row.file) } }, '插入路径'),
             ])
-            : h(SourceSnippet, { key: 'source', id: row.id }),
+            : h(StepSnippet, { key: 'source', row: row }),
           row.id !== null ? h('button', {
             key: 'locate', className: 'cddl-trace-locate',
             'data-locate-anchor-id': row.id,
@@ -364,12 +413,13 @@ window.__ModuleLoader__.load({
 
       // Expanded rows survive reloads. Their in-memory source cache does not,
       // so restore the data as well as the chevron instead of leaving a
-      // permanent empty "读取源码…" panel after refresh.
+      // permanent empty "读取源码…" panel after refresh. A row that carries its
+      // own captured text needs no fetch: that copy is what it shows.
       useEffect(function () {
         rows.forEach(function (row) {
-          if (row.id !== null && expanded[row.key] === true && (shared.sourceCache || {})[row.id] === undefined) {
-            engine.source(row.id)
-          }
+          if (row.id === null || expanded[row.key] !== true) return
+          if (capturedLines(row) !== null) return
+          if ((shared.sourceCache || {})[row.id] === undefined) engine.source(row.id)
         })
       }, [rows.length, Object.keys(expanded).join('|')])
 
@@ -447,7 +497,8 @@ window.__ModuleLoader__.load({
         if (next[row.key]) delete next[row.key]
         else {
           next[row.key] = true
-          if (row.id !== null) engine.source(row.id)
+          // 有那一步原文的，画的本来就是它，不必再去抓当前文件。
+          if (row.id !== null && capturedLines(row) === null) engine.source(row.id)
         }
         saveExpanded(next)
         setExpanded(next)

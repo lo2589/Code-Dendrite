@@ -1,6 +1,6 @@
 // dsh-cdd-lens — 计算单元 2：会话事件 → touch；解析后的证据 → 每一轮的 seed。
 //
-//   read ：meta.offset + meta.lines（[{number,text}]）给出行区间
+//   read ：meta.offset + meta.lines（ReadFileLine[]，见 compute/window.js）给出行区间
 //   write：写的是整个文件 → whole，取该文件全部 anchor（见 resolve.js）
 //   edit ：没有行号，带上改后 / 改前文本里第一行 ≥12 字符的内容作为定位键
 //   grep、glob、bash 等：不是证据
@@ -11,6 +11,8 @@
 //   用户：「edit树，每隔7轮删，还是带个计时器吧」「+7」「算了搞个可以设置的数字吧」「只管节点啊，自己管自己」
 // 两个计数自己管自己：edit 计时到 0 时「看过」计数器还 > 0，照旧是普通 seed。if pin，两个都不减。
 'use strict'
+
+const { readWindow } = require('./window.js')
 
 const VERBS = { read: 'read', read_image: 'read', edit: 'edit', write: 'edit', str_replace_editor: 'edit' }
 
@@ -61,15 +63,8 @@ function touchesOf(call) {
   const meta = call.result.meta
   const base = { turn: call.turn, step: call.step, name: call.name, verb }
   if (verb === 'read') {
-    const from = Number.isInteger(meta.offset) ? meta.offset : (Number.isInteger(call.args.offset) ? call.args.offset : 1)
-    let to = -1
-    if (Array.isArray(meta.lines) && meta.lines.length > 0) {
-      const last = meta.lines[meta.lines.length - 1]
-      to = Number.isInteger(last.number) ? last.number : from + meta.lines.length - 1
-    } else if (Number.isInteger(meta.lines)) {
-      to = from + meta.lines - 1
-    }
-    return [{ ...base, file: meta.path || call.args.file_path, from, to, keys: [] }]
+    const window = readWindow(meta, call.args)
+    return [{ ...base, file: meta.path || call.args.file_path, from: window.from, to: window.to, keys: [] }]
   }
   if (call.name === 'write') return [{ ...base, file: call.args.file_path, from: null, to: null, keys: [], whole: true }]
   const diffs = Array.isArray(meta.diffs) && meta.diffs.length > 0

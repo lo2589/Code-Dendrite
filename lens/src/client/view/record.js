@@ -16,6 +16,8 @@ window.__ModuleLoader__.load({
     var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var staleOf = __session_position.staleOf
 
     // ---- presentation helpers ---------------------------------------------
 
@@ -89,7 +91,46 @@ window.__ModuleLoader__.load({
       return parts.length <= 2 ? file : '…/' + parts.slice(-2).join('/')
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short }
+    // ---- 位置：这一刻的 anchor 和现在的关系 ----------------------------------
+
+    /**
+     * 这个 anchor **现在**的 hash。
+     *
+     * 图上节点的记录就是当前索引里的记录（`/screen` 发的），anchor 缓存同理 ——
+     * 两边描述的都是"现在的代码"。都没有就返回空串：那一位判不了过期。
+     */
+    function currentHashOf(id) {
+      var nodes = shared.graph === undefined || shared.graph === null ? undefined : shared.graph.nodes
+      var node = nodes === undefined || nodes === null ? undefined : nodes[id]
+      if (node !== undefined && node !== null && typeof node.hash === 'string') return node.hash
+      var cached = (shared.anchorCache || {})[id]
+      if (cached !== undefined && cached !== null && typeof cached.hash === 'string') return cached.hash
+      return ''
+    }
+
+    /**
+     * 这个位置过期没有：存下来的 hash 和现在的对不上，就是这份代码在那之后改过。
+     *
+     * @param row - 一条位置（轨迹栏的行，或 anchor 记录里的一条经历）。
+     * @param id - 它属于哪个 anchor。轨迹栏的行自己带 `id`；「经历」面板的一条经历不带
+     *   （它挂在 anchor 记录下面），所以调用方要把 anchor id 传进来。
+     *
+     * 空 hash 是**判不了**，不是没过期 —— 抓的时候就没抓住（回放旧会话、anchor 本来
+     * 就没有 hash），这种情况不打过期标记，因为打了就是编。
+     */
+    function expiredOf(row, id) {
+      if (row === undefined || row === null) return false
+      var anchorId = id === undefined ? row.id : id
+      return staleOf(row.hash, currentHashOf(anchorId)) === 'stale'
+    }
+
+    /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
+    function partialOf(row) {
+      var cover = row === undefined || row === null ? undefined : row.coverage
+      return cover !== undefined && cover !== null && cover.complete === false
+    }
+
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, partialOf }
     return module.exports
   },
 })

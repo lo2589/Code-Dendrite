@@ -7,6 +7,9 @@ window.__ModuleLoader__.load({
   id: 'dsh-cdd-lens/session/trajectory',
   factory: (require) => {
     var module = { exports: {} }
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var readWindow = __session_position.readWindow
+    var windowLines = __session_position.windowLines
 
     // ---- folding the session, off the Trajectory target --------------------
     //
@@ -61,16 +64,13 @@ window.__ModuleLoader__.load({
       if (verb === 'read') {
         var file = (meta && meta.path) || args.file_path
         if (typeof file !== 'string') return out
-        var from = (meta && Number.isInteger(meta.offset)) ? meta.offset
-          : (Number.isInteger(args.offset) ? args.offset : 1)
-        var span = (meta && Number.isInteger(meta.lines)) ? meta.lines
-          : (Number.isInteger(args.limit) ? args.limit : null)
-        // No limit means the agent opened the whole file, which is most reads.
-        // -1 says so on the wire; resolving such a read to whatever anchor
-        // contains line 1 finds nothing (line 1 is imports) and was why a
-        // session that read eight files drew an empty graph.
+        var window = readWindow(meta, args)
+        // The window's own text rides along: it is the only copy of the code as
+        // it stood at this step, and the trajectory row shows that copy rather
+        // than today's file.
         out.push({
-          path: file, from: from, to: span === null ? -1 : from + span - 1,
+          path: file, from: window.from, to: window.to,
+          lines: windowLines(meta),
           text: null, verb: verb, tool: name, running: running, approx: false,
         })
         return out
@@ -167,7 +167,10 @@ window.__ModuleLoader__.load({
         if (touches.length === 0) return
         var turn = turnOf(seq)
         if (turn > maxTurn) maxTurn = turn
-        calls.push({ key: block.callId, seq: seq, turn: turn, touches: touches, running: running })
+        // `time` 是这一步落地的时刻（epoch ms）。位置记 hash 时要拿它判断这一步是
+        // 不是 lens 正在看的时候发生的：回放一份旧会话，那些 step 早于我们开始看，
+        // 那时候的代码我们没见过，hash 也就无从抓起。
+        calls.push({ key: block.callId, seq: seq, turn: turn, touches: touches, running: running, time: block.time })
       }
 
       nodes.forEach(function (node) {

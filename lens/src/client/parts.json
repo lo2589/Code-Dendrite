@@ -5,6 +5,7 @@
     "graph/model.js",
     "state/store.js",
     "state/persist.js",
+    "session/position.js",
     "session/trajectory.js",
     "engine/fetch.js",
     "engine/explore.js",
@@ -118,8 +119,22 @@
       }
     },
     {
+      "file": "session/position.js",
+      "lines": 125,
+      "exports": [
+        "SEP",
+        "positionId",
+        "parsePositionId",
+        "readWindow",
+        "windowLines",
+        "staleOf",
+        "coverageOf"
+      ],
+      "needs": {}
+    },
+    {
       "file": "session/trajectory.js",
-      "lines": 195,
+      "lines": 198,
       "exports": [
         "TARGET",
         "VERBS",
@@ -128,7 +143,12 @@
         "walkCalls",
         "foldTrajectory"
       ],
-      "needs": {}
+      "needs": {
+        "session/position.js": [
+          "readWindow",
+          "windowLines"
+        ]
+      }
     },
     {
       "file": "engine/fetch.js",
@@ -190,7 +210,7 @@
     },
     {
       "file": "engine/ingest.js",
-      "lines": 224,
+      "lines": 232,
       "exports": [
         "ingestMethods"
       ],
@@ -207,6 +227,11 @@
           "publish",
           "requestViewport",
           "shared"
+        ],
+        "session/position.js": [
+          "positionId",
+          "windowLines",
+          "coverageOf"
         ]
       }
     },
@@ -257,18 +282,24 @@
     },
     {
       "file": "view/record.js",
-      "lines": 80,
+      "lines": 136,
       "exports": [
         "stateOf",
         "dotClass",
         "orderOf",
         "turnLabel",
         "degenerate",
-        "short"
+        "short",
+        "currentHashOf",
+        "expiredOf",
+        "partialOf"
       ],
       "needs": {
         "state/store.js": [
           "shared"
+        ],
+        "session/position.js": [
+          "staleOf"
         ]
       }
     },
@@ -318,7 +349,7 @@
     },
     {
       "file": "view/panels.js",
-      "lines": 162,
+      "lines": 194,
       "exports": [
         "Source",
         "History",
@@ -329,6 +360,8 @@
       "needs": {
         "view/record.js": [
           "dotClass",
+          "expiredOf",
+          "partialOf",
           "short",
           "stateOf"
         ],
@@ -560,12 +593,24 @@
     },
     {
       "file": "view/stream.js",
-      "lines": 0,
+      "lines": 608,
       "exports": [
-        "Stream",
-        "stepsOf"
+        "WIDTH_KEY",
+        "EXPANDED_KEY",
+        "stepsOf",
+        "groupRows",
+        "turnAtReadingLine",
+        "directScrollToTurn",
+        "jumpToChatTurn",
+        "locateInGraph",
+        "TrajectorySidebar",
+        "Stream"
       ],
-      "needs": {}
+      "needs": {
+        "session/position.js": [
+          "staleOf"
+        ]
+      }
     },
     {
       "file": "shell/chatSeat.js",

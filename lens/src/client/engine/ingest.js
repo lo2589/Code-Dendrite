@@ -20,6 +20,10 @@ window.__ModuleLoader__.load({
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var positionId = __session_position.positionId
+    var windowLines = __session_position.windowLines
+    var coverageOf = __session_position.coverageOf
 
     /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
     function stepsOf(snap) {
@@ -60,8 +64,24 @@ window.__ModuleLoader__.load({
       record.events.push(event)
     }
 
+    /** 这个 anchor 现在记录在索引里的 hash（拿不到就是空串）。 */
+    function currentHash(call, anchor) {
+      var hash = typeof anchor.hash === 'string' ? anchor.hash : ''
+      if (hash === '') return ''
+      // 位置要记的是"抓的那一刻这个 anchor 的代码"。只有这一步发生在 lens 真的在看
+      // 这个会话之后，索引里的那份才等于那一刻的代码。回放旧会话时索引描述的是今天
+      // 的文件，拿今天的 hash 冒充当时的，这个位置就会假装"没过期"—— 那是假话，
+      // 所以这种位置存空串：判不了，不是没过期。
+      var since = shared.watchSince
+      if (!Number.isFinite(since)) return ''
+      var at = call.time
+      // 还在跑的调用没有落地时刻，它就是此刻。
+      if (!Number.isFinite(at)) return hash
+      return at >= since ? hash : ''
+    }
+
     /** 解析结果 → 每个 anchor 一条轨迹记录；落不到 anchor 的文件照实列出，不丢。 */
-    function foldTrace(snap) {
+    function foldTrace(snap, sessionId) {
       var stepOf = stepsOf(snap)
       var byAnchor = {}
       var unresolved = {}
@@ -71,11 +91,20 @@ window.__ModuleLoader__.load({
           if (hit === undefined) return
           var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
           if (hit.anchors.length === 0) { noteUnresolved(unresolved, call, touch, hit, at); return }
+          // 这个 step 抓下来的那几行原文。轨迹栏展开看的就是它，不是今天的文件 ——
+          // 位置记的是"那一刻看到的代码"，现在文件什么样是另一件事（看过期标记）。
+          var lines = windowLines(touch)
           hit.anchors.forEach(function (anchor) {
             noteAnchor(byAnchor, call, anchor, {
               turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
               approx: touch.approx === true || hit.approx === true,
               onSurface: call.remembered !== false, working: call.running === true,
+              // 位置 id：这次查看的坐标。同一 anchor 被看多次 → 多条位置，各有各的 hash。
+              pid: positionId(sessionId, call.turn, at.step, anchor.id),
+              // 抓的那一刻这个 anchor 的 hash，之后永不改写。空串 = 没抓住。
+              hash: currentHash(call, anchor),
+              lines: lines,
+              coverage: coverageOf(anchor, touch.from, touch.to),
             })
           })
         })
@@ -151,7 +180,7 @@ window.__ModuleLoader__.load({
           })
 
           var after = function () {
-            var folded = foldTrace(snap)
+            var folded = foldTrace(snap, session())
             shared.trace = folded.byAnchor
             shared.unresolved = folded.unresolved
             shared.order = rankOf(snap)

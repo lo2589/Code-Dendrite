@@ -20,6 +20,8 @@ window.__ModuleLoader__.load({
     var dotClass = __view_record.dotClass
     var short = __view_record.short
     var stateOf = __view_record.stateOf
+    var expiredOf = __view_record.expiredOf
+    var partialOf = __view_record.partialOf
 
     // ---- source ------------------------------------------------------------
 
@@ -86,13 +88,23 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'cddl-hist' }, [
         h('h4', { key: 'h' }, '这个 anchor 的经历'),
       ].concat(record.events.map(function (event, i) {
-        return h('div', { key: i, className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') }, [
+        // 每一条经历就是一个位置：那一刻存的 hash 和现在的对不上，就是过期。
+        var expired = expiredOf(event, shared.selected)
+        var partial = partialOf(event)
+        return h('div', {
+          key: i,
+          className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') + (expired ? ' cddl-expired' : ''),
+          'data-cdd-position-id': event.pid || '',
+          'data-cdd-position-stale': expired ? 'stale' : 'ok',
+        }, [
           h('span', { key: 't', className: 'cddl-t' }, 'T' + event.turn),
           h('span', { key: 'd', className: dotClass({ state: event.working ? 'working' : event.verb === 'edit' ? 'edited' : 'viewed' }) }),
           h('span', { key: 'x' }, event.tool
             + (event.working ? ' · 正在执行' : '')
             + (event.approx ? ' · 行号近似' : '')
             + (event.onSurface ? '' : ' · 已被压缩')),
+          expired ? h('span', { key: 's', className: 'cddl-hist-tag' }, '过期') : null,
+          partial ? h('span', { key: 'p', className: 'cddl-hist-tag cddl-hist-part' }, '部分') : null,
           event.agent ? h('span', { key: 'a', className: 'cddl-agent' }, event.agent) : null,
           event.reason ? h('span', { key: 'r', className: 'cddl-reason' }, event.reason) : null,
         ])

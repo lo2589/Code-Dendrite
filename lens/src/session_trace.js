@@ -5,8 +5,12 @@
 //
 // ## Where the line numbers come from, and where they don't
 //
-// `read` settles with `meta = { path, offset, lines, totalLines }`, so a read is
-// an exact line window and resolves to exactly the anchors it overlapped.
+// `read` settles with `meta = { path, offset, lines, totalLines }`, where `lines`
+// is `ReadFileLine[]` — the window's text, each entry keeping its file line
+// number (compute/window.js). So a read is an exact line window and resolves to
+// exactly the anchors it overlapped. Reading `lines` as a count instead is what
+// made every read collapse to a single line; the array never passes
+// `Number.isInteger`, so the branch was dead and the fallback always won.
 //
 // `edit` and `write` settle with `meta = { diffs: [{ path, oldText, newText }] }`
 // — the applied hunks, and **no line numbers at all**. So an edit is located by
@@ -42,6 +46,7 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
+const { readWindow } = require('./compute/window.js')
 
 /** Tool name → what the agent was doing to the code. */
 const VERBS = new Map([
@@ -175,9 +180,8 @@ function collect(events, surfaceSeqs, root) {
         }
         continue
       }
-      const from = Number.isInteger(meta.offset) ? meta.offset : (Number.isInteger(call.args.offset) ? call.args.offset : 1)
-      const span = Number.isInteger(meta.lines) ? meta.lines : (Number.isInteger(call.args.limit) ? call.args.limit : null)
-      touches.push({ ...base, file, from, to: span === null ? null : from + span - 1, approx: false })
+      const window = readWindow(meta, call.args)
+      touches.push({ ...base, file, from: window.from, to: window.to, approx: false })
       continue
     }
 

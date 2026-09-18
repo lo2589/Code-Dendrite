@@ -77,6 +77,9 @@ window.__ModuleLoader__.load({
           shared.outline = undefined
           shared.fileCache = {}
           shared.sourceCache = {}
+          // 从这个时刻起我们真的在看这个会话：只有在此之后落地的 step，它的 hash 才
+          // 是"抓的时候"那个。再早的都是回放，那时候的代码我们没看见（见 ingest）。
+          shared.watchSince = Date.now()
           publish()
           if (id === undefined || id === null) return
           // A diagnostic handle, deliberately kept: when the graph is empty the
