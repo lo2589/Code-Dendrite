@@ -19,15 +19,17 @@ lens/output/playwright/
 !/assets/**
 
 # ── 文档不进仓 ────────────────────────────────────────────────
-# 唯一进仓的文档是根 README；夹具不是文档，缺了 test_issue_evidence_packet 会挂。
+# 唯一进仓的文档是根 README；云端禁止任何其他文本类文件。
 # 注意：pattern 后面不能跟行尾注释，会连注释一起当 pattern。
 *.md
 !/README.md
-!/src/tests/fixtures/*.md
-
 *.txt
-# 依赖清单不是文档
-!/src/scanner/requirements.txt
+
+# lens 设计稿是本地产物，不进仓
+/lens/design/*.html
+/lens-pcb/design/*.html
+/lens-v2/
+/multilanguage_debug/
 
 # ── 生成物：索引与产物，用 cdd rebuild 重生 ────────────────────
 .codedendrite/
@@ -44,6 +46,3 @@ backend/
 doc/*
 docs/*
 *.
-
-# agent skill 的 SKILL.md 不是文档，是给 agent 的指令
-!/skills/**/*.md
