@@ -11,7 +11,7 @@
 # harness is serving THIS checkout and not another one.
 set -euo pipefail
 
-DSH_REPO="${DSH_REPO:-/Users/a1/Workspace/WORKSPACE/deepseek-harness}"
+DSH_REPO="${DSH_REPO:-$(cd "$(dirname "$0")/../../.." && pwd)/deepseek-harness}"
 PROFILE="${PROFILE:-web}"
 PLUGIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PORT="${DSH_PORT:-3080}"

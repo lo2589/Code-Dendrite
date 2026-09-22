@@ -4962,7 +4962,7 @@ __cddLocal.load({
 
 // dsh-cdd-lens — 分层布局（自研 Sugiyama）。唯一的布局，没有皮肤。
 //
-// 端口：从 /Users/a1/Workspace/WORKSPACE/visual_map/js/graph-layout.js 移植，
+// 端口：从 visual_map 仓库的 js/graph-layout.js 移植，
 // 四步与原实现一致，只把 node 的取法换成 CDD 的 anchor 图：
 //
 //   1. 消环   —— DFS 找回向边，逻辑上反转它们使图变成 DAG
