@@ -12,12 +12,13 @@ license = { text = "MIT" }
 
 # 核心只用标准库；MCP 服务器和测试各自按需装。
 [project.optional-dependencies]
-mcp = ["mcp"]
+mcp = ["mcp>=1.0,<2"]
 test = ["pytest"]
 
 # 装完就能直接 `cdd xxx`：实体是 src/usage/cli/cdd，入口是 usage.cli.human:main。
 [project.scripts]
 cdd = "usage.cli.human:main"
+cdd-mcp = "cdd_mcp.server:main"   # 需要 pip install 'codedendrite[mcp]'
 
 [tool.setuptools]
 package-dir = { "" = "src" }
