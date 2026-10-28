@@ -333,16 +333,40 @@ def _extract_registered_as(decorators: list) -> Optional[str]:
             return dec["key"]
     return None
 
+def _decorator_entry(item) -> Optional[dict]:
+    """一个装饰器 → {key, name}；不是「名字(键, ...)」这种注册形状就返回 None。
+
+    装饰器有两种存法：字典（{name, key}），和 Python 解析路径里的原文字符串
+    ``"dataset('input.type.real_user')"``。以前只认字典，字符串一律跳过——装饰器名
+    就丢了，``dataset[f'input.type.{kind}']`` 这种按接收者名展开的注册表调用，
+    永远对不上接收者，整条边断掉。字符串用 ast 解析，不靠正则猜。
+    """
+    if isinstance(item, dict):
+        if not item.get("key"):
+            return None
+        return {"key": str(item["key"]), "name": str(item.get("name") or "")}
+    if not isinstance(item, str):
+        return None
+    try:
+        node = ast.parse(item.strip().lstrip("@"), mode="eval").body
+    except SyntaxError:
+        return None
+    if not isinstance(node, ast.Call) or not node.args:
+        return None
+    first = node.args[0]
+    if not isinstance(first, ast.Constant) or not isinstance(first.value, str):
+        return None
+    return {"key": first.value, "name": ast.unparse(node.func)}
+
+
 def _registration_entries(anchor) -> list[dict]:
     entries = []
     scalar = str(getattr(anchor, "registered_as", "") or "")
     if scalar:
         entries.append({"key": scalar, "name": ""})
     for item in getattr(anchor, "block_metadata", {}).get("decorators", []) or []:
-        if not isinstance(item, dict) or not item.get("key"):
-            continue
-        entry = {"key": str(item["key"]), "name": str(item.get("name") or "")}
-        if entry not in entries:
+        entry = _decorator_entry(item)
+        if entry is not None and entry not in entries:
             entries.append(entry)
     return entries
 
