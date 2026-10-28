@@ -93,7 +93,7 @@ class PythonAnalyzer(BaseAnalyzer):
         module_info.functions.append(func_info)
 
     def _extract_calls(self, node) -> List[str]:
-        from analyzer.shared.formula_skip import walk_skip_formula
+        from scanner.shared.formula_skip import walk_skip_formula
         calls = []
         depth = 0
 

@@ -127,9 +127,9 @@ class HashDatabase:
         cdd 进程用各自 load 时的旧快照互相覆盖。
         """
         try:
-            from analyzer.shared.dblock import db_lock
+            from scanner.shared.dblock import db_lock
         except ImportError:
-            from analyzer.shared.dblock import db_lock
+            from scanner.shared.dblock import db_lock
 
         with db_lock(self.db_path):
             self._merge_concurrent_writes()

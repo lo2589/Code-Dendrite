@@ -161,7 +161,7 @@ class AnchorDatabase:
     def save(self):
         """保存数据库（跨进程 db_lock + 写前 rebase 到磁盘当前状态）"""
         try:
-            from analyzer.shared.dblock import db_lock
+            from scanner.shared.dblock import db_lock
         except ImportError:
             from tools.CodeDendrite.shared.dblock import db_lock
 

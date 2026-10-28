@@ -8,7 +8,7 @@ from analyzer.identity.engine import (
 )
 
 try:
-    from usage.analyze.agent_tools import TOOL_DEFINITIONS, handle_tool_call
+    from analyzer.identity.agent_tools import TOOL_DEFINITIONS, handle_tool_call
 except ImportError:
     TOOL_DEFINITIONS = []
     handle_tool_call = None

@@ -356,7 +356,7 @@ def _generate_anchors_for_paths(
 
     if include_virtual_blocks:
         try:
-            from api.control_flow import extract_file_control_flow
+            from analyzer.control_flow.file_blocks import extract_file_control_flow
             for source_file in file_paths:
                 try:
                     rel = _normalize_file_ref(root, source_file)

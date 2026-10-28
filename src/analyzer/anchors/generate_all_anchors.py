@@ -415,7 +415,7 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
     # ── 源 4: inheritance（mro / parent_classes / overridden_by / overrides）
     if include_virtual_blocks:
         try:
-            from api.control_flow import extract_file_control_flow
+            from analyzer.control_flow.file_blocks import extract_file_control_flow
             from scanner.language.pipeline import walk_source_paths
             for source_file in walk_source_paths(root, ignore=ignore, exclude_dirs=exclude):
                 rel = _normalize_file_ref(root, source_file)
@@ -428,7 +428,7 @@ def generate_all_anchors(root=".", exclude_dirs=None, include_virtual_blocks=Fal
 
     # ── 运行时桥：HTTP 与 JS Worker 的可证明异步跳转 ──────────
     try:
-        from api.bridges import apply_runtime_bridges
+        from analyzer.anchors.bridges import apply_runtime_bridges
         apply_runtime_bridges(root, anchors)
     except Exception as e:
         failed.append("runtime_bridges: {}".format(e))

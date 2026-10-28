@@ -184,7 +184,7 @@ def update_anchors_for_files(root=".", changed_files=None, include_virtual_block
     touched_ids = new_ids | removed_ids
     affected_ids = set(new_ids)
     try:
-        from api.bridges import apply_runtime_bridges
+        from analyzer.anchors.bridges import apply_runtime_bridges
         affected_ids.update(apply_runtime_bridges(root, anchors))
     except Exception as e:
         failed.append("runtime_bridges: {}".format(e))
