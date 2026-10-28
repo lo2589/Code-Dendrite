@@ -24,6 +24,7 @@ window.__ModuleLoader__.load({
     var __view_record = require('dsh-cdd-lens/view/record')
     var dotClass = __view_record.dotClass
     var stateOf = __view_record.stateOf
+    var recordStateOf = __view_record.recordStateOf
     var turnLabel = __view_record.turnLabel
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
@@ -109,7 +110,10 @@ window.__ModuleLoader__.load({
       }
       return [p.x, p.y, p.w, p.h, p.baseX, p.baseY, p.side ? 1 : 0, p.label, p.flowAxis,
         shared.selected === id ? 1 : 0, lit, engine.isPinned(id) ? 1 : 0, openSlots(id), busySlots(engine, id),
-        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members].join('|')
+        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members,
+        // 过期状态也要进签名：它读的是 anchor 的 hash，索引换版后 hash 变了而这里不变，
+        // 卡片就会一直停在"没变灰"的旧样子。
+        recordStateOf(id)].join('|')
     }
 
     /** 拖动：卡片用 transform 跟着指针，线层只改这张卡片的线；松手 publish 一次、重排一次。 */
@@ -165,6 +169,8 @@ window.__ModuleLoader__.load({
       var anchor = p.node
       var ui = uiOf(shared.graph, p.id) || {}
       var record = stateOf(p.id)
+      // 你最近一次看这个 anchor 时的那份代码，和现在还是不是同一份。
+      var position = recordStateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
       var memberCount = memberCountOf(anchor)
@@ -224,9 +230,13 @@ window.__ModuleLoader__.load({
         h('span', { key: 'port-out', className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''), 'data-port': 'out', title: '关系离开此 Anchor' }),
       ]
       return h('div', {
-        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : ''),
+        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : '')
+          + (position === 'stale' ? ' cddl-stale' : ''),
         style: flow ? { width: p.w + 'px' } : { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px' },
         'data-node-id': p.id,
+        // 这个节点你看过的那一版还作不作数：ok 作数 · stale 之后改过（整块变灰）·
+        // unknown 判不了。图上只有 stale 变灰，判不了不许拿灰色冒充。
+        'data-cdd-node-stale': position,
         'data-side': p.side ? 'true' : 'false',
         // 有哪些「方向:关系」开着，供外部测试读。
         'data-open': openSlots(p.id),

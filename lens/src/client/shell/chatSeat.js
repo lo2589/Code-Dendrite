@@ -34,7 +34,24 @@ window.__ModuleLoader__.load({
       window.requestAnimationFrame(activateChatTab)
     }
 
-    module.exports = { activateChatTab, openDockBesideChat }
+    /**
+     * 跳到逻辑图：只切视图，不动布局。
+     *
+     * 以前这里直接走 openDockBesideChat——它会关掉宿主的详情面板、强行开 dock、再切
+     * 宿主的 tab。人只是想「从轨迹这一行跳到图上那个节点」，结果整页翻了一遍，所有
+     * 东西换了位置：要追的那个节点反而更难找了。已经开着就什么都不动，只把视图切到
+     * 逻辑图；只有确实没开，才去开。
+     */
+    function jumpToGraph(ctx) {
+      if (shared.dockOpen === true) {
+        shared.wantGraph = (shared.wantGraph || 0) + 1
+        publish()
+        return
+      }
+      openDockBesideChat(ctx)
+    }
+
+    module.exports = { activateChatTab, openDockBesideChat, jumpToGraph }
     return module.exports
   },
 })

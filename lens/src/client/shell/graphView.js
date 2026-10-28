@@ -22,6 +22,8 @@ window.__ModuleLoader__.load({
     var Source = __view_panels.Source
     var __view_hscroll = require('dsh-cdd-lens/view/hscroll')
     var HScroll = __view_hscroll.HScroll
+    var __view_focus_lock = require('dsh-cdd-lens/view/focusLock')
+    var useFocusLock = __view_focus_lock.useFocusLock
     var __shell_view_tate = require('dsh-cdd-lens/shell/viewState')
     var useViewState = __shell_view_tate.useViewState
     var __shell_view_anvas = require('dsh-cdd-lens/shell/viewCanvas')
@@ -46,6 +48,8 @@ window.__ModuleLoader__.load({
       var canvasRef = view.canvasRef
       var viewRef = view.viewRef
       var reserve = view.reserve
+      // 重排之后把正在看的那张卡片钉回原处：布局爱怎么算怎么算，屏幕上它不动。
+      useFocusLock(canvasRef)
       var canvas = renderCanvas(props, view)
 
       return h('div', {

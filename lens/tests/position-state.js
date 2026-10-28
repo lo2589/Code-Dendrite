@@ -160,7 +160,36 @@ check('ingest 把位置 hash 交给账本，而不是每次现算', () => {
     '不冻住就会被当前索引的 hash 盖掉，位置永远"没过期"')
 })
 
-// ---- 3. 界面不许把三态压成两态 ----------------------------------------------
+// ---- 3. 图上的节点：过期就变灰 -----------------------------------------------
+
+check('节点按最近一次看的那个位置判过期', () => {
+  const store2 = require_('dsh-cdd-lens/state/store')
+  store2.shared.graph = { nodes: { [ID]: { id: ID, hash: 'new9999' } }, edges: [] }
+  store2.shared.anchorCache = {}
+  // 早先看过一次（那版已经变了），最近又看了一次、对得上 → 不该变灰。
+  store2.shared.trace = { [ID]: { id: ID, events: [{ hash: 'old1111' }, { hash: 'new9999' }] } }
+  assert.strictEqual(record.recordStateOf(ID), 'ok')
+  // 最近一次看的那版之后被改过 → 过期。
+  store2.shared.trace = { [ID]: { id: ID, events: [{ hash: 'new9999' }, { hash: 'old1111' }] } }
+  assert.strictEqual(record.recordStateOf(ID), 'stale')
+  // 没有记录 / 没有事件 → 判不了，不是没过期。
+  store2.shared.trace = {}
+  assert.strictEqual(record.recordStateOf(ID), 'unknown')
+})
+
+check('只有 stale 变灰，判不了不许拿灰色冒充', () => {
+  const text = sourceOf('client/view/node.js')
+  assert.ok(/position === 'stale' \? ' cddl-stale' : ''/.test(text), '节点没有按过期加灰色类')
+  assert.ok(/'data-cdd-node-stale': position/.test(text), '节点没把三态写进 data 属性')
+  assert.ok(/recordStateOf\(id\)\]\.join\('\|'\)/.test(text), '过期状态没进重绘签名，卡片会停在旧样子')
+  const css = sourceOf('client/styles/graph.js')
+  assert.ok(/cddl-stale \.cddl-gnode\{filter:grayscale/.test(css), '没有灰调样式')
+  // 透明度是「已被压缩」的通道，过期不许抢；hover 变色会在人眼前晃两下，是丢焦点。
+  assert.ok(!/cddl-stale[^']*opacity/.test(css), '过期不许动透明度，那是 faded 的通道')
+  assert.ok(!/cddl-stale:hover/.test(css), '过期不许做 hover 变色')
+})
+
+// ---- 4. 界面不许把三态压成两态 ----------------------------------------------
 
 check('轨迹栏与「经历」面板都不再写 `? \'stale\' : \'ok\'`', () => {
   ;['client/view/stream.js', 'client/view/panels.js'].forEach((rel) => {
@@ -212,6 +241,24 @@ check('补 anchor 的 effect 依赖里带索引戳', () => {
   const text = sourceOf('client/view/stream.js')
   assert.ok(/engine\.ensureAnchors[\s\S]{0,200}shared\.anchorCacheStamp\]/.test(text),
     '只看行 id：索引重建后 id 没变，effect 不再跑，缓存空着，过期永远标不出来')
+})
+
+check('「在逻辑图中定位」只切视图，不翻页', () => {
+  const text = sourceOf('client/view/stream.js')
+  assert.ok(/jumpToGraph\(ctx\)/.test(text), '定位应该只切到逻辑图')
+  assert.ok(!/openDockBesideChat\(ctx\)/.test(text),
+    '不能再强开 dock：关详情面板 + 切宿主 tab = 整页翻一遍，要追的节点反而丢了')
+  const seat = sourceOf('client/shell/chatSeat.js')
+  assert.ok(/if \(shared\.dockOpen === true\)/.test(seat), '已经开着时必须什么都不动')
+})
+
+check('焦点锁：按内容坐标补偿，且挂在了画布上', () => {
+  const lock = sourceOf('client/view/focusLock.js')
+  // 内容坐标（offsetLeft/offsetTop）不随用户滚动变，所以这把锁不会跟用户滚动打架。
+  assert.ok(/el\.offsetLeft, y: el\.offsetTop/.test(lock), '必须用内容坐标，不是屏幕坐标')
+  assert.ok(/scroller\.scrollTop \+= now\.y - was\.y/.test(lock), '没有按位移补偿滚动')
+  assert.ok(/was\.id === id/.test(lock), '换了焦点的那一次不该补偿')
+  assert.ok(/useFocusLock\(canvasRef\)/.test(sourceOf('client/shell/graphView.js')), '焦点锁没挂到画布上')
 })
 
 check('engine 有 ensureAnchors', () => {

@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chatSeat.openDockBesideChat
+    var jumpToGraph = __shell_chatSeat.jumpToGraph
     var __view_record = require('dsh-cdd-lens/view/record')
     var positionStateOf = __view_record.positionStateOf
     var partialOf = __view_record.partialOf
@@ -334,8 +334,8 @@ window.__ModuleLoader__.load({
     }
 
     function locateInGraph(ctx, engine, id) {
-      // 先把图面板开出来，再定位：面板没开的话，定位完了也没人看得见。
-      openDockBesideChat(ctx)
+      // 只切到逻辑图，不翻页：面板已经开着就不动布局，省得要追的节点反而跑了。
+      jumpToGraph(ctx)
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
         if (anchor === null || anchor === undefined) return false

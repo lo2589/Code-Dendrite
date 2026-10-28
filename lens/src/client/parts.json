@@ -23,6 +23,7 @@
     "view/needIndex.js",
     "view/node.js",
     "view/hscroll.js",
+    "view/focusLock.js",
     "styles/graph.js",
     "layout/cardBox.js",
     "layout/metrics.js",

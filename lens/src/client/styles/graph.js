@@ -190,6 +190,14 @@ window.__ModuleLoader__.load({
       '.cddl-node-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
+      // 过期：你看过的那一版代码之后改过了。
+      //
+      // 只去色 + 虚线边，**不碰透明度**：透明度是「已被压缩」(.cddl-faded) 的通道，
+      // 两件事共用一个通道，人就分不出眼前这张卡是哪一种。
+      //
+      // 也不做 hover 变色：鼠标进出各变一次，正盯着它的人等于被晃了两下 —— 那是丢焦点。
+      '.cddl-node-shell.cddl-stale .cddl-gnode{filter:grayscale(1)}',
+      '.cddl-node-shell.cddl-stale .cddl-gnode{border-style:dashed}',
       '.cddl-node-actions button{min-width:26px;height:19px;padding:0 5px;border-radius:5px;cursor:pointer;font:700 11px var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-state-business-tertiary)}',
       '.cddl-node-actions .cddl-action-collapse:not(:disabled){color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-tertiary)}',
       '.cddl-node-actions button:hover:not(:disabled),.cddl-node-actions button.on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}',

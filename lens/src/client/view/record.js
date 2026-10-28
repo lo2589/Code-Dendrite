@@ -134,13 +134,26 @@ window.__ModuleLoader__.load({
       return staleOf(row.hash, currentHashOf(anchorId))
     }
 
+    /**
+     * 这个 anchor 在图上该不该变灰：看它**最近一次**被看到的那个位置。
+     *
+     * 只看最近一次：早先那次过期不算数——后来又看过一遍、而且对得上，那它就是新的。
+     * 返回 'ok' / 'stale' / 'unknown'，判不了就是判不了，不拿灰色去冒充"变过"。
+     */
+    function recordStateOf(id) {
+      var record = stateOf(id)
+      var events = record === null || record === undefined ? [] : (record.events || [])
+      if (events.length === 0) return 'unknown'
+      return positionStateOf(events[events.length - 1], id)
+    }
+
     /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
     function partialOf(row) {
       var cover = row === undefined || row === null ? undefined : row.coverage
       return cover !== undefined && cover !== null && cover.complete === false
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, partialOf }
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, recordStateOf, partialOf }
     return module.exports
   },
 })

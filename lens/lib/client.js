@@ -5,7 +5,7 @@
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
 // build: V1_59_POSITION_STATE_UNKNOWN_001
-// parts: 46
+// parts: 47
 
 ;(function () {
 var __cddHost = window.__ModuleLoader__
@@ -2575,13 +2575,26 @@ __cddLocal.load({
       return staleOf(row.hash, currentHashOf(anchorId))
     }
 
+    /**
+     * 这个 anchor 在图上该不该变灰：看它**最近一次**被看到的那个位置。
+     *
+     * 只看最近一次：早先那次过期不算数——后来又看过一遍、而且对得上，那它就是新的。
+     * 返回 'ok' / 'stale' / 'unknown'，判不了就是判不了，不拿灰色去冒充"变过"。
+     */
+    function recordStateOf(id) {
+      var record = stateOf(id)
+      var events = record === null || record === undefined ? [] : (record.events || [])
+      if (events.length === 0) return 'unknown'
+      return positionStateOf(events[events.length - 1], id)
+    }
+
     /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
     function partialOf(row) {
       var cover = row === undefined || row === null ? undefined : row.coverage
       return cover !== undefined && cover !== null && cover.complete === false
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, partialOf }
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, recordStateOf, partialOf }
     return module.exports
   },
 })
@@ -3225,6 +3238,7 @@ __cddLocal.load({
     var __view_record = require('dsh-cdd-lens/view/record')
     var dotClass = __view_record.dotClass
     var stateOf = __view_record.stateOf
+    var recordStateOf = __view_record.recordStateOf
     var turnLabel = __view_record.turnLabel
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
@@ -3310,7 +3324,10 @@ __cddLocal.load({
       }
       return [p.x, p.y, p.w, p.h, p.baseX, p.baseY, p.side ? 1 : 0, p.label, p.flowAxis,
         shared.selected === id ? 1 : 0, lit, engine.isPinned(id) ? 1 : 0, openSlots(id), busySlots(engine, id),
-        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members].join('|')
+        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members,
+        // 过期状态也要进签名：它读的是 anchor 的 hash，索引换版后 hash 变了而这里不变，
+        // 卡片就会一直停在"没变灰"的旧样子。
+        recordStateOf(id)].join('|')
     }
 
     /** 拖动：卡片用 transform 跟着指针，线层只改这张卡片的线；松手 publish 一次、重排一次。 */
@@ -3366,6 +3383,8 @@ __cddLocal.load({
       var anchor = p.node
       var ui = uiOf(shared.graph, p.id) || {}
       var record = stateOf(p.id)
+      // 你最近一次看这个 anchor 时的那份代码，和现在还是不是同一份。
+      var position = recordStateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
       var memberCount = memberCountOf(anchor)
@@ -3425,9 +3444,13 @@ __cddLocal.load({
         h('span', { key: 'port-out', className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''), 'data-port': 'out', title: '关系离开此 Anchor' }),
       ]
       return h('div', {
-        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : ''),
+        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : '')
+          + (position === 'stale' ? ' cddl-stale' : ''),
         style: flow ? { width: p.w + 'px' } : { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px' },
         'data-node-id': p.id,
+        // 这个节点你看过的那一版还作不作数：ok 作数 · stale 之后改过（整块变灰）·
+        // unknown 判不了。图上只有 stale 变灰，判不了不许拿灰色冒充。
+        'data-cdd-node-stale': position,
         'data-side': p.side ? 'true' : 'false',
         // 有哪些「方向:关系」开着，供外部测试读。
         'data-open': openSlots(p.id),
@@ -3557,6 +3580,84 @@ __cddLocal.load({
     }
 
     module.exports = { HScroll }
+    return module.exports
+  },
+})
+
+// dsh-cdd-lens — 焦点锁：重排之后，正在看的那张卡片不许跑。
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+__cddLocal.load({
+  id: 'dsh-cdd-lens/view/focusLock',
+  factory: (require) => {
+    var module = { exports: {} }
+    var React = require('react')
+    var useEffect = React.useEffect
+    var useRef = React.useRef
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
+
+    /** 这个节点在**内容坐标**里的位置（和滚到哪儿无关）。 */
+    function spotOf(scroller, id) {
+      if (scroller === null || scroller === undefined || typeof id !== 'string' || id === '') return null
+      var el = null
+      var all = scroller.querySelectorAll('[data-node-id]')
+      for (var i = 0; i < all.length; i += 1) {
+        if (all[i].getAttribute('data-node-id') === id) { el = all[i]; break }
+      }
+      if (el === null) return null
+      return { x: el.offsetLeft, y: el.offsetTop }
+    }
+
+    /** 该钉住谁：选中的那张；没有选中就钉视口中间那张。 */
+    function pickFocus(scroller) {
+      if (typeof shared.selected === 'string' && spotOf(scroller, shared.selected) !== null) return shared.selected
+      var mid = scroller.scrollTop + scroller.clientHeight / 2
+      var all = scroller.querySelectorAll('[data-node-id]')
+      var best = null
+      var bestGap = Infinity
+      for (var i = 0; i < all.length; i += 1) {
+        var gap = Math.abs(all[i].offsetTop + all[i].offsetHeight / 2 - mid)
+        if (gap < bestGap) { bestGap = gap; best = all[i].getAttribute('data-node-id') }
+      }
+      return best
+    }
+
+    /**
+     * 重排后把焦点卡片钉回原来的屏幕位置，整张画布跟着它挪。
+     *
+     * 布局重算会让整列卡片平移——实测索引换一版，9 张卡片里 8 张动了，竖直 69px。
+     * 人正盯着一张卡片追代码，卡片跑了就是丢焦点。这里不碰布局怎么算，只在它算完
+     * 之后，按焦点卡片在内容坐标里的位移，把画布滚动同样多。
+     *
+     * 为什么用内容坐标而不是屏幕坐标：用户自己滚动只改 scrollTop、不改内容坐标，
+     * 所以这把锁不会跟用户的滚动打架；只有布局真的挪了东西，它才出手。
+     *
+     * 换了焦点（点了别的卡片）的那一次只记位置、不补偿：那次移动是用户自己要的。
+     */
+    function useFocusLock(scrollerRef) {
+      var mark = useRef(null)
+      useEffect(function () {
+        var scroller = scrollerRef === null || scrollerRef === undefined ? null : scrollerRef.current
+        if (scroller === null || scroller === undefined || scroller.querySelectorAll === undefined) return
+        var kept = mark.current !== null && spotOf(scroller, mark.current.id) !== null ? mark.current.id : null
+        var id = typeof shared.selected === 'string' && spotOf(scroller, shared.selected) !== null
+          ? shared.selected
+          : (kept !== null ? kept : pickFocus(scroller))
+        var now = spotOf(scroller, id)
+        if (now === null) { mark.current = null; return }
+        var was = mark.current
+        if (was !== null && was.id === id && (was.x !== now.x || was.y !== now.y)) {
+          scroller.scrollLeft += now.x - was.x
+          scroller.scrollTop += now.y - was.y
+        }
+        mark.current = { id: id, x: now.x, y: now.y }
+      })
+    }
+
+    module.exports = { spotOf, pickFocus, useFocusLock }
     return module.exports
   },
 })
@@ -3753,6 +3854,14 @@ __cddLocal.load({
       '.cddl-node-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
+      // 过期：你看过的那一版代码之后改过了。
+      //
+      // 只去色 + 虚线边，**不碰透明度**：透明度是「已被压缩」(.cddl-faded) 的通道，
+      // 两件事共用一个通道，人就分不出眼前这张卡是哪一种。
+      //
+      // 也不做 hover 变色：鼠标进出各变一次，正盯着它的人等于被晃了两下 —— 那是丢焦点。
+      '.cddl-node-shell.cddl-stale .cddl-gnode{filter:grayscale(1)}',
+      '.cddl-node-shell.cddl-stale .cddl-gnode{border-style:dashed}',
       '.cddl-node-actions button{min-width:26px;height:19px;padding:0 5px;border-radius:5px;cursor:pointer;font:700 11px var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-state-business-tertiary)}',
       '.cddl-node-actions .cddl-action-collapse:not(:disabled){color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-tertiary)}',
       '.cddl-node-actions button:hover:not(:disabled),.cddl-node-actions button.on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}',
@@ -6135,7 +6244,7 @@ __cddLocal.load({
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chatSeat.openDockBesideChat
+    var jumpToGraph = __shell_chatSeat.jumpToGraph
     var __view_record = require('dsh-cdd-lens/view/record')
     var positionStateOf = __view_record.positionStateOf
     var partialOf = __view_record.partialOf
@@ -6447,8 +6556,8 @@ __cddLocal.load({
     }
 
     function locateInGraph(ctx, engine, id) {
-      // 先把图面板开出来，再定位：面板没开的话，定位完了也没人看得见。
-      openDockBesideChat(ctx)
+      // 只切到逻辑图，不翻页：面板已经开着就不动布局，省得要追的节点反而跑了。
+      jumpToGraph(ctx)
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
         if (anchor === null || anchor === undefined) return false
@@ -6773,7 +6882,24 @@ __cddLocal.load({
       window.requestAnimationFrame(activateChatTab)
     }
 
-    module.exports = { activateChatTab, openDockBesideChat }
+    /**
+     * 跳到逻辑图：只切视图，不动布局。
+     *
+     * 以前这里直接走 openDockBesideChat——它会关掉宿主的详情面板、强行开 dock、再切
+     * 宿主的 tab。人只是想「从轨迹这一行跳到图上那个节点」，结果整页翻了一遍，所有
+     * 东西换了位置：要追的那个节点反而更难找了。已经开着就什么都不动，只把视图切到
+     * 逻辑图；只有确实没开，才去开。
+     */
+    function jumpToGraph(ctx) {
+      if (shared.dockOpen === true) {
+        shared.wantGraph = (shared.wantGraph || 0) + 1
+        publish()
+        return
+      }
+      openDockBesideChat(ctx)
+    }
+
+    module.exports = { activateChatTab, openDockBesideChat, jumpToGraph }
     return module.exports
   },
 })
@@ -7543,6 +7669,8 @@ __cddLocal.load({
     var Source = __view_panels.Source
     var __view_hscroll = require('dsh-cdd-lens/view/hscroll')
     var HScroll = __view_hscroll.HScroll
+    var __view_focus_lock = require('dsh-cdd-lens/view/focusLock')
+    var useFocusLock = __view_focus_lock.useFocusLock
     var __shell_view_tate = require('dsh-cdd-lens/shell/viewState')
     var useViewState = __shell_view_tate.useViewState
     var __shell_view_anvas = require('dsh-cdd-lens/shell/viewCanvas')
@@ -7567,6 +7695,8 @@ __cddLocal.load({
       var canvasRef = view.canvasRef
       var viewRef = view.viewRef
       var reserve = view.reserve
+      // 重排之后把正在看的那张卡片钉回原处：布局爱怎么算怎么算，屏幕上它不动。
+      useFocusLock(canvasRef)
       var canvas = renderCanvas(props, view)
 
       return h('div', {
