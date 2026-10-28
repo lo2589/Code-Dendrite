@@ -78,7 +78,7 @@ The project that `--root` points to must have been indexed with `cdd rebuild`.
 | `skills/` | Three agent skills: `cdd-understand` (understand a project), `cdd-rebuild` (topology refactoring), `cdd-learn` (layer-by-layer guided learning) |
 | `src/tests/` | Tests and fixtures |
 
-Main dependency direction: `scanner` → `analyzer` → `api` → `usage` / `view`. A few reverse imports remain: `scanner` imports type definitions from `analyzer.shared.legacy`, `analyzer/anchors/scanning.py` imports `usage.analyze`, `api/__init__.py` imports `usage`, and `api/analysis.py` imports `view.html`.
+Dependency direction: `scanner` → `analyzer` → `api` → `usage` / `view`. `scanner` and `analyzer` import nothing above them. One reverse dependency remains: `api/query/cmd_chain.py` imports `view.relations`, `view.timeline`, `view.code_map` and `usage.profiles.yaml_profile` inside functions (4 imports). Modules that used to sit in the wrong layer have moved, so `scan_project`, `debug_workflow`, `generate_module_tree`, `smart_analyze` and the navigator (`start`, `jump`, …) are imported from `usage`, and `generate_mermaid_for_project` from `view.html.graph`, not from `api`.
 
 ---
 
