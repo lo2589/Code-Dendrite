@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, '.')
 
 # 读取 backend/main.py
-with open('D:/workspace/code/parallm/para-llm-for-vscode/backend/main.py', 'r', encoding='utf-8') as f:
+with open('backend/main.py', 'r', encoding='utf-8') as f:
     source = f.read()
 
 tree = ast.parse(source)
