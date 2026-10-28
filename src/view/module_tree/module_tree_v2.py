@@ -80,6 +80,9 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans
 .slot-label {{ font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase;
                margin-bottom: 4px; }}
 .slot-value {{ font-size: 13px; line-height: 1.5; }}
+/* How 是一步一行的实现过程：占满整行、保留换行，长路径不折断成乱码 */
+.slot.how, .slot.wide {{ grid-column: 1 / -1; }}
+.slot.how .slot-value {{ white-space: pre; overflow-x: auto; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }}
 
 .evidence-section {{ margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; }}
 .evidence-chips {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }}
@@ -202,9 +205,9 @@ def _render_module_card(module: dict) -> str:
   </div>
   <div class="module-body">
     <div class="slot"><div class="slot-label">What</div><div class="slot-value">{_esc(what)}</div></div>
-    <div class="slot"><div class="slot-label">How</div><div class="slot-value">{_esc(how)}</div></div>
-    <div class="slot"><div class="slot-label">Functions</div><div class="slot-value">{funcs_html or '-'}</div></div>
     <div class="slot"><div class="slot-label">Role</div><div class="slot-value">{_esc(role)}</div></div>
+    <div class="slot how"><div class="slot-label">How</div><div class="slot-value">{_esc(how)}</div></div>
+    <div class="slot wide"><div class="slot-label">Functions</div><div class="slot-value">{funcs_html or '-'}</div></div>
   </div>
   <div class="evidence-section">{evidence_html}</div>
 </div>"""

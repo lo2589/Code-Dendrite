@@ -193,9 +193,13 @@ class TestCurrentRepoRegression:
             assert name != "generate_report", f"generate_report as module name"
 
     def test_modules_count_reasonable(self):
-        """模块数量应在合理范围内（5-100）。"""
-        count = len(self.tree["modules"])
-        assert 5 <= count <= 100, f"module count {count} out of range"
+        """模块树是功能树：功能数随入口多少而定，不设上限；零散入口（没接进任何功能的代码）
+        不该占大头，多了说明入口识别出了问题。"""
+        mods = self.tree["modules"]
+        features = [m for m in mods if m["status"] in ("core_flow", "independent_capability")]
+        dormant = [m for m in mods if m["status"] == "dormant"]
+        assert len(features) >= 5, f"only {len(features)} features"
+        assert len(dormant) <= len(mods) * 0.1, f"{len(dormant)} dormant of {len(mods)}"
 
     def test_has_core_flow_modules(self):
         """至少应有 core_flow 模块。"""

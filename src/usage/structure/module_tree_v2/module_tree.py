@@ -1,39 +1,27 @@
 """
-模块树 V2 生成器
+模块树 V2：功能树
 ========================
-从 capability_candidates 合并生成项目级功能块导览图。
+一个模块就是一个功能：从入口（__main__、注册的函数、调用图的根）开始，顺着调用边走到的
+代码就是它的实现；被多个功能共用的代码单独成"共享底座"。每个模块说清 what（入口的文档
+字符串）和 how（入口按调用顺序走过的每一步）。算法见 feature_tree。
 
-核心流程:
-  candidates → module kernels → merge → 四格填充 → status/confidence → edges → completeness
+以前按"目录第一段 + 一条边就合并"生成，代码搬进 src/ 以后全仓库只剩一个目录，模块塌成
+几个大杂烩，what/how 也只是模板句。
 
 用法:
     from usage.structure.module_tree_v2 import generate_module_tree_v2
 
     tree = generate_module_tree_v2("/path/to/project")
-    # -> { "version": "module_tree_v2", "modules": [...], ... }
+    # -> { "version": "module_tree_v2", "modules": [...], "edges": [...], ... }
 """
 
 import json
-from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
-from usage.path_policy import (
-    PathPolicy,
-    classify_path_role,
-    load_path_policy,
-)
-from usage.structure.capability_candidates import (
-    build_capability_candidates,
-    _build_edge_indexes,
-    _anchor_attr,
-)
+from usage.path_policy import PathPolicy, load_path_policy
+from usage.structure.module_tree_v2.feature_tree import build_feature_tree
 
-
-# ── 模块核生成 ──────────────────────────────────────────────────
-
-from usage.structure.module_tree_v2.module_assign import _clean_module, assign_module_confidence, assign_module_name, assign_module_status
-from usage.structure.module_tree_v2.module_completeness import build_completeness_report, build_module_edges, build_module_kernels, fill_module_slots, merge_module_candidates
 
 def generate_module_tree_v2(
     root: str = ".",
@@ -42,87 +30,14 @@ def generate_module_tree_v2(
     anchors: Optional[dict] = None,
     relations: Optional[dict] = None,
 ) -> dict:
-    """生成 Module Tree V2。
-
-    Args:
-        root: 项目根目录
-        policy: 路径策略
-        candidates: 候选结果（build_capability_candidates 的输出）
-        anchors: 锚点字典
-        relations: 关系字典
-
-    Returns:
-        完整的模块树 JSON 结构
-    """
-    # ── 加载依赖 ──
+    """生成功能树。candidates / relations 只为兼容旧调用方保留，不再使用。"""
     if policy is None:
         policy = load_path_policy(root)
-
     if anchors is None:
         from analyzer.anchors import load_anchors
         anchors = load_anchors(root)
-
-    if relations is None:
-        from api.relations import load_relations
-        relations = load_relations(root)
-
-    if candidates is None:
-        candidates = build_capability_candidates(root, policy, anchors, relations)
-
-    cand_list = candidates.get("candidates", []) if isinstance(candidates, dict) else candidates
-
-    # ── 1. 生成模块核 ──
-    modules = build_module_kernels(cand_list, anchors, relations, policy)
-
-    # ── 2. 合并 ──
-    modules = merge_module_candidates(modules, relations, policy)
-
-    # ── 3. 填充四格 + 命名 + status + confidence ──
-    for mod in modules:
-        fill_module_slots(mod)
-        assign_module_name(mod)
-        assign_module_status(mod)
-        assign_module_confidence(mod)
-
-    # ── 4. 按 status 优先级排序 ──
-    status_order = {
-        "core_flow": 0,
-        "independent_capability": 1,
-        "support_utility": 2,
-        "dormant": 3,
-        "uncertain": 4,
-    }
-    modules.sort(key=lambda m: (status_order.get(m["status"], 9), -m.get("_seed_score", 0)))
-
-    # ── 5. 模块间边 ──
-    edges = build_module_edges(modules, relations)
-
-    # ── 6. 构建摘要 ──
-    by_status = defaultdict(int)
-    by_confidence = defaultdict(int)
-    for mod in modules:
-        by_status[mod["status"]] += 1
-        by_confidence[mod["confidence"]] += 1
-
-    # ── 7. 完整性报告 ──
-    tree = {
-        "version": "module_tree_v2",
-        "root": str(Path(root).resolve()),
-        "modules": modules,
-        "edges": edges,
-        "summary": {
-            "total_modules": len(modules),
-            "by_status": dict(by_status),
-            "by_confidence": dict(by_confidence),
-        },
-    }
-
-    completeness = build_completeness_report(tree, anchors, policy)
-    tree["completeness"] = completeness
-
-    # ── 8. 清理临时字段 ──
-    tree["modules"] = [_clean_module(m) for m in modules]
-
+    tree = build_feature_tree(str(Path(root).resolve()), anchors, policy)
+    tree["root"] = str(Path(root).resolve())
     return tree
 
 def save_module_tree_v2(tree: dict, root: str = ".") -> tuple:
@@ -159,9 +74,8 @@ if __name__ == "__main__":
 
     print(f"\n=== 模块列表 ===")
     for mod in tree["modules"]:
-        print(f"  [{mod['confidence']}] {mod['status']:24s} {mod['name']}")
-        print(f"      what: {mod['what'][:60]}")
-        print(f"      files: {len(mod['files'])}  entries: {len(mod['entrypoints'])}")
+        print(f"  [{mod['confidence']}] {mod['status']:24s} {mod['name']}  ({mod['size']['functions']} 个函数)")
+        print(f"      what: {mod['what'][:80]}")
 
     comp = tree.get("completeness", {})
     ac = comp.get("area_coverage", {})
