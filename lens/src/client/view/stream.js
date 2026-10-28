@@ -334,8 +334,8 @@ window.__ModuleLoader__.load({
     }
 
     function locateInGraph(ctx, engine, id) {
-      // 只切到逻辑图，不翻页：面板已经开着就不动布局，省得要追的节点反而跑了。
-      jumpToGraph(ctx)
+      // 只切到「CDD Lens」这一页，不动布局：要追的节点不能因为跳转反而更难找。
+      jumpToGraph()
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
         if (anchor === null || anchor === undefined) return false

@@ -5,7 +5,7 @@
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
 // build: V1_59_POSITION_STATE_UNKNOWN_001
-// parts: 47
+// parts: 46
 
 ;(function () {
 var __cddHost = window.__ModuleLoader__
@@ -6556,8 +6556,8 @@ __cddLocal.load({
     }
 
     function locateInGraph(ctx, engine, id) {
-      // 只切到逻辑图，不翻页：面板已经开着就不动布局，省得要追的节点反而跑了。
-      jumpToGraph(ctx)
+      // 只切到「CDD Lens」这一页，不动布局：要追的节点不能因为跳转反而更难找。
+      jumpToGraph()
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
         if (anchor === null || anchor === undefined) return false
@@ -6846,7 +6846,10 @@ __cddLocal.load({
   },
 })
 
-// dsh-cdd-lens — Reaching the Chat tab and opening the dock beside it.
+// dsh-cdd-lens — 切到会话里的某个页（Chat / CDD Lens）。
+//
+// 这里只做一件事：把宿主会话区的某个页切出来。不开悬浮窗、不关宿主的详情面板、
+// 不动任何布局 —— 逻辑图已经不悬浮了，它就是会话里的一页。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -6859,233 +6862,37 @@ __cddLocal.load({
     var publish = __state_store.publish
     var shared = __state_store.shared
 
-    // ---- the floating panel (shell.overlay) --------------------------------
+    var LENS_TAB = 'CDD Lens'
 
-    function activateChatTab() {
+    /** 点开会话区里名字叫 name 的那一页；没找到就什么都不做。 */
+    function activateTab(name) {
       var candidates = document.querySelectorAll('[role="tab"], button')
       for (var i = 0; i < candidates.length; i += 1) {
-        if (String(candidates[i].textContent || '').trim() !== '对话') continue
+        if (String(candidates[i].textContent || '').trim() !== name) continue
         candidates[i].click()
         return true
       }
       return false
     }
 
-    function openDockBesideChat(ctx) {
-      try {
-        var layoutService = ctx.get('layout')
-        if (layoutService) layoutService.closeDetails()
-      } catch (e) { /* optional host service */ }
-      shared.dockOpen = true
-      shared.wantGraph = (shared.wantGraph || 0) + 1
-      publish()
-      window.requestAnimationFrame(activateChatTab)
+    function activateChatTab() {
+      return activateTab('对话')
     }
 
     /**
-     * 跳到逻辑图：只切视图，不动布局。
+     * 跳到逻辑图：切到「CDD Lens」这一页，并把页内视图切成逻辑图。
      *
-     * 以前这里直接走 openDockBesideChat——它会关掉宿主的详情面板、强行开 dock、再切
-     * 宿主的 tab。人只是想「从轨迹这一行跳到图上那个节点」，结果整页翻了一遍，所有
-     * 东西换了位置：要追的那个节点反而更难找了。已经开着就什么都不动，只把视图切到
-     * 逻辑图；只有确实没开，才去开。
+     * 只切页，不动布局。以前这里会关掉宿主的详情面板、强行开一个悬浮的 dock、再切
+     * 宿主 tab——人只是想从轨迹这一行跳到图上那个节点，结果整页翻一遍，要追的节点
+     * 反而更难找。
      */
-    function jumpToGraph(ctx) {
-      if (shared.dockOpen === true) {
-        shared.wantGraph = (shared.wantGraph || 0) + 1
-        publish()
-        return
-      }
-      openDockBesideChat(ctx)
+    function jumpToGraph() {
+      shared.wantGraph = (shared.wantGraph || 0) + 1
+      publish()
+      activateTab(LENS_TAB)
     }
 
-    module.exports = { activateChatTab, openDockBesideChat, jumpToGraph }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The floating panel in shell.overlay.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-__cddLocal.load({
-  id: 'dsh-cdd-lens/shell/panel',
-  factory: (require) => {
-    var module = { exports: {} }
-    var React = require('react')
-    var h = React.createElement
-    var useState = React.useState
-    var useEffect = React.useEffect
-    var useCallback = React.useCallback
-    var useMemo = React.useMemo
-    var useRef = React.useRef
-    var __runtime_api = require('dsh-cdd-lens/runtime/api')
-    var BUILD = __runtime_api.BUILD
-    var api = __runtime_api.api
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-    var useRightInset = __state_store.useRightInset
-    var useShared = __state_store.useShared
-    var __state_persist = require('dsh-cdd-lens/state/persist')
-    var usePlacement = __state_persist.usePlacement
-    var __engine_engine = require('dsh-cdd-lens/engine/engine')
-    var makeEngine = __engine_engine.makeEngine
-    var __session_trace = require('dsh-cdd-lens/session/trace')
-    var useConversationTrace = __session_trace.useConversationTrace
-    var __view_record = require('dsh-cdd-lens/view/record')
-    var degenerate = __view_record.degenerate
-    var __view_stream = require('dsh-cdd-lens/view/stream')
-    var Stream = __view_stream.Stream
-    var __view_tree = require('dsh-cdd-lens/view/tree')
-    var Tree = __view_tree.Tree
-    var __view_outline = require('dsh-cdd-lens/view/outline')
-    var Draw = __view_outline.Draw
-    var Outline = __view_outline.Outline
-    var __view_panels = require('dsh-cdd-lens/view/panels')
-    var History = __view_panels.History
-    var Legend = __view_panels.Legend
-    var Search = __view_panels.Search
-    var Source = __view_panels.Source
-    var Unresolved = __view_panels.Unresolved
-    var __view_need_ndex = require('dsh-cdd-lens/view/needIndex')
-    var NeedIndex = __view_need_ndex.NeedIndex
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
-
-    function LensPanel(props) {
-      var ctx = props.ctx
-      useShared()
-      var engine = useMemo(function () { return makeEngine(ctx) }, [])
-      var open = useState(true)
-      var tab = useState('graph')
-      var health = useState(null)
-      var rootRef = useRef(null)
-      var rightInset = useRightInset(rootRef)
-      var placement = usePlacement()
-
-      // focus() bumps this; following it puts the graph on screen the moment a
-      // function is picked in the directory.
-      var wanted = shared.wantGraph || 0
-      var seenWant = useRef(wanted)
-      useEffect(function () {
-        if (wanted !== seenWant.current) { seenWant.current = wanted; tab[1]('graph') }
-      }, [wanted])
-      var wantedFloat = shared.wantFloat || 0
-      var seenFloat = useRef(wantedFloat)
-      useEffect(function () {
-        if (wantedFloat !== seenFloat.current) {
-          seenFloat.current = wantedFloat
-          open[1](true)
-          tab[1]('graph')
-        }
-      }, [wantedFloat])
-
-      useEffect(function () {
-        engine.context()
-        api('/health', {}).then(function (body) { health[1]({ ok: true, body: body }) })
-          .catch(function (e) { health[1]({ ok: false, error: String(e.message) }) })
-      }, [])
-      useConversationTrace(ctx, engine)
-
-      if (!open[0]) {
-        return h('div', { className: 'cddl-root', ref: rootRef, style: { right: rightInset + 'px' } },
-          h('button', { className: 'cddl-pill', onClick: function () { open[1](true) } },
-            ['CDD Lens', shared.turn > 0 ? h('span', { key: 't', className: 'cddl-pilln' }, Object.keys(shared.trace).length) : null]))
-      }
-
-      var context = shared.context
-      var body
-      if (context === undefined) body = h('div', { className: 'cddl-empty' }, '连接中…')
-      else if (!context.indexed) body = h(NeedIndex, { engine: engine })
-      else if (tab[0] === 'outline') body = h(Outline, { engine: engine })
-      else if (tab[0] === 'draw') body = h(Draw, { engine: engine })
-      // The rail belongs beside the conversation, not inside the spread-out tab:
-      // watching the anchors arrive is something you do WHILE the agent runs,
-      // and that tab replaces the chat it is meant to accompany.
-      else if (tab[0] === 'steps') body = h(Stream, { engine: engine })
-      else body = h(Tree, { engine: engine })
-
-      var stamp = health[0]
-      var mismatch = stamp !== null && stamp.ok && (stamp.body.build !== BUILD || !stamp.body.clientBundleMatchesBuild)
-
-      return h('div', {
-        className: 'cddl-root', ref: rootRef,
-        style: {
-          right: (rightInset + placement.place.dx) + 'px',
-          bottom: (16 + placement.place.dy) + 'px',
-        },
-      },
-        h('div', { className: 'cddl-card', style: { width: placement.place.w + 'px' } }, [
-          h('div', {
-            className: 'cddl-grip', key: 'g', title: '拖这里改宽度',
-            onPointerDown: placement.onResizeDown,
-          }),
-          h('div', {
-            className: 'cddl-head', key: 'h',
-            title: '按住标题拖动面板；双击回到右下角',
-            onPointerDown: placement.onMoveDown,
-            onDoubleClick: placement.reset,
-          }, [
-            h('span', { className: 'cddl-title', key: 't' }, 'CDD Lens'),
-            h('span', { className: 'cddl-meta', key: 'm', title: context ? context.root : '' },
-              context && context.stats
-                ? (context.stats.anchors + ' anchor · ' + context.stats.files + ' 文件')
-                : (stamp === null ? '…' : (stamp.ok ? '' : stamp.error))),
-            degenerate(context)
-              ? h('span', {
-                key: 'q', className: 'cddl-bad',
-                title: '这个工程的索引里 ' + context.stats.anchors + ' 个 anchor 只派生出 '
-                  + context.stats.edges + ' 条边。多半是扫进了 node_modules / .venv 之类，'
-                  + '调用图画不出来。给这个目录加 .codedendrite_ignore 再重建。',
-              }, '索引可疑')
-              : null,
-            mismatch ? h('span', { key: 'w', className: 'cddl-bad', title: '构建戳对不上：' + stamp.body.build + ' vs ' + BUILD }, '版本不符') : null,
-            h('span', { className: 'cddl-spacer', key: 's' }),
-            h('button', {
-              key: 'dock', className: 'cddl-btn', title: '把逻辑图放到 Chat 右侧',
-              onPointerDown: function (e) { e.stopPropagation() },
-              onClick: function () { openDockBesideChat(ctx) },
-            }, '并排 ⤢'),
-            h('button', {
-              key: 'r', className: 'cddl-btn', title: '重建索引（增量）',
-              onPointerDown: function (e) { e.stopPropagation() },
-              onClick: function () { engine.reindex() },
-            }, shared.reindexing ? '建索引…' : '↻'),
-            h('button', {
-              key: 'x', className: 'cddl-btn',
-              onPointerDown: function (e) { e.stopPropagation() },
-              onClick: function () { open[1](false) },
-            }, '—'),
-          ]),
-          h('div', { className: 'cddl-tabs', key: 'tb' }, [
-            h('button', {
-              key: 'g', className: tab[0] === 'graph' ? 'on' : '',
-              onClick: function () { tab[1]('graph') },
-            }, '逻辑图'),
-            h('button', {
-              key: 'o', className: tab[0] === 'outline' ? 'on' : '',
-              onClick: function () { tab[1]('outline') },
-            }, '目录'),
-            h('button', {
-              key: 'd', className: tab[0] === 'draw' ? 'on' : '',
-              onClick: function () { tab[1]('draw') },
-            }, 'cdd draw'),
-            h('button', {
-              key: 's', className: tab[0] === 'steps' ? 'on' : '',
-              title: '按顺序看这次会话碰过什么',
-              onClick: function () { tab[1]('steps') },
-            }, '进度'),
-          ]),
-          h(Search, { key: 'q', engine: engine }),
-          h('div', { key: 'b', className: 'cddl-body' }, [body, h(Unresolved, { key: 'u' })]),
-          h(Legend, { key: 'l' }),
-          h(Source, { key: 's', engine: engine }),
-          h(History, { key: 'y' }),
-        ]))
-    }
-
-    module.exports = { LensPanel }
+    module.exports = { LENS_TAB, activateTab, activateChatTab, jumpToGraph }
     return module.exports
   },
 })
@@ -7439,8 +7246,6 @@ __cddLocal.load({
     var clearNodePositions = __state_persist.clearNodePositions
     var __view_panels = require('dsh-cdd-lens/view/panels')
     var Search = __view_panels.Search
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
 
@@ -7558,10 +7363,7 @@ __cddLocal.load({
           key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
           onClick: clicked('适配', function () { fit(shared.selected || shared.graph.rootId, .35) }),
         }, '适配'),
-        props.docked ? null : h('button', {
-          key: 'float', className: 'cddl-btn',
-          onClick: clicked('并排 Chat', function () { openDockBesideChat(ctx) }),
-        }, '并排 Chat ⤢'),
+        // 「并排 Chat」没了：它开的是悬浮的逻辑图，而悬浮的只许有轨迹栏一个。
         h('button', {
           key: 'r', className: 'cddl-btn',
           onClick: function () { engine.reindex() },
@@ -7766,7 +7568,11 @@ __cddLocal.load({
   },
 })
 
-// dsh-cdd-lens — The dock beside Chat and the overlay that seats both views.
+// dsh-cdd-lens — 悬浮层：常驻的数据主人 + 轨迹栏。
+//
+// **这个插件里能悬浮的有且只有轨迹栏。** 逻辑图不悬浮，它住在会话里的「CDD Lens」
+// 页，和 Chat 并列。悬浮的图盖在页面上，一开一关整页的东西都换位置，正在追的那个
+// 节点就丢了 —— 这正是「焦点不能丢」里第一条。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -7777,25 +7583,14 @@ __cddLocal.load({
     var module = { exports: {} }
     var React = require('react')
     var h = React.createElement
-    var useState = React.useState
     var useEffect = React.useEffect
-    var useCallback = React.useCallback
     var useMemo = React.useMemo
-    var useRef = React.useRef
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var publish = __state_store.publish
-    var shared = __state_store.shared
-    var useShared = __state_store.useShared
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
     var __session_trace = require('dsh-cdd-lens/session/trace')
     var useConversationTrace = __session_trace.useConversationTrace
-    var __shell_graph_iew = require('dsh-cdd-lens/shell/graphView')
-    var LensView = __shell_graph_iew.LensView
     var __view_stream = require('dsh-cdd-lens/view/stream')
     var TrajectorySidebar = __view_stream.TrajectorySidebar
-
-    var DOCK_WIDTH_KEY = 'cdd-lens.dock-width'
 
     /** Always-on data owner with no visible panel. */
     function LensRuntime(props) {
@@ -7804,7 +7599,7 @@ __cddLocal.load({
         engine.context()
         // 索引可能在页面外面被重建（有人跑了 cdd update / rebuild）。不定期问一声，
         // 页面就一直用着上一版 anchor：改过的代码在轨迹里永远显示「没过期」。
-        // 放在这个常驻组件里 —— 浮动面板不一定挂载，挂在那儿等于没挂。
+        // 放在这个常驻组件里 —— 别的面板不一定挂载，挂在那儿等于没挂。
         var poll = setInterval(function () { engine.context() }, 10000)
         return function () { clearInterval(poll) }
       }, [])
@@ -7812,76 +7607,14 @@ __cddLocal.load({
       return null
     }
 
-    function loadDockWidth() {
-      try {
-        var value = Number(window.localStorage.getItem(DOCK_WIDTH_KEY))
-        if (isFinite(value) && value >= 420) return value
-      } catch (e) { /* ignore */ }
-      return Math.max(520, Math.min(760, Math.round(window.innerWidth * .48)))
-    }
-
-    function LensDock(props) {
-      useShared()
-      var widthState = useState(loadDockWidth)
-      var width = widthState[0]
-      var setWidth = widthState[1]
-      var drag = useRef(null)
-
-      useEffect(function () {
-        document.documentElement.style.setProperty('--cddl-dock-width', width + 'px')
-        try { window.localStorage.setItem(DOCK_WIDTH_KEY, String(width)) } catch (e) { /* ignore */ }
-        return function () { document.documentElement.style.removeProperty('--cddl-dock-width') }
-      }, [width])
-
-      if (!shared.dockOpen) return null
-
-      var resize = function (event) {
-        if (event.button !== undefined && event.button !== 0) return
-        event.preventDefault()
-        event.stopPropagation()
-        drag.current = { x: event.clientX, width: width }
-        var move = function (e) {
-          if (drag.current === null) return
-          var next = drag.current.width + (drag.current.x - e.clientX)
-          setWidth(Math.max(420, Math.min(window.innerWidth * .78, next)))
-        }
-        var up = function () {
-          drag.current = null
-          window.removeEventListener('pointermove', move)
-          window.removeEventListener('pointerup', up)
-        }
-        window.addEventListener('pointermove', move)
-        window.addEventListener('pointerup', up)
-      }
-
-      return h('section', {
-        className: 'cddl-dock cddl-dock-open',
-        style: { width: width + 'px' },
-        'data-cdd-dock': '',
-      }, [
-        h('div', { key: 'resize', className: 'cddl-dock-resize', onPointerDown: resize, title: '拖动改变宽度' }),
-        h('header', { key: 'head', className: 'cddl-dock-head' }, [
-          h('strong', { key: 'title' }, 'CDD Lens'),
-          h('span', { key: 'mode', className: 'cddl-meta' }, shared.edgeFocus ? '链路聚焦（临时）' : '用户布局'),
-          h('span', { key: 'space', className: 'cddl-spacer' }),
-          h('button', {
-            key: 'close', className: 'cddl-btn',
-            onClick: function () { shared.dockOpen = false; publish() },
-          }, '收起'),
-        ]),
-        h(LensView, { key: 'view', ctx: props.ctx, docked: true }),
-      ])
-    }
-
     function LensOverlay(props) {
       return h(React.Fragment, null, [
         h(LensRuntime, { key: 'runtime', ctx: props.ctx }),
-        h(LensDock, { key: 'dock', ctx: props.ctx }),
         h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
       ])
     }
 
-    module.exports = { DOCK_WIDTH_KEY, loadDockWidth, LensRuntime, LensDock, LensOverlay }
+    module.exports = { LensRuntime, LensOverlay }
     return module.exports
   },
 })

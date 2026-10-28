@@ -20,8 +20,6 @@ window.__ModuleLoader__.load({
     var clearNodePositions = __state_persist.clearNodePositions
     var __view_panels = require('dsh-cdd-lens/view/panels')
     var Search = __view_panels.Search
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
 
@@ -139,10 +137,7 @@ window.__ModuleLoader__.load({
           key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
           onClick: clicked('适配', function () { fit(shared.selected || shared.graph.rootId, .35) }),
         }, '适配'),
-        props.docked ? null : h('button', {
-          key: 'float', className: 'cddl-btn',
-          onClick: clicked('并排 Chat', function () { openDockBesideChat(ctx) }),
-        }, '并排 Chat ⤢'),
+        // 「并排 Chat」没了：它开的是悬浮的逻辑图，而悬浮的只许有轨迹栏一个。
         h('button', {
           key: 'r', className: 'cddl-btn',
           onClick: function () { engine.reindex() },

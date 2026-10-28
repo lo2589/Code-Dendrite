@@ -243,13 +243,23 @@ check('补 anchor 的 effect 依赖里带索引戳', () => {
     '只看行 id：索引重建后 id 没变，effect 不再跑，缓存空着，过期永远标不出来')
 })
 
-check('「在逻辑图中定位」只切视图，不翻页', () => {
+check('「在逻辑图中定位」只切页，不开悬浮窗', () => {
   const text = sourceOf('client/view/stream.js')
-  assert.ok(/jumpToGraph\(ctx\)/.test(text), '定位应该只切到逻辑图')
-  assert.ok(!/openDockBesideChat\(ctx\)/.test(text),
-    '不能再强开 dock：关详情面板 + 切宿主 tab = 整页翻一遍，要追的节点反而丢了')
+  assert.ok(/jumpToGraph\(\)/.test(text), '定位应该只切到 CDD Lens 这一页')
   const seat = sourceOf('client/shell/chatSeat.js')
-  assert.ok(/if \(shared\.dockOpen === true\)/.test(seat), '已经开着时必须什么都不动')
+  assert.ok(!/openDockBesideChat/.test(seat), '不该再有"开悬浮 dock"这条路')
+  assert.ok(!/closeDetails/.test(seat), '不许关宿主的详情面板')
+})
+
+check('能悬浮的有且只有轨迹栏', () => {
+  const dock = sourceOf('client/shell/dock.js')
+  assert.ok(/TrajectorySidebar/.test(dock), '轨迹栏必须还在悬浮层里')
+  assert.ok(!/LensDock|LensView/.test(dock), '逻辑图不许再悬浮，它住在会话的 CDD Lens 页')
+  const parts = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'client', 'parts.json'), 'utf8'))
+  assert.ok(!parts.order.includes('shell/panel.js'), '浮动面板模块应已删除')
+  assert.ok(!fs.existsSync(path.join(ROOT, 'src', 'client', 'shell', 'panel.js')), 'panel.js 应已删除')
+  // 认按钮文案，不认注释：注释里提一句"这个按钮没了"是允许的。
+  assert.ok(!/'并排 Chat ⤢'/.test(sourceOf('client/shell/viewToolbar.js')), '「并排 Chat」按钮开的是悬浮图，应已去掉')
 })
 
 check('焦点锁：按内容坐标补偿，且挂在了画布上', () => {

@@ -1,4 +1,7 @@
-// dsh-cdd-lens — Reaching the Chat tab and opening the dock beside it.
+// dsh-cdd-lens — 切到会话里的某个页（Chat / CDD Lens）。
+//
+// 这里只做一件事：把宿主会话区的某个页切出来。不开悬浮窗、不关宿主的详情面板、
+// 不动任何布局 —— 逻辑图已经不悬浮了，它就是会话里的一页。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -11,47 +14,37 @@ window.__ModuleLoader__.load({
     var publish = __state_store.publish
     var shared = __state_store.shared
 
-    // ---- the floating panel (shell.overlay) --------------------------------
+    var LENS_TAB = 'CDD Lens'
 
-    function activateChatTab() {
+    /** 点开会话区里名字叫 name 的那一页；没找到就什么都不做。 */
+    function activateTab(name) {
       var candidates = document.querySelectorAll('[role="tab"], button')
       for (var i = 0; i < candidates.length; i += 1) {
-        if (String(candidates[i].textContent || '').trim() !== '对话') continue
+        if (String(candidates[i].textContent || '').trim() !== name) continue
         candidates[i].click()
         return true
       }
       return false
     }
 
-    function openDockBesideChat(ctx) {
-      try {
-        var layoutService = ctx.get('layout')
-        if (layoutService) layoutService.closeDetails()
-      } catch (e) { /* optional host service */ }
-      shared.dockOpen = true
-      shared.wantGraph = (shared.wantGraph || 0) + 1
-      publish()
-      window.requestAnimationFrame(activateChatTab)
+    function activateChatTab() {
+      return activateTab('对话')
     }
 
     /**
-     * 跳到逻辑图：只切视图，不动布局。
+     * 跳到逻辑图：切到「CDD Lens」这一页，并把页内视图切成逻辑图。
      *
-     * 以前这里直接走 openDockBesideChat——它会关掉宿主的详情面板、强行开 dock、再切
-     * 宿主的 tab。人只是想「从轨迹这一行跳到图上那个节点」，结果整页翻了一遍，所有
-     * 东西换了位置：要追的那个节点反而更难找了。已经开着就什么都不动，只把视图切到
-     * 逻辑图；只有确实没开，才去开。
+     * 只切页，不动布局。以前这里会关掉宿主的详情面板、强行开一个悬浮的 dock、再切
+     * 宿主 tab——人只是想从轨迹这一行跳到图上那个节点，结果整页翻一遍，要追的节点
+     * 反而更难找。
      */
-    function jumpToGraph(ctx) {
-      if (shared.dockOpen === true) {
-        shared.wantGraph = (shared.wantGraph || 0) + 1
-        publish()
-        return
-      }
-      openDockBesideChat(ctx)
+    function jumpToGraph() {
+      shared.wantGraph = (shared.wantGraph || 0) + 1
+      publish()
+      activateTab(LENS_TAB)
     }
 
-    module.exports = { activateChatTab, openDockBesideChat, jumpToGraph }
+    module.exports = { LENS_TAB, activateTab, activateChatTab, jumpToGraph }
     return module.exports
   },
 })

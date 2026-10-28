@@ -38,7 +38,6 @@
     "layout/layout.js",
     "view/stream.js",
     "shell/chatSeat.js",
-    "shell/panel.js",
     "shell/viewState.js",
     "shell/viewCanvas.js",
     "shell/viewToolbar.js",
