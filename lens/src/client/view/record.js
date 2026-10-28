@@ -119,9 +119,19 @@ window.__ModuleLoader__.load({
      * 就没有 hash），这种情况不打过期标记，因为打了就是编。
      */
     function expiredOf(row, id) {
-      if (row === undefined || row === null) return false
+      return positionStateOf(row, id) === 'stale'
+    }
+
+    /**
+     * 这个位置和现在的代码是什么关系：`ok` 没变 · `stale` 变过 · `unknown` 判不了。
+     *
+     * 三态必须一路传到界面。把 `unknown` 并进 `ok`，就是拿"没抓住 hash"冒充"没过期"；
+     * 并进 `stale` 同样是编。界面上"判不了"要自己占一格，不借别人的名字。
+     */
+    function positionStateOf(row, id) {
+      if (row === undefined || row === null) return 'unknown'
       var anchorId = id === undefined ? row.id : id
-      return staleOf(row.hash, currentHashOf(anchorId)) === 'stale'
+      return staleOf(row.hash, currentHashOf(anchorId))
     }
 
     /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
@@ -130,7 +140,7 @@ window.__ModuleLoader__.load({
       return cover !== undefined && cover !== null && cover.complete === false
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, partialOf }
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, partialOf }
     return module.exports
   },
 })

@@ -24,6 +24,7 @@ window.__ModuleLoader__.load({
     var positionId = __session_position.positionId
     var windowLines = __session_position.windowLines
     var coverageOf = __session_position.coverageOf
+    var freezeHash = __session_position.freezeHash
 
     /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
     function stepsOf(snap) {
@@ -95,14 +96,17 @@ window.__ModuleLoader__.load({
           // 位置记的是"那一刻看到的代码"，现在文件什么样是另一件事（看过期标记）。
           var lines = windowLines(touch)
           hit.anchors.forEach(function (anchor) {
+            var pid = positionId(sessionId, call.turn, at.step, anchor.id)
             noteAnchor(byAnchor, call, anchor, {
               turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
               approx: touch.approx === true || hit.approx === true,
               onSurface: call.remembered !== false, working: call.running === true,
               // 位置 id：这次查看的坐标。同一 anchor 被看多次 → 多条位置，各有各的 hash。
-              pid: positionId(sessionId, call.turn, at.step, anchor.id),
-              // 抓的那一刻这个 anchor 的 hash，之后永不改写。空串 = 没抓住。
-              hash: currentHash(call, anchor),
+              pid: pid,
+              // 抓的那一刻这个 anchor 的 hash，之后永不改写 —— 由账本保证：轨迹每次
+              // 重算都会走到这里，不冻住的话这一位就会被**当前**索引的 hash 盖掉，
+              // 位置永远等于现在，过期就再也标不出来。
+              hash: freezeHash(pid, currentHash(call, anchor)),
               lines: lines,
               coverage: coverageOf(anchor, touch.from, touch.to),
             })

@@ -20,6 +20,35 @@ window.__ModuleLoader__.load({
     var apiPost = __runtime_api2.apiPost
 
     /**
+     * 替轨迹问「现在的 anchor」时，哪些 id 真的要问。
+     *
+     * 问过的记下来：host 答不出的 id 再问多少遍都一样，不记就每次重渲染都打一轮
+     * /anchors。
+     *
+     * 但这份记录必须**跟着索引戳作废，并且在发请求之前判**。索引一重建，anchorCache
+     * 被清空，可这些 id 还留在"问过了"里——于是再也不去问，"现在的 hash"永远取不到，
+     * 整条轨迹卡死在「未知」，连没改过的函数也一样。只在响应里清没用：那一轮请求根本
+     * 不会发出去。
+     */
+    function askLedger() {
+      var seen = {}
+      var stamp
+      return {
+        pick: function (ids, nodes, cache, nowStamp) {
+          if (stamp !== nowStamp) { seen = {}; stamp = nowStamp }
+          var want = (ids || []).filter(function (id) {
+            return typeof id === 'string' && id !== ''
+              && (nodes || {})[id] === undefined && (cache || {})[id] === undefined && seen[id] === undefined
+          })
+          want.forEach(function (id) { seen[id] = true })
+          return want
+        },
+      }
+    }
+
+    var ledger = askLedger()
+
+    /**
      * The layer belongs on the node, so whatever draws the graph can ask a
      * node where it goes instead of working it out again. This only ever
      * writes stamps — nothing already in the graph is removed — so it is safe
@@ -46,6 +75,27 @@ window.__ModuleLoader__.load({
           return engine.refresh()
         },
 
+        /**
+         * 轨迹里那些不在图上的 anchor：把它们**现在**的记录拉回缓存。
+         *
+         * 判过期要两个 hash：抓那一刻存下的，和现在的。现在的那个以前只从图上和缓存里
+         * 找——可轨迹里绝大多数行的 anchor 并不在图上，于是"现在的"永远取到空串，位置
+         * 一律显示成"没过期"。那不是没过期，是**根本没去问**。
+         *
+         * 问回来之后：hash 对不上的标过期，host 答不出的留在「未知」，都不编。
+         */
+        ensureAnchors: function (ids) {
+          var want = ledger.pick(ids, (shared.graph || {}).nodes, shared.anchorCache, shared.anchorCacheStamp)
+          if (want.length === 0) return Promise.resolve()
+          return apiPost('/anchors', params(), { ids: want }).then(function (body) {
+            require('dsh-cdd-lens/engine/screen').remember(body.anchors, body.stamp)
+            require('dsh-cdd-lens/runtime/debug').note('graph',
+              '轨迹补 anchor：问 ' + want.length + ' 个，拿到 ' + Object.keys(body.anchors || {}).length
+                + ' 个，拿不到 ' + (body.missing || []).length + ' 个（判不了过期，标未知）')
+            publish()
+          }).catch(function () { /* 问不到就是判不了，界面照实标未知 */ })
+        },
+
         context: function () {
           // 还没有会话、也没有仓库：不问。问了 host 只能猜一个仓库，猜错的代价是把别的项目整份索引读进内存。
           var sid = session()
@@ -68,7 +118,12 @@ window.__ModuleLoader__.load({
             if (stamp !== undefined && shared.graphStamp === undefined) shared.graphStamp = stamp
             ensureNodePositions(body.root)
             publish()
-            if (stamp !== undefined && shared.graphStamp !== stamp && shared.graph.order.length > 0) {
+            // 换版就重算，**不管图上有没有节点**。以前要求 `graph.order.length > 0`：
+            // 图是空的时候（只开着轨迹栏，没画任何节点）索引在外面重建了也不重算，
+            // anchorCache 里留着上一版的 anchor，拿旧 hash 跟旧 hash 比永远相等 ——
+            // 代码明明改过，位置却一直说「没过期」。
+            if (stamp !== undefined && shared.graphStamp !== stamp) {
+              require('dsh-cdd-lens/runtime/debug').note('graph', '索引换版，整屏重算（位置要按新 hash 重判过期）')
               return engine.revalidate().then(function () { return body })
             }
             return body
@@ -137,7 +192,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    module.exports = { fetchMethods }
+    module.exports = { askLedger, fetchMethods }
     return module.exports
   },
 })

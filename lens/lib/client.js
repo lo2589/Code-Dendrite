@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_58_POSITION_HASH_WINDOW_001
+// build: V1_59_POSITION_STATE_UNKNOWN_001
 // parts: 46
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_58_POSITION_HASH_WINDOW_001'
+    var BUILD = 'V1_59_POSITION_STATE_UNKNOWN_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -874,7 +874,58 @@ __cddLocal.load({
       }
     }
 
-    module.exports = { SEP, positionId, parsePositionId, readWindow, windowLines, staleOf, coverageOf }
+    // ---- 位置 hash 的账本：抓到一次，之后永不改写 ---------------------------
+    //
+    // 「存抓那一刻的 hash」以前只是句注释：轨迹每重算一次，hash 就按**当前**索引重新
+    // 算一遍，于是它永远等于当前值 —— 自己跟自己比，过期这件事根本不可能发生。真正
+    // 要做的是把第一次抓到的值记下来，后面只读不写。
+    var HASH_KEY = 'cdd-lens.position-hash.v1'
+    var LIMIT = 4000
+    var frozen = null
+
+    function loadFrozen() {
+      if (frozen !== null) return frozen
+      frozen = {}
+      try {
+        var raw = window.localStorage.getItem(HASH_KEY)
+        if (raw) frozen = JSON.parse(raw) || {}
+      } catch (e) { frozen = {} }
+      return frozen
+    }
+
+    function saveFrozen(all) {
+      var keys = Object.keys(all)
+      if (keys.length > LIMIT) {
+        // 超了就丢最早的一批：位置是只增不减的流水，旧的让位给新的。
+        keys.slice(0, keys.length - LIMIT).forEach(function (key) { delete all[key] })
+      }
+      try { window.localStorage.setItem(HASH_KEY, JSON.stringify(all)) } catch (e) { /* 存不下不致命 */ }
+    }
+
+    /**
+     * 这个位置该用哪个 hash：第一次抓到的那个。
+     *
+     * @param pid - 位置 id（session|轮次|step|anchor）。
+     * @param captured - 这一次算出来的 hash；空串表示没抓住，不记。
+     * @returns 账本里的那个值；从没抓住过就返回空串（判不了，不是没过期）。
+     */
+    function freezeHash(pid, captured) {
+      if (typeof pid !== 'string' || pid === '') return typeof captured === 'string' ? captured : ''
+      var all = loadFrozen()
+      if (typeof all[pid] === 'string' && all[pid] !== '') return all[pid]
+      if (typeof captured !== 'string' || captured === '') return ''
+      all[pid] = captured
+      saveFrozen(all)
+      return captured
+    }
+
+    /** 测试用：把账本清空，不碰别的状态。 */
+    function forgetFrozen() {
+      frozen = {}
+      try { window.localStorage.removeItem(HASH_KEY) } catch (e) { /* optional */ }
+    }
+
+    module.exports = { SEP, positionId, parsePositionId, readWindow, windowLines, staleOf, coverageOf, freezeHash, forgetFrozen }
     return module.exports
   },
 })
@@ -1100,6 +1151,35 @@ __cddLocal.load({
     var apiPost = __runtime_api2.apiPost
 
     /**
+     * 替轨迹问「现在的 anchor」时，哪些 id 真的要问。
+     *
+     * 问过的记下来：host 答不出的 id 再问多少遍都一样，不记就每次重渲染都打一轮
+     * /anchors。
+     *
+     * 但这份记录必须**跟着索引戳作废，并且在发请求之前判**。索引一重建，anchorCache
+     * 被清空，可这些 id 还留在"问过了"里——于是再也不去问，"现在的 hash"永远取不到，
+     * 整条轨迹卡死在「未知」，连没改过的函数也一样。只在响应里清没用：那一轮请求根本
+     * 不会发出去。
+     */
+    function askLedger() {
+      var seen = {}
+      var stamp
+      return {
+        pick: function (ids, nodes, cache, nowStamp) {
+          if (stamp !== nowStamp) { seen = {}; stamp = nowStamp }
+          var want = (ids || []).filter(function (id) {
+            return typeof id === 'string' && id !== ''
+              && (nodes || {})[id] === undefined && (cache || {})[id] === undefined && seen[id] === undefined
+          })
+          want.forEach(function (id) { seen[id] = true })
+          return want
+        },
+      }
+    }
+
+    var ledger = askLedger()
+
+    /**
      * The layer belongs on the node, so whatever draws the graph can ask a
      * node where it goes instead of working it out again. This only ever
      * writes stamps — nothing already in the graph is removed — so it is safe
@@ -1126,6 +1206,27 @@ __cddLocal.load({
           return engine.refresh()
         },
 
+        /**
+         * 轨迹里那些不在图上的 anchor：把它们**现在**的记录拉回缓存。
+         *
+         * 判过期要两个 hash：抓那一刻存下的，和现在的。现在的那个以前只从图上和缓存里
+         * 找——可轨迹里绝大多数行的 anchor 并不在图上，于是"现在的"永远取到空串，位置
+         * 一律显示成"没过期"。那不是没过期，是**根本没去问**。
+         *
+         * 问回来之后：hash 对不上的标过期，host 答不出的留在「未知」，都不编。
+         */
+        ensureAnchors: function (ids) {
+          var want = ledger.pick(ids, (shared.graph || {}).nodes, shared.anchorCache, shared.anchorCacheStamp)
+          if (want.length === 0) return Promise.resolve()
+          return apiPost('/anchors', params(), { ids: want }).then(function (body) {
+            require('dsh-cdd-lens/engine/screen').remember(body.anchors, body.stamp)
+            require('dsh-cdd-lens/runtime/debug').note('graph',
+              '轨迹补 anchor：问 ' + want.length + ' 个，拿到 ' + Object.keys(body.anchors || {}).length
+                + ' 个，拿不到 ' + (body.missing || []).length + ' 个（判不了过期，标未知）')
+            publish()
+          }).catch(function () { /* 问不到就是判不了，界面照实标未知 */ })
+        },
+
         context: function () {
           // 还没有会话、也没有仓库：不问。问了 host 只能猜一个仓库，猜错的代价是把别的项目整份索引读进内存。
           var sid = session()
@@ -1148,7 +1249,12 @@ __cddLocal.load({
             if (stamp !== undefined && shared.graphStamp === undefined) shared.graphStamp = stamp
             ensureNodePositions(body.root)
             publish()
-            if (stamp !== undefined && shared.graphStamp !== stamp && shared.graph.order.length > 0) {
+            // 换版就重算，**不管图上有没有节点**。以前要求 `graph.order.length > 0`：
+            // 图是空的时候（只开着轨迹栏，没画任何节点）索引在外面重建了也不重算，
+            // anchorCache 里留着上一版的 anchor，拿旧 hash 跟旧 hash 比永远相等 ——
+            // 代码明明改过，位置却一直说「没过期」。
+            if (stamp !== undefined && shared.graphStamp !== stamp) {
+              require('dsh-cdd-lens/runtime/debug').note('graph', '索引换版，整屏重算（位置要按新 hash 重判过期）')
               return engine.revalidate().then(function () { return body })
             }
             return body
@@ -1217,7 +1323,7 @@ __cddLocal.load({
       }
     }
 
-    module.exports = { fetchMethods }
+    module.exports = { askLedger, fetchMethods }
     return module.exports
   },
 })
@@ -1416,6 +1522,7 @@ __cddLocal.load({
     var positionId = __session_position.positionId
     var windowLines = __session_position.windowLines
     var coverageOf = __session_position.coverageOf
+    var freezeHash = __session_position.freezeHash
 
     /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
     function stepsOf(snap) {
@@ -1487,14 +1594,17 @@ __cddLocal.load({
           // 位置记的是"那一刻看到的代码"，现在文件什么样是另一件事（看过期标记）。
           var lines = windowLines(touch)
           hit.anchors.forEach(function (anchor) {
+            var pid = positionId(sessionId, call.turn, at.step, anchor.id)
             noteAnchor(byAnchor, call, anchor, {
               turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
               approx: touch.approx === true || hit.approx === true,
               onSurface: call.remembered !== false, working: call.running === true,
               // 位置 id：这次查看的坐标。同一 anchor 被看多次 → 多条位置，各有各的 hash。
-              pid: positionId(sessionId, call.turn, at.step, anchor.id),
-              // 抓的那一刻这个 anchor 的 hash，之后永不改写。空串 = 没抓住。
-              hash: currentHash(call, anchor),
+              pid: pid,
+              // 抓的那一刻这个 anchor 的 hash，之后永不改写 —— 由账本保证：轨迹每次
+              // 重算都会走到这里，不冻住的话这一位就会被**当前**索引的 hash 盖掉，
+              // 位置永远等于现在，过期就再也标不出来。
+              hash: freezeHash(pid, currentHash(call, anchor)),
               lines: lines,
               coverage: coverageOf(anchor, touch.from, touch.to),
             })
@@ -2114,7 +2224,7 @@ __cddLocal.load({
       }
     }
 
-    module.exports = { TREES, RELATIONS, screenMethods }
+    module.exports = { TREES, RELATIONS, remember, screenMethods }
     return module.exports
   },
 })
@@ -2450,9 +2560,19 @@ __cddLocal.load({
      * 就没有 hash），这种情况不打过期标记，因为打了就是编。
      */
     function expiredOf(row, id) {
-      if (row === undefined || row === null) return false
+      return positionStateOf(row, id) === 'stale'
+    }
+
+    /**
+     * 这个位置和现在的代码是什么关系：`ok` 没变 · `stale` 变过 · `unknown` 判不了。
+     *
+     * 三态必须一路传到界面。把 `unknown` 并进 `ok`，就是拿"没抓住 hash"冒充"没过期"；
+     * 并进 `stale` 同样是编。界面上"判不了"要自己占一格，不借别人的名字。
+     */
+    function positionStateOf(row, id) {
+      if (row === undefined || row === null) return 'unknown'
       var anchorId = id === undefined ? row.id : id
-      return staleOf(row.hash, currentHashOf(anchorId)) === 'stale'
+      return staleOf(row.hash, currentHashOf(anchorId))
     }
 
     /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
@@ -2461,7 +2581,7 @@ __cddLocal.load({
       return cover !== undefined && cover !== null && cover.complete === false
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, partialOf }
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, partialOf }
     return module.exports
   },
 })
@@ -2842,7 +2962,7 @@ __cddLocal.load({
     var dotClass = __view_record.dotClass
     var short = __view_record.short
     var stateOf = __view_record.stateOf
-    var expiredOf = __view_record.expiredOf
+    var positionStateOf = __view_record.positionStateOf
     var partialOf = __view_record.partialOf
 
     // ---- source ------------------------------------------------------------
@@ -2910,14 +3030,16 @@ __cddLocal.load({
       return h('div', { className: 'cddl-hist' }, [
         h('h4', { key: 'h' }, '这个 anchor 的经历'),
       ].concat(record.events.map(function (event, i) {
-        // 每一条经历就是一个位置：那一刻存的 hash 和现在的对不上，就是过期。
-        var expired = expiredOf(event, shared.selected)
+        // 每一条经历就是一个位置，三态：对不上是过期，拿不到 hash 是判不了（未知）。
+        var position = positionStateOf(event, shared.selected)
+        var expired = position === 'stale'
+        var unknown = position === 'unknown'
         var partial = partialOf(event)
         return h('div', {
           key: i,
           className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') + (expired ? ' cddl-expired' : ''),
           'data-cdd-position-id': event.pid || '',
-          'data-cdd-position-stale': expired ? 'stale' : 'ok',
+          'data-cdd-position-stale': position,
         }, [
           h('span', { key: 't', className: 'cddl-t' }, 'T' + event.turn),
           h('span', { key: 'd', className: dotClass({ state: event.working ? 'working' : event.verb === 'edit' ? 'edited' : 'viewed' }) }),
@@ -2926,6 +3048,7 @@ __cddLocal.load({
             + (event.approx ? ' · 行号近似' : '')
             + (event.onSurface ? '' : ' · 已被压缩')),
           expired ? h('span', { key: 's', className: 'cddl-hist-tag' }, '过期') : null,
+          unknown ? h('span', { key: 'u', className: 'cddl-hist-tag cddl-hist-part', title: '判不了过期：抓的时候没抓住 hash，或者这个 anchor 现在查不到' }, '未知') : null,
           partial ? h('span', { key: 'p', className: 'cddl-hist-tag cddl-hist-part' }, '部分') : null,
           event.agent ? h('span', { key: 'a', className: 'cddl-agent' }, event.agent) : null,
           event.reason ? h('span', { key: 'r', className: 'cddl-reason' }, event.reason) : null,
@@ -3555,7 +3678,8 @@ __cddLocal.load({
       '.cddl-trace-expired{border-color:var(--dsw-alias-state-warn-primary)}',
       '.cddl-trace-anchor-main{width:100%;min-height:31px;display:grid;grid-template-columns:12px 8px minmax(0,1fr) auto auto auto;align-items:center;gap:6px;padding:5px 7px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left}',
       '.cddl-trace-anchor-main:hover{background:var(--dsw-alias-interactive-bg-hover)}',
-      '.cddl-trace-expired-tag,.cddl-trace-partial-tag{font-size:8px;line-height:1;padding:2px 4px;border-radius:3px;white-space:nowrap}',
+      '.cddl-trace-expired-tag,.cddl-trace-partial-tag,.cddl-trace-unknown-tag{font-size:8px;line-height:1;padding:2px 4px;border-radius:3px;white-space:nowrap}',
+      '.cddl-trace-unknown-tag{color:var(--dsw-alias-label-dimmed);border:1px dashed var(--dsw-alias-border-l3)}',
       '.cddl-trace-expired-tag{color:var(--dsw-alias-state-warn-primary);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
       '.cddl-trace-partial-tag{color:var(--dsw-alias-label-dimmed);border:1px solid var(--dsw-alias-border-l3)}',
       '.cddl-trace-chevron{font-size:10px;color:var(--dsw-alias-label-caption)}',
@@ -6013,7 +6137,7 @@ __cddLocal.load({
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
     var openDockBesideChat = __shell_chatSeat.openDockBesideChat
     var __view_record = require('dsh-cdd-lens/view/record')
-    var expiredOf = __view_record.expiredOf
+    var positionStateOf = __view_record.positionStateOf
     var partialOf = __view_record.partialOf
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
@@ -6337,15 +6461,22 @@ __cddLocal.load({
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
       var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
-      // 位置过期：这一刻存的 hash 和现在的对不上，说明这份代码在那之后改过。
-      var expired = expiredOf(row)
+      // 位置和现在的关系，三态：ok 没变 · stale 这份代码之后改过 · unknown 判不了
+      // （抓的时候没抓住 hash，或者这个 anchor 现在查不到）。判不了就标「未知」，
+      // 不借「没过期」的名字——那是编。
+      var position = positionStateOf(row)
+      var expired = position === 'stale'
+      // 落不到 anchor 的行（只有文件名）不是「位置」，没有可判的 hash —— 给它打「未知」
+      // 等于给每一条这样的行都挂一个永远为真的标签，是噪音。只有真的指向某个 anchor
+      // 的行才谈得上判不判得了。
+      var unknown = position === 'unknown' && row.id !== null && row.id !== undefined
       // 只读到一部分（窗口切在函数中间）。不完整不是"没碰到"，仍然是一条位置。
       var partial = partialOf(row)
       return h('article', {
         className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : '') + (expired ? ' cddl-trace-expired' : ''),
         'data-cdd-anchor-id': row.id || '',
         'data-cdd-position-id': row.pid || row.key,
-        'data-cdd-position-stale': expired ? 'stale' : 'ok',
+        'data-cdd-position-stale': position,
       }, [
         h('button', {
           key: 'main', className: 'cddl-trace-anchor-main',
@@ -6356,6 +6487,7 @@ __cddLocal.load({
           h('span', { key: 'dot', className: 'cddl-trace-dot' }),
           h('span', { key: 'label', className: 'cddl-trace-label', title: row.id || row.file }, label),
           expired ? h('span', { key: 'expired', className: 'cddl-trace-expired-tag', title: '第 ' + row.turn + ' 轮看的那份代码之后改过了' }, '过期') : null,
+          unknown ? h('span', { key: 'unknown', className: 'cddl-trace-unknown-tag', title: '判不了过期：抓的时候没抓住 hash，或者这个 anchor 现在查不到' }, '未知') : null,
           partial ? h('span', { key: 'partial', className: 'cddl-trace-partial-tag', title: '这次只读到 ' + row.coverage.span + '/' + row.coverage.total + ' 行' }, '部分') : null,
           h('span', { key: 'state', className: 'cddl-trace-state' }, verbOf(row)),
         ]),
@@ -6411,6 +6543,15 @@ __cddLocal.load({
           if ((shared.sourceCache || {})[row.id] === undefined) engine.source(row.id)
         })
       }, [rows.length, Object.keys(expanded).join('|')])
+
+      // 判过期要"现在的 hash"。轨迹里的 anchor 多半不在图上，这个 hash 得去问 host；
+      // 不问就只能一直标「未知」，而假装"没过期"更糟。
+      //
+      // 依赖里必须带索引戳：索引重建后行的 id 一个没变，只看 id 这个 effect 就不再跑，
+      // 缓存又被清空了 —— 结果是改过的代码一直显示「没过期」。
+      useEffect(function () {
+        engine.ensureAnchors(rows.map(function (row) { return row.id }))
+      }, [rows.map(function (row) { return row.id || '' }).join('|'), shared.anchorCacheStamp])
 
       useEffect(function () {
         document.documentElement.style.setProperty('--cddl-trajectory-width', width + 'px')
@@ -7529,7 +7670,14 @@ __cddLocal.load({
     /** Always-on data owner with no visible panel. */
     function LensRuntime(props) {
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
-      useEffect(function () { engine.context() }, [])
+      useEffect(function () {
+        engine.context()
+        // 索引可能在页面外面被重建（有人跑了 cdd update / rebuild）。不定期问一声，
+        // 页面就一直用着上一版 anchor：改过的代码在轨迹里永远显示「没过期」。
+        // 放在这个常驻组件里 —— 浮动面板不一定挂载，挂在那儿等于没挂。
+        var poll = setInterval(function () { engine.context() }, 10000)
+        return function () { clearInterval(poll) }
+      }, [])
       useConversationTrace(props.ctx, engine)
       return null
     }

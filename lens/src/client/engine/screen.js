@@ -371,7 +371,7 @@ window.__ModuleLoader__.load({
       }
     }
 
-    module.exports = { TREES, RELATIONS, screenMethods }
+    module.exports = { TREES, RELATIONS, remember, screenMethods }
     return module.exports
   },
 })

@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({
     var dotClass = __view_record.dotClass
     var short = __view_record.short
     var stateOf = __view_record.stateOf
-    var expiredOf = __view_record.expiredOf
+    var positionStateOf = __view_record.positionStateOf
     var partialOf = __view_record.partialOf
 
     // ---- source ------------------------------------------------------------
@@ -88,14 +88,16 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'cddl-hist' }, [
         h('h4', { key: 'h' }, '这个 anchor 的经历'),
       ].concat(record.events.map(function (event, i) {
-        // 每一条经历就是一个位置：那一刻存的 hash 和现在的对不上，就是过期。
-        var expired = expiredOf(event, shared.selected)
+        // 每一条经历就是一个位置，三态：对不上是过期，拿不到 hash 是判不了（未知）。
+        var position = positionStateOf(event, shared.selected)
+        var expired = position === 'stale'
+        var unknown = position === 'unknown'
         var partial = partialOf(event)
         return h('div', {
           key: i,
           className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') + (expired ? ' cddl-expired' : ''),
           'data-cdd-position-id': event.pid || '',
-          'data-cdd-position-stale': expired ? 'stale' : 'ok',
+          'data-cdd-position-stale': position,
         }, [
           h('span', { key: 't', className: 'cddl-t' }, 'T' + event.turn),
           h('span', { key: 'd', className: dotClass({ state: event.working ? 'working' : event.verb === 'edit' ? 'edited' : 'viewed' }) }),
@@ -104,6 +106,7 @@ window.__ModuleLoader__.load({
             + (event.approx ? ' · 行号近似' : '')
             + (event.onSurface ? '' : ' · 已被压缩')),
           expired ? h('span', { key: 's', className: 'cddl-hist-tag' }, '过期') : null,
+          unknown ? h('span', { key: 'u', className: 'cddl-hist-tag cddl-hist-part', title: '判不了过期：抓的时候没抓住 hash，或者这个 anchor 现在查不到' }, '未知') : null,
           partial ? h('span', { key: 'p', className: 'cddl-hist-tag cddl-hist-part' }, '部分') : null,
           event.agent ? h('span', { key: 'a', className: 'cddl-agent' }, event.agent) : null,
           event.reason ? h('span', { key: 'r', className: 'cddl-reason' }, event.reason) : null,

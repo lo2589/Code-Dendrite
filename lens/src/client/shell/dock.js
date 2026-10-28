@@ -32,7 +32,14 @@ window.__ModuleLoader__.load({
     /** Always-on data owner with no visible panel. */
     function LensRuntime(props) {
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
-      useEffect(function () { engine.context() }, [])
+      useEffect(function () {
+        engine.context()
+        // 索引可能在页面外面被重建（有人跑了 cdd update / rebuild）。不定期问一声，
+        // 页面就一直用着上一版 anchor：改过的代码在轨迹里永远显示「没过期」。
+        // 放在这个常驻组件里 —— 浮动面板不一定挂载，挂在那儿等于没挂。
+        var poll = setInterval(function () { engine.context() }, 10000)
+        return function () { clearInterval(poll) }
+      }, [])
       useConversationTrace(props.ctx, engine)
       return null
     }

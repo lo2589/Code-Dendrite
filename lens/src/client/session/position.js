@@ -119,7 +119,58 @@ window.__ModuleLoader__.load({
       }
     }
 
-    module.exports = { SEP, positionId, parsePositionId, readWindow, windowLines, staleOf, coverageOf }
+    // ---- 位置 hash 的账本：抓到一次，之后永不改写 ---------------------------
+    //
+    // 「存抓那一刻的 hash」以前只是句注释：轨迹每重算一次，hash 就按**当前**索引重新
+    // 算一遍，于是它永远等于当前值 —— 自己跟自己比，过期这件事根本不可能发生。真正
+    // 要做的是把第一次抓到的值记下来，后面只读不写。
+    var HASH_KEY = 'cdd-lens.position-hash.v1'
+    var LIMIT = 4000
+    var frozen = null
+
+    function loadFrozen() {
+      if (frozen !== null) return frozen
+      frozen = {}
+      try {
+        var raw = window.localStorage.getItem(HASH_KEY)
+        if (raw) frozen = JSON.parse(raw) || {}
+      } catch (e) { frozen = {} }
+      return frozen
+    }
+
+    function saveFrozen(all) {
+      var keys = Object.keys(all)
+      if (keys.length > LIMIT) {
+        // 超了就丢最早的一批：位置是只增不减的流水，旧的让位给新的。
+        keys.slice(0, keys.length - LIMIT).forEach(function (key) { delete all[key] })
+      }
+      try { window.localStorage.setItem(HASH_KEY, JSON.stringify(all)) } catch (e) { /* 存不下不致命 */ }
+    }
+
+    /**
+     * 这个位置该用哪个 hash：第一次抓到的那个。
+     *
+     * @param pid - 位置 id（session|轮次|step|anchor）。
+     * @param captured - 这一次算出来的 hash；空串表示没抓住，不记。
+     * @returns 账本里的那个值；从没抓住过就返回空串（判不了，不是没过期）。
+     */
+    function freezeHash(pid, captured) {
+      if (typeof pid !== 'string' || pid === '') return typeof captured === 'string' ? captured : ''
+      var all = loadFrozen()
+      if (typeof all[pid] === 'string' && all[pid] !== '') return all[pid]
+      if (typeof captured !== 'string' || captured === '') return ''
+      all[pid] = captured
+      saveFrozen(all)
+      return captured
+    }
+
+    /** 测试用：把账本清空，不碰别的状态。 */
+    function forgetFrozen() {
+      frozen = {}
+      try { window.localStorage.removeItem(HASH_KEY) } catch (e) { /* optional */ }
+    }
+
+    module.exports = { SEP, positionId, parsePositionId, readWindow, windowLines, staleOf, coverageOf, freezeHash, forgetFrozen }
     return module.exports
   },
 })

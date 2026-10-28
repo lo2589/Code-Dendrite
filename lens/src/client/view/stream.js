@@ -24,7 +24,7 @@ window.__ModuleLoader__.load({
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
     var openDockBesideChat = __shell_chatSeat.openDockBesideChat
     var __view_record = require('dsh-cdd-lens/view/record')
-    var expiredOf = __view_record.expiredOf
+    var positionStateOf = __view_record.positionStateOf
     var partialOf = __view_record.partialOf
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
@@ -348,15 +348,22 @@ window.__ModuleLoader__.load({
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
       var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
-      // 位置过期：这一刻存的 hash 和现在的对不上，说明这份代码在那之后改过。
-      var expired = expiredOf(row)
+      // 位置和现在的关系，三态：ok 没变 · stale 这份代码之后改过 · unknown 判不了
+      // （抓的时候没抓住 hash，或者这个 anchor 现在查不到）。判不了就标「未知」，
+      // 不借「没过期」的名字——那是编。
+      var position = positionStateOf(row)
+      var expired = position === 'stale'
+      // 落不到 anchor 的行（只有文件名）不是「位置」，没有可判的 hash —— 给它打「未知」
+      // 等于给每一条这样的行都挂一个永远为真的标签，是噪音。只有真的指向某个 anchor
+      // 的行才谈得上判不判得了。
+      var unknown = position === 'unknown' && row.id !== null && row.id !== undefined
       // 只读到一部分（窗口切在函数中间）。不完整不是"没碰到"，仍然是一条位置。
       var partial = partialOf(row)
       return h('article', {
         className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : '') + (expired ? ' cddl-trace-expired' : ''),
         'data-cdd-anchor-id': row.id || '',
         'data-cdd-position-id': row.pid || row.key,
-        'data-cdd-position-stale': expired ? 'stale' : 'ok',
+        'data-cdd-position-stale': position,
       }, [
         h('button', {
           key: 'main', className: 'cddl-trace-anchor-main',
@@ -367,6 +374,7 @@ window.__ModuleLoader__.load({
           h('span', { key: 'dot', className: 'cddl-trace-dot' }),
           h('span', { key: 'label', className: 'cddl-trace-label', title: row.id || row.file }, label),
           expired ? h('span', { key: 'expired', className: 'cddl-trace-expired-tag', title: '第 ' + row.turn + ' 轮看的那份代码之后改过了' }, '过期') : null,
+          unknown ? h('span', { key: 'unknown', className: 'cddl-trace-unknown-tag', title: '判不了过期：抓的时候没抓住 hash，或者这个 anchor 现在查不到' }, '未知') : null,
           partial ? h('span', { key: 'partial', className: 'cddl-trace-partial-tag', title: '这次只读到 ' + row.coverage.span + '/' + row.coverage.total + ' 行' }, '部分') : null,
           h('span', { key: 'state', className: 'cddl-trace-state' }, verbOf(row)),
         ]),
@@ -422,6 +430,15 @@ window.__ModuleLoader__.load({
           if ((shared.sourceCache || {})[row.id] === undefined) engine.source(row.id)
         })
       }, [rows.length, Object.keys(expanded).join('|')])
+
+      // 判过期要"现在的 hash"。轨迹里的 anchor 多半不在图上，这个 hash 得去问 host；
+      // 不问就只能一直标「未知」，而假装"没过期"更糟。
+      //
+      // 依赖里必须带索引戳：索引重建后行的 id 一个没变，只看 id 这个 effect 就不再跑，
+      // 缓存又被清空了 —— 结果是改过的代码一直显示「没过期」。
+      useEffect(function () {
+        engine.ensureAnchors(rows.map(function (row) { return row.id }))
+      }, [rows.map(function (row) { return row.id || '' }).join('|'), shared.anchorCacheStamp])
 
       useEffect(function () {
         document.documentElement.style.setProperty('--cddl-trajectory-width', width + 'px')
