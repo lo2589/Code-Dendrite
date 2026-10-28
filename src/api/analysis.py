@@ -21,7 +21,7 @@ from scanner.language import (
     KotlinAnalyzer,
     HtmlAnalyzer,
 )
-from view.html.graph import generate_mermaid_for_project
+# generate_mermaid_for_project 属于 view 层，不在 api 转发：from view.html.graph import generate_mermaid_for_project
 
 
 # ─────────────────────────────────────────────
@@ -106,7 +106,6 @@ __all__ = [
     # 直接转发 (13 个)
     'get_analyzer',
     'analyze_project_structure',
-    'generate_mermaid_for_project',
     'PythonAnalyzer',
     'TypeScriptAnalyzer',
     'CppAnalyzer',
