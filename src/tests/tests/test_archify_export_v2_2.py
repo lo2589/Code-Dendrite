@@ -62,3 +62,22 @@ def test_region_box_never_wraps_another_layer(tmp_path):
             if c["id"] in box["wraps"]:
                 continue
             assert not (min(rows) <= c["row"] <= max(rows) and min(cols) <= c["col"] <= max(cols))
+
+
+def _git(cwd, *args):
+    import subprocess
+    subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True)
+
+
+def test_repository_pinned_only_when_project_is_the_git_root(tmp_path):
+    from usage.export.archify_repo import repository_identity
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "proj").mkdir()
+    (tmp_path / "proj" / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x")
+    # 子目录：HEAD 属于外层仓库，sources 路径对不上，不能钉
+    assert repository_identity(tmp_path / "proj") == (None, set())
+    repo, dirty = repository_identity(tmp_path)
+    assert re.fullmatch(r"[0-9a-f]{40}", repo["revision"]) and repo["link_mode"] == "local-only"
+    assert dirty == set()

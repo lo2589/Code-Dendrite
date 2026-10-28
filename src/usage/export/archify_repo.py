@@ -27,6 +27,11 @@ def _strip_userinfo(url):
 
 def repository_identity(root):
     """返回 (meta.repository 或 None, 有未提交改动的路径集合)。不是 git 仓库就是 (None, set())。"""
+    # sources 的路径相对项目根；项目只是某个大仓库的子目录时，HEAD 是外层仓库的，
+    # 路径对不上它，宁可不给链接也不给错链接
+    top = _git(root, "rev-parse", "--show-toplevel")
+    if not top or Path(top).resolve() != Path(root).resolve():
+        return None, set()
     revision = _git(root, "rev-parse", "HEAD")
     if not revision or not re.fullmatch(r"[0-9a-fA-F]{40}", revision):
         return None, set()
