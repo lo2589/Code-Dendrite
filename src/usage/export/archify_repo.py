@@ -4,6 +4,7 @@ archify 用 ``meta.repository``（地址 + 40 位 commit）把节点的 ``source
 字节上，``--repo-root`` 时逐个核对路径和行号。索引是按工作树建的，所以被引用的文件
 有未提交改动时要说出来：那几处行号可能和 commit 里的对不上。
 """
+import json
 import os
 import re
 import shutil
@@ -81,3 +82,17 @@ def run_deliver(cmd):
     """跑 archify deliver。返回 (退出码, stdout, stderr)。"""
     out = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     return out.returncode, out.stdout, out.stderr
+
+
+def read_layout(cli, node, ir_path, root, with_repo):
+    """``archify validate --layout-json``：实际走线、标签框、节点框。不合法时返回 None。"""
+    cmd = [node or "node", str(cli), "validate", "architecture", str(ir_path),
+           "--layout-json", "--quality", "showcase"]
+    if with_repo:
+        cmd += ["--repo-root", str(root)]
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    try:
+        data = json.loads(out.stdout)
+    except ValueError:
+        return None
+    return data if data.get("ok") and data.get("connections") is not None else None

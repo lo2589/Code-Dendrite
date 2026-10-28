@@ -53,14 +53,20 @@ def _columns(files, links):
         if (s, d) not in back:
             preds[d].append(s); succ[s].append(d); indeg[d] += 1
     col = {p: 0 for p in files}
-    ready = [p for p in files if indeg[p] == 0]
+    ready, topo = [p for p in files if indeg[p] == 0], []
     while ready:
         node = ready.pop(0)
+        topo.append(node)
         for d in succ[node]:
             col[d] = min(MAX_COLS - 1, max(col[d], col[node] + 1))
             indeg[d] -= 1
             if indeg[d] == 0:
                 ready.append(d)
+    # 出边比入边多的文件往右挪到它调的文件前一列：get_upward_chain 一条入边、三条出边，
+    # 留在第 1 列时三条长线挤一条通道；挪过去以后总线长变短，通道也空出来
+    for node in reversed(topo[1:]):
+        if succ[node] and len(succ[node]) > len(preds[node]):
+            col[node] = max(col[node], min(col[d] for d in succ[node]) - 1)
     return col, preds
 
 

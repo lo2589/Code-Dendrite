@@ -15,9 +15,11 @@ from pathlib import Path
 
 from analyzer.anchors import load_anchors
 from usage.export.archify_ir import build_architecture_ir
+from usage.export.archify_repair import polish
 from usage.export.archify_repo import (
-    deliver_command, find_archify, find_node, repository_identity, run_deliver,
+    deliver_command, find_archify, find_node, read_layout, repository_identity, run_deliver,
 )
+
 
 INSTALL_HINT = "npx skills add tt-a1i/archify -g"
 
@@ -67,6 +69,23 @@ def _write_ir(anchors, root_id, depth, name, repository, out_dir):
     return ir, stats, ir_path
 
 
+def _polish(ir, ir_path, cli, node, root, with_repo):
+    """archify 合法 ≠ 读得懂：查并线和挂错的标签，一次试一个改法（见 archify_repair）。
+    胜出的那一版写回 ir_path，返回还剩的问题。"""
+    trial_path = ir_path.with_name(ir_path.stem + ".trial.json")
+
+    def validate(candidate):
+        trial_path.write_text(json.dumps(candidate, ensure_ascii=False), encoding="utf-8")
+        return read_layout(cli, node, trial_path, root, with_repo)
+
+    try:
+        best, remaining = polish(ir, validate)
+    finally:
+        trial_path.unlink(missing_ok=True)
+    ir_path.write_text(json.dumps(best, ensure_ascii=False, indent=2), encoding="utf-8")
+    return remaining
+
+
 def _summary(stats):
     return "{} 个函数 · {} 个文件 · {} 条文件间调用".format(stats["functions"], stats["files"], stats["links"])
 
@@ -76,12 +95,15 @@ def _render(anchors, root_id, args, name, repository, out_dir, cli, node, root):
     html_path = out_dir / (name + ".html")
     last = None
     for depth in range(args.depth, 0, -1):
-        _, stats, ir_path = _write_ir(anchors, root_id, depth, name, repository, out_dir)
+        ir, stats, ir_path = _write_ir(anchors, root_id, depth, name, repository, out_dir)
+        remaining = _polish(ir, ir_path, cli, node, root, repository is not None)
         cmd = deliver_command(cli, node, ir_path, html_path, root, repository is not None)
         code, stdout, stderr = run_deliver(cmd)
         if code == 0:
             if depth < args.depth:
                 print("      深度 {} 太大，archify 不接受；实际画到深度 {}（{}）".format(args.depth, depth, _summary(stats)))
+            for line in remaining:
+                print("      仍可能认错：" + line)
             print("      完成：{}".format(html_path))
             return 0
         last = (code, stdout, stderr)
