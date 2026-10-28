@@ -17,6 +17,7 @@ window.__ModuleLoader__.load({
       '.cddl-canvaswrap::-webkit-scrollbar{width:12px;height:12px}',
       '.cddl-hscroll{grid-column:1;grid-row:2;align-self:end;position:relative;height:12px;margin:0 2px 2px;border-radius:6px;background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.10));cursor:pointer;z-index:3}',
       '.cddl-hscroll-thumb{position:absolute;top:2px;bottom:2px;border-radius:5px;background:var(--dsw-alias-border-l4);pointer-events:none}',
+      '.cddl-hscroll-idle{visibility:hidden;pointer-events:none}',
       '.cddl-hscroll:hover .cddl-hscroll-thumb{background:var(--dsw-alias-label-caption)}',
       '.cddl-canvaswrap::-webkit-scrollbar-track{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.08))}',
       '.cddl-canvaswrap::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l4);border-radius:7px;border:3px solid transparent;background-clip:content-box}',

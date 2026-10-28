@@ -78,19 +78,30 @@ window.__ModuleLoader__.load({
      */
     function settleBoxes(place, laid, metrics) {
       var byBox = {}
+      // 按「属于哪个框」认成员，不按文件名：同一个文件可能有两个框——老框保位不动，
+      // 新卡片接不进去时在下面另开一个续框（layout/stable.js）。按文件名认，两个框会
+      // 把这个文件的全部卡片都算进来，各自撑大、互相压住，再把老卡片推走。
+      // 没有 boxKey 的退回文件名，和原来一样。
       place.placed.forEach(function (p) {
         if (p.manual === true) return
-        var key = keyOf(p.side === true, p.file)
+        var key = keyOf(p.side === true, p.boxKey !== undefined ? p.boxKey : p.file)
         if (byBox[key] === undefined) byBox[key] = []
         byBox[key].push(p)
       })
-      var membersOf = function (b) { return byBox[keyOf(b.frame === 'side', b.file)] || [] }
+      var membersOf = function (b) { return byBox[keyOf(b.frame === 'side', b.boxKey !== undefined ? b.boxKey : b.file)] || [] }
       var boxes = (laid.boxes || []).map(function (b) { return grow(b, membersOf(b), metrics.BOX_PAD, metrics.BOX_HEAD) })
       var rows = (laid.rows || []).map(function (r) { return Object.assign({}, r) })
       var gap = Math.min(metrics.BOX_GAP_X, metrics.BOX_GAP_Y)
       var tree = boxes.filter(function (b) { return b.frame !== 'side' })
       var side = boxes.filter(function (b) { return b.frame === 'side' })
       var treeBottom = settleSection(tree, membersOf, -Infinity, gap)
+      // 保位（layout/stable.js）时不再强制「旁边整段压在树的下面」：新卡片放在整张图最下面，
+      // 树区因此变长，照这条规矩会把整个旁边区推到新树区底下——实测 4 张老卡片一下跑了 1015px。
+      // 保位已经保证新框不压任何老框，这里只剩「框不重叠」一件事，老卡片原地不动。
+      if (side.length > 0 && laid.held) {
+        settleSection(side, membersOf, -Infinity, gap)
+        return { boxes: boxes, rows: rows }
+      }
       if (side.length > 0) {
         var labelY = rows.length > 0 ? rows[0].y : -Infinity
         if (tree.length > 0) labelY = Math.max(labelY, treeBottom + SECTION_GAP)

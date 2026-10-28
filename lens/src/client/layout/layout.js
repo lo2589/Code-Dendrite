@@ -22,6 +22,10 @@ window.__ModuleLoader__.load({
     var boxMetrics = __layout_metrics.boxMetrics
     var __layout_file_grid = require('dsh-cdd-lens/layout/fileGrid')
     var placeFileGrid = __layout_file_grid.placeFileGrid
+    var gridTools = { polylinesFor: __layout_file_grid.polylinesFor, portsFor: __layout_file_grid.portsFor }
+    var __layout_stable = require('dsh-cdd-lens/layout/stable')
+    var holdLayout = __layout_stable.holdLayout
+    var hold = __layout_stable.hold
     var __layout_settle = require('dsh-cdd-lens/layout/settle')
     var settleBoxes = __layout_settle.settleBoxes
     var __layout_space = require('dsh-cdd-lens/layout/space')
@@ -120,10 +124,15 @@ window.__ModuleLoader__.load({
       var scope = screenScope(graph)
       var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
       var laid = placeFileGrid(graph, scope.included, scope.side, metrics, avail)
+      // 焦点不能丢：上次画过的卡片原地不动，新来的只往空地放。
+      // 间距取收框那一步同一个数，新放的不贴着老框，收框就不会再去推老卡片。
+      laid = holdLayout(graph, laid, Math.min(metrics.BOX_GAP_X, metrics.BOX_GAP_Y), gridTools)
       var value = { scope: scope, metrics: metrics, laid: laid }
       cached = { graph: graph, screen: shared.screen, key: key, value: value }
       note('layout', '文件框网格：树 ' + scope.included.length + ' · 旁边 ' + scope.side.length + ' · 文件框 ' + laid.boxes.length
-        + '（每行 ' + laid.cols + ' 格）· 边 ' + graph.edges.length + ' · 画布高 ' + Math.round(laid.canvasY) + ' · ' + (Date.now() - t0) + 'ms')
+        + '（每行 ' + laid.cols + ' 格）· 边 ' + graph.edges.length + ' · 画布高 ' + Math.round(laid.canvasY) + ' · ' + (Date.now() - t0) + 'ms'
+        + (laid.held ? ' · 保位：老 ' + laid.held.kept + ' 张原地，新 ' + laid.held.fresh + ' 张（' + laid.held.below + ' 组放到下面）'
+          + (laid.held.notes && laid.held.notes.length > 0 ? ' · ' + laid.held.notes.join('；') : '') : ' · 整体重排'))
       return value
     }
 
@@ -200,6 +209,8 @@ window.__ModuleLoader__.load({
         fit = fitExtent(place, drawn, metrics)
       }
       rememberPlaces(graph, place)
+      // 这一张就是下一次的「老位置」：下回再变，就照这一张不动。
+      hold(place.placed, s.laid.cols)
       var files = shifted(settled.boxes, dx, dy)
       var rows = shifted(settled.rows, dx, dy)
       var maxX = files.reduce(function (m, b) { return Math.max(m, b.x + b.w) }, fit.maxX)

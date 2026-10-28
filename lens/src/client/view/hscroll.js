@@ -47,7 +47,9 @@ window.__ModuleLoader__.load({
         }
       }, [props.width, props.zoom])
 
-      if (st.overflow <= 2) return null
+      // 没有横向溢出也占着这一行，只是看不见：以前直接不渲染，一溢出就冒出来占掉约 15px，
+      // 画布被挤矮；正好滚在底部时浏览器把滚动位置往回夹，整张图在屏幕上平移 15px——丢焦点。
+      if (st.overflow <= 2) return h('div', { className: 'cddl-hscroll cddl-hscroll-idle', 'aria-hidden': 'true' })
 
       var onDown = function (e) {
         var el = props.canvasRef.current

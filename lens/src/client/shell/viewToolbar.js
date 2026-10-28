@@ -18,6 +18,8 @@ window.__ModuleLoader__.load({
     var shared = __state_store.shared
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var clearNodePositions = __state_persist.clearNodePositions
+    var __layout_stable = require('dsh-cdd-lens/layout/stable')
+    var forgetHeldLayout = __layout_stable.forget
     var __view_panels = require('dsh-cdd-lens/view/panels')
     var Search = __view_panels.Search
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
@@ -127,6 +129,8 @@ window.__ModuleLoader__.load({
           key: 'l', className: 'cddl-btn',
           onClick: clicked('恢复自动布局', function () {
             clearNodePositions()
+            // 用户自己要求重排：忘掉"上次画在哪"，整体重新装箱。平时卡片保位不动（layout/stable.js）。
+            forgetHeldLayout()
             // 框的先后也按交流重新算一遍。
             shared.boxOrder = null
             layoutRevision[1](function (n) { return n + 1 })

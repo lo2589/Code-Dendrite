@@ -120,17 +120,21 @@ window.__ModuleLoader__.load({
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
-      /** 这个节点现在看得见吗：只在看不见时才动视口，免得展开时画面乱跳。 */
+      /**
+       * 这个节点现在看得见吗：只在看不见时才动视口。
+       *
+       * **露出一部分就算看得见。** 以前要求整张卡片完整落在视口里、四周还留 12px：卡片露出
+       * 一半——用户正点着它的展开按钮——也被当成"看不见"，视口居中过去，整张图一跳。
+       * 用户正在看、正在点的东西，视口一像素都不该动。完全不在视野里，才把它带过来。
+       */
       var onScreen = function (el, id, m, scale) {
         if (el === null) return true
         var target = m.nodes.filter(function (p) { return p.id === id })[0]
         if (target === undefined) return false
-        var pad = 12
         var left = target.x * scale, top = target.y * scale
         var right = (target.x + target.w) * scale, bottom = (target.y + target.h) * scale
-        return left >= el.scrollLeft + pad && top >= el.scrollTop + pad
-          && right <= el.scrollLeft + el.clientWidth - pad
-          && bottom <= el.scrollTop + el.clientHeight - pad
+        return right > el.scrollLeft && left < el.scrollLeft + el.clientWidth
+          && bottom > el.scrollTop && top < el.scrollTop + el.clientHeight
       }
       var centerOn = function (id, scale) {
         var el = canvasRef.current

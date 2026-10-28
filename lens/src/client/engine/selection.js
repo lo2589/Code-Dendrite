@@ -27,7 +27,9 @@ window.__ModuleLoader__.load({
           shared.lit = null
           var ui = uiOf(shared.graph, id)
           if (ui !== null) ui.viewedAt = shared.turn
-          requestViewport(id, 'center')
+          // 点一张卡片 / 在逻辑图中定位：看得见就不动视口，看不见才带过来。
+          // 以前是 center——点一下你正看着的卡片，整张图就滑一下去居中它，焦点丢了。
+          requestViewport(id, 'ensure')
           publish()
           return engine.source(id)
         },

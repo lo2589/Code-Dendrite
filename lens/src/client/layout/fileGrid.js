@@ -274,10 +274,11 @@ window.__ModuleLoader__.load({
         var sideOrder = stableOrder('side', Object.keys(rest), fileWeights(graph, rest), g.cols)
         bottom = packSection(graph, rest, sideOrder, labelY + 8, g, true, placed, boxes)
       }
-      return { placed: placed, polylines: polylinesFor(graph, placed), boxes: boxes, rows: rows, cols: g.cols, canvasY: bottom }
+      // grid 一并交出去：增量布局（stable.js）给新卡片找位置时要用同一套尺寸。
+      return { placed: placed, polylines: polylinesFor(graph, placed), boxes: boxes, rows: rows, cols: g.cols, canvasY: bottom, grid: g }
     }
 
-    module.exports = { placeFileGrid, greedyOrder, communicationOrder, eligibleColumns }
+    module.exports = { placeFileGrid, polylinesFor, portsFor, greedyOrder, communicationOrder, eligibleColumns }
     return module.exports
   },
 })

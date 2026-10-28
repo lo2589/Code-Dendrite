@@ -35,6 +35,7 @@
     "layout/sugiyama.js",
     "layout/fileGrid.js",
     "layout/settle.js",
+    "layout/stable.js",
     "layout/layout.js",
     "view/stream.js",
     "shell/chatSeat.js",

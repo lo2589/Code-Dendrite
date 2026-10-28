@@ -232,6 +232,8 @@ const CASES = [
 let bad = 0
 for (const [label, seed, filter, avail] of CASES) {
   const base = { selected: null, edgeFocus: null, nodePositions: {}, pins: {}, turn: 4, gather: null, wireMode: 'trunk' }
+  // 每个用例是一张独立的图，等于换了一个会话：上一张的「保位」不能带进来（layout/stable.js）。
+  B.require_('dsh-cdd-lens/layout/stable').forget()
   side.shared.skin = seed.skin || 'auto'
   let g = build(side, Object.assign({}, base, seed))
   if (seed.files) g = withFiles(side, g, seed.files[0], seed.files[1])
