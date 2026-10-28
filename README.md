@@ -1,6 +1,40 @@
 English | [简体中文](README.zh-CN.md)
 
-# CodeDendrite: causal code navigation from static analysis
+<h1 align="center">CodeDendrite</h1>
+<h3 align="center">Code navigation where every edge is a call that exists in the code.</h3>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-cdd-archify-dark.png" />
+    <img src="assets/hero-cdd-archify-light.png" alt="cdd archify output: build_jump_packet traced across 7 files, every edge a call found by static analysis, every node linked to its source lines" width="960" />
+  </picture>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/python-%E2%89%A53.10-3776AB?style=flat-square" alt="Python 3.10+" />
+  <img src="https://img.shields.io/badge/core-standard_library_only-64748b?style=flat-square" alt="Core uses the standard library only" />
+  <a href="#install-in-one-line"><img src="https://img.shields.io/badge/skills_for-Claude_Code_%7C_Codex_%7C_Cursor_%7C_OpenCode-7C3AED?style=flat-square" alt="Agent skills for Claude Code, Codex, Cursor and OpenCode" /></a>
+</p>
+
+The picture above is `cdd archify src/usage/jump_packet.py::build_jump_packet` run on this repository. CodeDendrite parsed the code, followed the calls from that function, grouped them by file and handed the result to [archify](https://github.com/tt-a1i/archify) to draw. Nobody placed an arrow by hand: each one is a call the index found, labelled with the function it calls. Each `SRC` marker opens the exact lines at the pinned commit.
+
+<a id="install-in-one-line"></a>
+
+### Install in one line, then ask your agent
+
+```bash
+npx skills add lo2589/Code-Dendrite        # 4 agent skills: understand · learn · rebuild · diagram
+pip install git+https://github.com/lo2589/Code-Dendrite   # the cdd command (Python ≥ 3.10, no dependencies)
+```
+
+Then tell your agent:
+
+```text
+Use cdd-diagram to show how <your entry function> works in this repo.
+```
+
+For diagrams, also install the renderer once: `npx skills add tt-a1i/archify -g`.
 
 ## CLI demo: rg vs cdd
 
