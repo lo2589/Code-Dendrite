@@ -3,15 +3,19 @@
 一个文件一个节点：一条 55 行的 chain 摊成 55 个函数节点，图就读不了了；按文件聚起来，
 节点数就是 chain 跨过的文件数。节点的 ``sources`` 是这个文件里落在 chain 上的函数
 （最多 3 个，带行号范围），文件之间的边是索引里真实存在的调用，标签是被调函数名。
-列号是文件离入口的调用深度，所以图从左到右就是调用往下走的方向。
+位置由 archify_layout 算：列是最长调用路径（边都从左指向右），行按上游对齐。
 """
 import re
-from collections import OrderedDict, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from pathlib import PurePosixPath
 
-MAX_COLS = 12
+from usage.export.archify_layout import assign_grid, box_is_clean, gap_for, region_of
+
 MAX_SOURCES = 3
 NODE_H = 60
+LABEL_CAPS = (20, 16, 12, 8)
+# archify 在 1440px 桌面上要求整张图宽 ≤ 1794px；留点余量
+WIDTH_BUDGET = 1760
 
 
 def _int(value, default=0):
@@ -43,12 +47,6 @@ def collect_chain(anchors, root_id, depth):
 def _node_id(path):
     slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", path).strip("_")
     return "f_" + slug
-
-
-def _region_of(path):
-    """文件属于哪一层：取前两级目录（src/usage、src/analyzer），顶层文件归到第一级。"""
-    parts = PurePosixPath(path).parts[:-1]
-    return "/".join(parts[:2]) if parts else "."
 
 
 def group_by_file(anchors, seen, edges):
@@ -86,66 +84,64 @@ def _sources(anchors, symbols):
     return out
 
 
-def _components(anchors, files, root_file):
-    rows = defaultdict(int)
+def _sublabel(path, names):
+    """副标题是目录。同名文件（两个 core.py）只写最后一级就分不清，改写最后两级。"""
+    parent = PurePosixPath(path).parent
+    if names[PurePosixPath(path).name] > 1 and len(parent.parts) > 1:
+        return "/".join(parent.parts[-2:])[-24:]
+    return (parent.name or "repo root")[:24]
+
+
+def _components(anchors, files, links, root_file):
+    grid = assign_grid(files, links)
+    names = Counter(PurePosixPath(p).name for p in files)
     comps = []
-    # 同一列里同一层的文件排相邻行，层按它最早出现的深度排：先出现的层占上面的行，
-    # 各列的同层节点就落在同一排，层框才不会圈到别层的节点
-    first_seen = {}
-    for path, info in files.items():
-        region = _region_of(path)
-        first_seen[region] = min(first_seen.get(region, info["depth"]), info["depth"])
-    ordered = sorted(files.items(), key=lambda kv: (
-        min(kv[1]["depth"], MAX_COLS - 1), first_seen[_region_of(kv[0])], _region_of(kv[0])))
-    for path, info in ordered:
-        col = min(info["depth"], MAX_COLS - 1)
+    for path, info in sorted(files.items(), key=lambda kv: grid[kv[0]]):
+        col, row = grid[path]
         name = PurePosixPath(path)
         count = len(info["symbols"])
         comps.append({
             "id": _node_id(path),
             "type": "frontend" if path == root_file else "backend",
             "label": name.name,
-            # 节点宽度放不下完整目录（archify 会拒绝），只写最后一级；完整路径在 sources 里
-            "sublabel": (name.parent.name or "repo root")[:24],
+            # 节点宽度放不下完整目录（archify 会拒绝）；完整路径在 sources 里
+            "sublabel": _sublabel(path, names),
             "tag": "{} fn{}".format(count, "" if count == 1 else "s"),
             "sources": _sources(anchors, info["symbols"]),
             "size": [_node_width(name.name), NODE_H],
-            "row": rows[col],
+            "row": row,
             "col": col,
         })
-        rows[col] += 1
     return comps
 
 
-def _connections(links):
+def _connections(links, cap):
     out = []
     for (src, dst), names in links.items():
-        label = names[0] if len(names) == 1 else "{} +{}".format(names[0], len(names) - 1)
-        out.append({"from": _node_id(src), "to": _node_id(dst), "label": label[:40]})
+        # 标签决定列间距，太长整张图会超出 archify 的桌面宽度上限；全名在节点的 SRC 里
+        name = names[0] if len(names[0]) <= cap else names[0][:cap - 1] + "…"
+        label = name if len(names) == 1 else "{} +{}".format(name, len(names) - 1)
+        out.append({"from": _node_id(src), "to": _node_id(dst), "label": label})
     return out
 
 
-def _box_is_clean(comps, ids):
-    """archify 按被框节点的外接矩形画框：矩形里混进别层的节点，框就在说假话。"""
-    inside = [c for c in comps if c["id"] in ids]
-    rows = [c["row"] for c in inside]; cols = [c["col"] for c in inside]
-    return not any(c["id"] not in ids and min(rows) <= c["row"] <= max(rows)
-                   and min(cols) <= c["col"] <= max(cols) for c in comps)
-
-
-def _gap_for(conns):
-    """列间距要放得下最长的边标签（archify 按约 5.3px/字 量宽，标签两侧还要留白）。"""
-    longest = max((len(c.get("label", "")) for c in conns), default=0)
-    return max(56, int(longest * 5.6) + 40)
+def _fit_connections(links, cols, cell_w):
+    """边标签逐级截短，直到整张图（原点 + 各列 + 列间距）放得进 archify 的宽度上限。"""
+    for cap in LABEL_CAPS:
+        conns = _connections(links, cap)
+        if 40 + cols * cell_w + (cols - 1) * gap_for(conns) <= WIDTH_BUDGET:
+            return conns
+    return conns
 
 
 def _boundaries(files, comps):
     groups = defaultdict(list)
     for path in files:
-        groups[_region_of(path)].append(_node_id(path))
+        groups[region_of(path)].append(_node_id(path))
     return [{"kind": "region", "label": region, "wraps": ids}
             for region, ids in groups.items()
-            if region != "." and len(ids) > 1 and _box_is_clean(comps, set(ids))]
+            # 框住全部节点的框不提供任何信息
+            if region != "." and 1 < len(ids) < len(files) and box_is_clean(comps, set(ids))]
 
 
 def build_architecture_ir(anchors, root_id, depth, output_name, repository=None):
@@ -155,9 +151,10 @@ def build_architecture_ir(anchors, root_id, depth, output_name, repository=None)
     seen, edges = collect_chain(anchors, root_id, depth)
     files, links = group_by_file(anchors, seen, edges)
     root_file = anchors[root_id].file
-    comps = _components(anchors, files, root_file)
-    conns = _connections(links)
+    comps = _components(anchors, files, links, root_file)
     cols = max(c["col"] for c in comps) + 1
+    cell_w = max(168, max(c["size"][0] for c in comps) + 16)
+    conns = _fit_connections(links, cols, cell_w)
     meta = {
         "title": anchors[root_id].symbol,
         "subtitle": "cdd chain {} · {} functions in {} files · edges from static analysis".format(
@@ -176,8 +173,7 @@ def build_architecture_ir(anchors, root_id, depth, output_name, repository=None)
         "diagram_type": "architecture",
         "meta": meta,
         "layout": {"mode": "grid", "origin": [40, 110], "cols": cols,
-                   "gapX": _gap_for(conns), "gapY": 44,
-                   "cellW": max(168, max(c["size"][0] for c in comps) + 16), "cellH": 64},
+                   "gapX": gap_for(conns), "gapY": 44, "cellW": cell_w, "cellH": 64},
         "components": comps,
         "connections": conns,
     }

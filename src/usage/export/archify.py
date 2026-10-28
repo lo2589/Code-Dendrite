@@ -3,6 +3,9 @@
 产物在 <root>/.codedendrite/archify/：<名字>.architecture.json（IR）和 <名字>.html。
 本机装了 archify（``npx skills add tt-a1i/archify -g``）就直接渲染并核对源码行号，
 没装就只写 IR，并打印渲染命令。
+
+archify 拒绝版面时（边穿过节点、图太宽……），多半是链太大、一张图读不了：自动把深度
+减一重画，直到通过，并说清楚实际画到了哪一层。
 """
 import argparse
 import json
@@ -38,20 +41,54 @@ def _cited_dirty(ir, dirty):
     return sorted(cited & dirty)
 
 
-def _report_failure(stdout, stderr):
+def _diagnostics(stdout):
     try:
-        receipt = json.loads(stdout)
+        return json.loads(stdout).get("diagnostics", [])
     except ValueError:
+        return []
+
+
+def _report_failure(stdout, stderr):
+    diags = _diagnostics(stdout)
+    if not diags:
         print((stderr or stdout).strip()[:2000])
-        return
-    for diag in receipt.get("diagnostics", [])[:12]:
+    for diag in diags[:12]:
         print("  [{}] {}".format(diag.get("code"), (diag.get("message") or "")[:300]))
         if diag.get("evidence"):
             print("      evidence: " + json.dumps(diag["evidence"], ensure_ascii=False)[:200])
         if diag.get("supportedFixes"):
             print("      fixes: " + ", ".join(diag["supportedFixes"]))
-    if not receipt.get("diagnostics"):
-        print(json.dumps(receipt, ensure_ascii=False)[:2000])
+
+
+def _write_ir(anchors, root_id, depth, name, repository, out_dir):
+    ir, stats = build_architecture_ir(anchors, root_id, depth, name + ".html", repository)
+    ir_path = out_dir / (name + ".architecture.json")
+    ir_path.write_text(json.dumps(ir, ensure_ascii=False, indent=2), encoding="utf-8")
+    return ir, stats, ir_path
+
+
+def _summary(stats):
+    return "{} 个函数 · {} 个文件 · {} 条文件间调用".format(stats["functions"], stats["files"], stats["links"])
+
+
+def _render(anchors, root_id, args, name, repository, out_dir, cli, node, root):
+    """从 --depth 往下逐层试，返回 archify 的退出码。"""
+    html_path = out_dir / (name + ".html")
+    last = None
+    for depth in range(args.depth, 0, -1):
+        _, stats, ir_path = _write_ir(anchors, root_id, depth, name, repository, out_dir)
+        cmd = deliver_command(cli, node, ir_path, html_path, root, repository is not None)
+        code, stdout, stderr = run_deliver(cmd)
+        if code == 0:
+            if depth < args.depth:
+                print("      深度 {} 太大，archify 不接受；实际画到深度 {}（{}）".format(args.depth, depth, _summary(stats)))
+            print("      完成：{}".format(html_path))
+            return 0
+        last = (code, stdout, stderr)
+        print("      深度 {}（{}）没通过：{} 条版面问题，减一层再画".format(depth, _summary(stats), len(_diagnostics(stdout)) or "?"))
+    print("      archify 没通过：")
+    _report_failure(last[1], last[2])
+    return last[0]
 
 
 def main(argv=None):
@@ -70,38 +107,28 @@ def main(argv=None):
     print("[2/4] 读 git 身份（地址 + commit），源码链接钉在这个 commit 上")
     repository, dirty = repository_identity(root)
     name = _slug(root_id)
-    ir, stats = build_architecture_ir(anchors, root_id, args.depth, name + ".html", repository)
-    print("      chain {}：{} 个函数 · {} 个文件 · {} 条文件间调用".format(
-        root_id, stats["functions"], stats["files"], stats["links"]))
+    out_dir = root / ".codedendrite" / "archify"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ir, stats, ir_path = _write_ir(anchors, root_id, args.depth, name, repository, out_dir)
+    print("      chain {}：{}".format(root_id, _summary(stats)))
     stale = _cited_dirty(ir, dirty)
     if stale:
         print("      注意：这些文件有未提交改动，行号按工作树算，可能和 commit 对不上：")
         for path in stale:
             print("        " + path)
-
-    out_dir = root / ".codedendrite" / "archify"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    ir_path, html_path = out_dir / (name + ".architecture.json"), out_dir / (name + ".html")
-    ir_path.write_text(json.dumps(ir, ensure_ascii=False, indent=2), encoding="utf-8")
     print("[3/4] IR 已写：{}".format(ir_path))
 
     cli, node = find_archify(), find_node()
-    cmd = deliver_command(cli, node, ir_path, html_path, root, repository is not None)
     if args.no_render or not cli or not node:
         if not cli:
             print("[4/4] 本机没有 archify，先装：{}".format(INSTALL_HINT))
         elif not node:
             print("[4/4] 找不到 node（可设 ARCHIFY_NODE）")
+        cmd = deliver_command(cli, node, ir_path, out_dir / (name + ".html"), root, repository is not None)
         print("      渲染命令：" + " ".join(cmd))
         return 0
-    print("[4/4] archify 渲染并核对源码：" + " ".join(cmd))
-    code, stdout, stderr = run_deliver(cmd)
-    if code != 0:
-        print("      archify 没通过：")
-        _report_failure(stdout, stderr)
-        return code
-    print("      完成：{}".format(html_path))
-    return 0
+    print("[4/4] archify 渲染并核对源码")
+    return _render(anchors, root_id, args, name, repository, out_dir, cli, node, root)
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ archify renders and validates the picture; CodeDendrite supplies the facts. `cdd
 
 - **node** = a file on the path; `SRC n` lists the functions on the path with their line ranges
 - **edge** = the index has a real call from one file into the other; the label is the callee
-- **column** = call depth from the entry, so the picture reads left to right in call order
+- **column** = longest call path from the entry, so every edge outside a cycle points left to right; a file called both directly and by a deeper file sits right of that file
 - **dashed box** = a layer (`src/usage`, `src/analyzer`, ...), drawn only when it encloses no node from another layer
 - `meta.repository` pins the origin URL and HEAD; archify checks every cited line against that commit
 
@@ -44,7 +44,9 @@ Without archify installed, `cdd archify` still writes the IR and prints the exac
 
 ## When archify rejects the layout
 
-`cdd archify` prints archify's diagnostics (`code`, subject, measured evidence). Layout problems (a label that does not fit, a crowded corridor) are fixed in the IR with the fields archify lists under `supportedFixes`, then render again with the printed command. Two rounds at most.
+A chain too big for one readable picture is the usual cause. `cdd archify` then redraws one level shallower until archify accepts it and says so ("depth 6 too big; drawn at depth 2"). Tell the user which depth was drawn; to see the deeper part, run `cdd archify` again from a file further down the chain.
+
+If even depth 1 is rejected, the printed diagnostics (`code`, message, measured evidence, supported fixes) say what to change in the IR; render again with the printed command. Two rounds at most.
 
 Do **not** add, remove or relabel edges or nodes by hand. The point of this diagram is that every edge exists in the code. To show less, lower `--depth` or start from a deeper entry. To show more, raise `--depth`.
 
