@@ -224,45 +224,100 @@ def test_rust_cfg_duplicates_and_tauri_invokes_are_preserved(tmp_path):
     assert "src/main.rs::approve" in anchors["src/main.rs::keystroke_yes@cfg(target_os=macos)"].callers
 
 
-def test_lens_plugin_self_chain_is_not_flattened_or_cross_wired():
-    root = Path(__file__).resolve().parents[3] / "lens"   # 插件已拉到顶层，与 src 平级
-    paths = [
-        root / "src" / "host.js",
-        root / "src" / "index_worker.js",
-        root / "lib" / "client.js",
-    ]
-    parsed, failures, completed = parse_paths(root, paths)
+# 以前这条测试拿 lens 插件的活代码当样本（host.js / index_worker.js / client.js），
+# lens 一改名就红：index_worker.js::chain#1 改没了、LensPanel 删掉了，09-14 起它就一直
+# 失败，还被归成「pre-existing，不修」。它要验的从来不是 lens 长什么样，而是 JS 解析的
+# 三件事：嵌套函数的父子链不被压平、递归自调用认得出、注释里的词不被当成类。
+# 所以样本写死在这里，形状照 lens 当年那几段：插件 apply 里注册回调、worker 里递归 visit、
+# 模块工厂里的组件带 useEffect。
+_JS_SELF_CHAIN = {
+    "src/host.js": (
+        "// Every route here is reached from a click: a class call or class is never a class.\n"
+        "module.exports = {\n"
+        "  name: 'demo',\n"
+        "  apply(ctx) {\n"
+        "    const json = (res, body) => {\n"
+        "      res.end(JSON.stringify(body))\n"
+        "    }\n"
+        "    const register = (path, handler) => ctx.routes.push({ path, handler })\n"
+        "    register('/health', {\n"
+        "      handler(req, res) {\n"
+        "        json(res, { ok: true, note: 'the class target can be showed' })\n"
+        "      },\n"
+        "    })\n"
+        "  },\n"
+        "}\n"
+    ),
+    "src/worker.js": (
+        "function describe(id) {\n"
+        "  return String(id)\n"
+        "}\n\n"
+        "function walkAll(graph, seeds) {\n"
+        "  const seen = new Set()\n"
+        "  const visit = (id) => {\n"
+        "    if (seen.has(id)) return\n"
+        "    seen.add(id)\n"
+        "    for (const next of graph.get(id) || []) visit(next)\n"
+        "  }\n"
+        "  seeds.forEach(visit)\n"
+        "  const names = []\n"
+        "  for (const id of seeds) names.push(describe(id))\n"
+        "  return names\n"
+        "}\n\n"
+        "module.exports = { walkAll, describe }\n"
+    ),
+    "src/client.js": (
+        "window.__loader.load({\n"
+        "  id: 'demo/panel',\n"
+        "  factory: (require) => {\n"
+        "    const React = require('react')\n"
+        "    function Panel(props) {\n"
+        "      React.useEffect(function () {\n"
+        "        props.onOpen()\n"
+        "      }, [])\n"
+        "      return null\n"
+        "    }\n"
+        "    return { Panel }\n"
+        "  },\n"
+        "})\n"
+    ),
+}
+
+
+def test_js_self_chain_is_not_flattened_or_cross_wired(tmp_path):
+    for rel, text in _JS_SELF_CHAIN.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    paths = [tmp_path / rel for rel in _JS_SELF_CHAIN]
+    parsed, failures, completed = parse_paths(tmp_path, paths)
     assert not failures
     assert len(completed) == len(paths)
     anchors = _anchors(parsed)
 
+    # 注释和字符串里的 "class call"、"class target" 不是类
     fake = {"call", "or", "is", "target", "can", "showed"}
     assert not fake.intersection(
         item.symbol for item in anchors.values() if item.symbol_type == "class"
     )
 
+    # 插件 apply 里的注册回调：父子链不压平，回调调到 apply 里的辅助函数
     host = anchors["src/host.js::apply"]
-    # 行号从源码现算，不写死：往插件文件前面加几行就会让 115 变成 139，而这条测试
-    # 真正要验的是"锚点落在那个函数上、父子链没被压平"，不是某个魔数。
-    source_lines = (root / "src" / "host.js").read_text(encoding="utf-8").split("\n")
-    apply_at = next(
-        i for i, line in enumerate(source_lines, 1) if line.strip().startswith("apply(")
-    )
-    assert host.line_start <= apply_at <= host.line_end
-    assert host.line_end > host.line_start + 500
-    route = anchors["src/host.js::apply.register#1"]
-    route_handler = anchors["src/host.js::apply.register#1.handler"]
-    assert route.parent_anchor == host.id
-    assert route_handler.parent_anchor == route.id
-    assert "src/host.js::apply.json" in route_handler.callees
+    handler = anchors["src/host.js::apply.handler"]
+    helper = anchors["src/host.js::apply.json"]
+    assert handler.parent_anchor == host.id
+    assert helper.parent_anchor == host.id
+    assert helper.id in handler.callees
 
-    worker_chain = anchors["src/index_worker.js::chain#1"]
-    worker_visit = anchors["src/index_worker.js::chain#1.visit"]
-    assert worker_visit.parent_anchor == worker_chain.id
-    assert "src/index_worker.js::chain#1.visit" in worker_visit.callees
-    assert "src/index_worker.js::describe" in worker_chain.callees
+    # worker 里的递归：visit 挂在 walkAll 下、调自己；walkAll 调到顶层的 describe
+    walk = anchors["src/worker.js::walkAll"]
+    visit = anchors["src/worker.js::walkAll.visit"]
+    assert visit.parent_anchor == walk.id
+    assert visit.id in visit.callees
+    assert "src/worker.js::describe" in walk.callees
 
-    lens = anchors["lib/client.js::factory#49.LensPanel"]
-    effect = anchors["lib/client.js::factory#49.LensPanel.useEffect#1"]
-    assert lens.line_end > lens.line_start
-    assert effect.parent_anchor == lens.id
+    # 模块工厂里的组件和它的 effect：一层一层挂着
+    panel = anchors["src/client.js::factory.Panel"]
+    effect = anchors["src/client.js::factory.Panel.useEffect"]
+    assert panel.parent_anchor == "src/client.js::factory"
+    assert effect.parent_anchor == panel.id
+    assert panel.line_end > panel.line_start
