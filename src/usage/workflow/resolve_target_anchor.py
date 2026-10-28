@@ -150,7 +150,7 @@ def _resolve_target_anchor(
             return anchor
 
     try:
-        from api.smart import smart_analyze
+        from usage.smart import smart_analyze
         report = smart_analyze(error_msg, file=file_path, severity="high", root=root)
         report_target = str(getattr(report, "target", "") or "").replace("\\", "/")
         # SmartAnalyzer may return the input file path as its generic target.
@@ -278,7 +278,7 @@ def debug_workflow(error_msg: str, file_path: str, root: str) -> dict:
     # 第二步：定位报错函数
     target = None
     try:
-        from api.smart import smart_analyze
+        from usage.smart import smart_analyze
         report = smart_analyze(error_msg, file=file_path, severity="high", root=root)
         target = getattr(report, "target", None)
     except Exception:

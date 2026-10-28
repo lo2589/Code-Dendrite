@@ -44,7 +44,7 @@ PROFILE_4B = "4b"
 PROFILE_8B = "8b"
 _DEFAULT_PROFILE = PROFILE_8B
 
-from api.navigator.target import Step, Target, _build_context_summary, _extract_code, _refresh, _write_current_target, _write_log
+from usage.navigator.target import Step, Target, _build_context_summary, _extract_code, _refresh, _write_current_target, _write_log
 
 def jump(
     coordinate: str,

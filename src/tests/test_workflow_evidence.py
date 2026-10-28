@@ -29,7 +29,7 @@ class WorkflowEvidenceTests(unittest.TestCase):
                 "api/cli.py::main": _anchor("api/cli.py::main", 329),
             }
             with patch(
-                "api.smart.smart_analyze",
+                "usage.smart.smart_analyze",
                 return_value=SimpleNamespace(target="api/cli.py"),
             ):
                 resolved = _resolve_target_anchor(

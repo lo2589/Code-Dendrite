@@ -13,6 +13,8 @@ view 的 mermaid 画图——下层替上层转发，分层就成了网状（REA
     from usage.workflow import debug_workflow, locate_bug, diagnose_bug, plan_fix, verify_fix, run_debug_loop
     from usage.structure.module_tree import generate_module_tree, load_module_tree, get_module, ...
     from view.html.graph import generate_mermaid_for_project
+    from usage.smart import smart_analyze
+    from usage.navigator import Step, Target, start, jump, get_target, done, escalate
 
 使用方式:
     from api import analyze_code, search_symbol, generate_all_anchors
@@ -64,9 +66,6 @@ from api.dataflow import (
     generate_dataflow_html,
 )
 
-# ─── 智能分析 (1 个) ───
-from api.smart import smart_analyze
-
 # ─── 锚点管理 (9 个) ───
 from analyzer.anchors import (
     list_all_symbols,
@@ -90,17 +89,6 @@ from api.relations import (
     count_edge_types,
 )
 
-# ─── 导航链 (7 个，小模型接口) ────────
-from api.navigator import (
-    Step,
-    Target,
-    start,
-    jump,
-    get_target,
-    done,
-    escalate,
-)
-
 
 __all__ = [
     # 代码分析 (14)
@@ -118,8 +106,6 @@ __all__ = [
     'analyze_dataflow', 'analyze_call_chain', 'trace_variable',
     'get_function_inputs', 'get_function_outputs', 'get_transformations',
     'generate_dataflow_html',
-    # 智能分析 (1)
-    'smart_analyze',
     # 锚点管理 (9)
     'list_all_symbols', 'list_anchors', 'create_anchor',
     'check_all_anchors', 'generate_all_anchors', 'update_anchors_for_files',
@@ -127,6 +113,4 @@ __all__ = [
     # 关系图 (6)
     'generate_relations', 'load_relations', 'get_node_edges', 'expand_node',
     'filter_edges_by_keyword', 'count_edge_types',
-    # 导航链 (7)
-    'Step', 'Target', 'start', 'jump', 'get_target', 'done', 'escalate',
 ]

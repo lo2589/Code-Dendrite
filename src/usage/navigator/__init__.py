@@ -44,8 +44,8 @@ PROFILE_4B = "4b"
 PROFILE_8B = "8b"
 _DEFAULT_PROFILE = PROFILE_8B
 
-from api.navigator.target import Step, Target, _build_context_summary, _codekeeper_dir, _extract_code, _read_current_target, _refresh, _write_current_target, _write_log, done, escalate, get_target
-from api.navigator.jump import jump
-from api.navigator.start import start, navigate, step_to_str, target_to_str
+from usage.navigator.target import Step, Target, _build_context_summary, _codekeeper_dir, _extract_code, _read_current_target, _refresh, _write_current_target, _write_log, done, escalate, get_target
+from usage.navigator.jump import jump
+from usage.navigator.start import start, navigate, step_to_str, target_to_str
 
 __all__ = ['Step', 'Target', '_build_context_summary', '_codekeeper_dir', '_extract_code', '_read_current_target', '_refresh', '_write_current_target', '_write_log', 'done', 'escalate', 'get_target', 'jump', 'start', 'navigate', 'step_to_str', 'target_to_str']
