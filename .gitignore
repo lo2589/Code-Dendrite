@@ -54,3 +54,7 @@ docs/*
 # pip 打包产物
 build/
 *.egg-info/
+
+# design notes and docs never go into git (README and install docs only)
+/doc/
+**/design/

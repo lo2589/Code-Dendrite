@@ -323,7 +323,7 @@ def _make_llm(model_str: str) -> Callable:
         base_urls = {
             "openai": None,
             "deepseek": "https://api.deepseek.com/v1",
-            "ollama": os.environ.get("OLLAMA_URL", "http://192.168.3.12:11434") + "/v1",
+            "ollama": os.environ.get("OLLAMA_URL", "http://localhost:11434") + "/v1",
         }
         client = OpenAI(
             base_url=base_urls.get(vendor),
