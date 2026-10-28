@@ -1,41 +1,8 @@
-"""Canonical CodeDendrite anchor identity helpers.
+"""已搬到 scanner.shared.genome_identity（扫描层）。这里只转发：旧模块名指向同一个模块对象，analyzer 里的引用不用改。
 
-Real code symbols use the same public ID everywhere:
-
-    relative/path.py::Class.method
-
-Non-symbol assets keep the same file namespace and add an explicit kind:
-
-    relative/path.py::import:json
+搬家原因：scanner 产出这些东西，却要反向 import analyzer 才拿得到——分层从此不是单向的。
 """
+import importlib
+import sys
 
-from pathlib import Path
-from typing import Optional, Union
-
-
-PathLike = Union[str, Path]
-
-
-def canonical_file_id(file_path: PathLike, project_root: Optional[PathLike] = None) -> str:
-    """Return a stable POSIX file path, relative to the scanned project when possible."""
-    path = Path(file_path).expanduser()
-    if project_root is not None:
-        root = Path(project_root).expanduser().resolve()
-        try:
-            path = path.resolve().relative_to(root)
-        except ValueError:
-            path = Path(path.name)
-    elif path.is_absolute():
-        path = Path(path.name)
-    normalized = path.as_posix()
-    return normalized[2:] if normalized.startswith("./") else normalized
-
-
-def symbol_anchor_id(file_id: str, symbol: str) -> str:
-    """Build the canonical ID for a real function, class, or method."""
-    return "{}::{}".format(file_id.replace("\\", "/"), symbol)
-
-
-def asset_anchor_id(file_id: str, kind: str, name: str) -> str:
-    """Build a collision-resistant ID for a non-symbol code asset."""
-    return "{}::{}:{}".format(file_id.replace("\\", "/"), kind, name)
+sys.modules[__name__] = importlib.import_module("scanner.shared.genome_identity")

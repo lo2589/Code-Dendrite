@@ -10,7 +10,7 @@ import fnmatch
 from pathlib import Path
 from typing import List, Dict, Set, Optional
 
-from analyzer.shared.codedendrite_ignore.glob_match import _glob_match
+from scanner.shared.codedendrite_ignore.glob_match import _glob_match
 
 class CodeDendriteIgnore:
     """
