@@ -32,6 +32,8 @@ lens/output/playwright/
 /lens-pcb/design/*.html
 /lens-v2/
 /multilanguage_debug/
+# 评测 / 录屏的本地产物；README 要用的图放 /assets/
+/output/
 
 # ── 生成物：索引与产物，用 cdd rebuild 重生 ────────────────────
 .codedendrite/

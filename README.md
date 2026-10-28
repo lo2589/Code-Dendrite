@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 ## CLI demo: rg vs cdd
 
-![Animated side-by-side CLI comparison: locating a function, opening its source, and tracing calls with rg and cdd](output/usability-comparison-2026-10-12/comparison.gif)
+![Animated side-by-side CLI comparison: locating a function, opening its source, and tracing calls with rg and cdd](assets/cli-rg-vs-cdd.gif)
 
 The same coding task is shown side by side: `rg` on the left and `cdd` on the right. The animation plays directly in this README.
 

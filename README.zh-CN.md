@@ -4,7 +4,7 @@
 
 ## CLI 演示：rg 与 cdd 同屏对比
 
-![rg 与 cdd 的 CLI 动画对比：定位函数、打开源码、追踪调用关系](output/usability-comparison-2026-10-12/comparison.gif)
+![rg 与 cdd 的 CLI 动画对比：定位函数、打开源码、追踪调用关系](assets/cli-rg-vs-cdd.gif)
 
 同一个 coding 任务，左侧用 `rg`，右侧用 `cdd`；打开 README 就能直接看到动画。
 
