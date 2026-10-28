@@ -141,6 +141,8 @@ window.__ModuleLoader__.load({
       '.cddl-trace-unresolved button{margin:0 0 0 auto}',
       '@media (min-width:721px) and (max-width:900px){.cddl-trajectory{width:min(var(--cddl-trajectory-width,360px),52vw)!important;min-width:220px}.cddl-dock{right:min(var(--cddl-trajectory-width,360px),52vw)}.cddl-trace-step{grid-template-columns:34px minmax(0,1fr)}.cddl-trace-step-label{font-size:8px}}',
       '@media (max-width:720px){.cddl-trajectory:not(.is-collapsed){width:min(var(--cddl-trajectory-width,360px),82vw)!important;min-width:280px}.cddl-trajectory-toggle{display:block}.cddl-trajectory:not(.is-collapsed){box-shadow:-18px 0 42px rgba(0,0,0,.34)}.cddl-dock{right:44px;min-width:0;max-width:calc(100vw - 44px)}.cddl-trace-step{grid-template-columns:34px minmax(0,1fr)}.cddl-trace-step-label{font-size:8px}}',
+      // 托管在 rightbar 标签里：rightbar 给位置和宽度，这里只填满它给的盒子。
+      '.cddl-trajectory.is-hosted{position:relative!important;top:auto;right:auto;bottom:auto;height:100%;width:auto!important;min-width:0!important;max-width:none!important;box-shadow:none;border-left:none;z-index:auto}',
       '.cddl-rail{display:flex;flex-direction:column;min-height:0;height:100%}',
       '.cddl-rail-head{padding:6px 10px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}',
       '.cddl-rail-body{overflow:auto;padding:6px 4px 14px;display:flex;flex-direction:column;gap:7px;flex:1}',

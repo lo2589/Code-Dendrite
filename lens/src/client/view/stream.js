@@ -396,6 +396,9 @@ window.__ModuleLoader__.load({
 
     /** Fixed right column; history is never filtered by compaction/fade. */
     function TrajectorySidebar(props) {
+      // hosted：住在 dsh-plugin-rightbar 的「轨迹」标签里。位置、宽度、收起都归 rightbar，
+      // 这里不再 fixed、不写 --cddl-trajectory-width/top，也不画自己的拖宽手柄和收起按钮。
+      var hosted = props.hosted === true
       useShared()
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
       var rows = stepsOf()
@@ -441,6 +444,7 @@ window.__ModuleLoader__.load({
       }, [rows.map(function (row) { return row.id || '' }).join('|'), shared.anchorCacheStamp])
 
       useEffect(function () {
+        if (hosted) return undefined
         document.documentElement.style.setProperty('--cddl-trajectory-width', width + 'px')
         try { window.localStorage.setItem(WIDTH_KEY, String(width)) } catch (e) { /* optional */ }
         return function () { document.documentElement.style.removeProperty('--cddl-trajectory-width') }
@@ -450,6 +454,7 @@ window.__ModuleLoader__.load({
       // Follow Chat's real scroll-area top so DSH's complete session header
       // remains visible even if the host changes its header height.
       useEffect(function () {
+        if (hosted) return undefined
         var frame = null
         var syncTop = function () {
           frame = null
@@ -539,13 +544,13 @@ window.__ModuleLoader__.load({
       }
 
       return h('aside', {
-        className: 'cddl-trajectory' + (collapsed ? ' is-collapsed' : ''),
-        style: { width: width + 'px' },
+        className: 'cddl-trajectory' + (hosted ? ' is-hosted' : (collapsed ? ' is-collapsed' : '')),
+        style: hosted ? undefined : { width: width + 'px' },
         'data-cdd-trajectory': 'persistent',
         // 两个插件都挂这条侧栏、叠在同一个位置：谁的图开着显示谁（代码窗口在它里面），另一条藏起来，见 styles/graph.js。
         'data-cdd-view': shared.viewMounted > 0 ? 'open' : 'closed',
       }, [
-        h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
+        hosted ? null : h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
         // The source lives here, not over the graph. This edge is one place
         // with several tenants; reading a function should cost the graph
         // nothing, and the graph is the thing you came to look at.
@@ -558,7 +563,7 @@ window.__ModuleLoader__.load({
             h('strong', { key: 'strong' }, '轨迹'),
             h('span', { key: 'count' }, turns.length + ' 轮 · ' + rows.length + ' Anchor 记录'),
           ]),
-          h('button', {
+          hosted ? null : h('button', {
             key: 'collapse', className: 'cddl-trajectory-toggle',
             'aria-expanded': collapsed ? 'false' : 'true',
             'aria-label': collapsed ? '展开代码轨迹' : '收起代码轨迹',

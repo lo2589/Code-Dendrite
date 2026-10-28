@@ -22,6 +22,19 @@ window.__ModuleLoader__.load({
     var __view_stream = require('dsh-cdd-lens/view/stream')
     var TrajectorySidebar = __view_stream.TrajectorySidebar
 
+    // 轨迹栏是否已被 dsh-plugin-rightbar 托管。rightbar 是可选的：没装就永远 false，
+    // 轨迹栏照旧自己浮着；装了，entry.js 的 inject 把它置 true，浮动的那条就不画。
+    var hostedState = { value: false, listeners: new Set() }
+    function setTrajectoryHosted(value) {
+      hostedState.value = value === true
+      hostedState.listeners.forEach(function (fn) { fn() })
+    }
+    function subscribeHosted(fn) {
+      hostedState.listeners.add(fn)
+      return function () { hostedState.listeners.delete(fn) }
+    }
+    function readHosted() { return hostedState.value }
+
     /** Always-on data owner with no visible panel. */
     function LensRuntime(props) {
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
@@ -38,13 +51,14 @@ window.__ModuleLoader__.load({
     }
 
     function LensOverlay(props) {
+      var hosted = React.useSyncExternalStore(subscribeHosted, readHosted, readHosted)
       return h(React.Fragment, null, [
         h(LensRuntime, { key: 'runtime', ctx: props.ctx }),
-        h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
+        hosted ? null : h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
       ])
     }
 
-    module.exports = { LensRuntime, LensOverlay }
+    module.exports = { LensRuntime, LensOverlay, setTrajectoryHosted }
     return module.exports
   },
 })

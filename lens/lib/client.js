@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_61_FOCUS_HOLD_001
+// build: V1_62_RIGHTBAR_TAB_001
 // parts: 47
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_61_FOCUS_HOLD_001'
+    var BUILD = 'V1_62_RIGHTBAR_TAB_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -3809,6 +3809,8 @@ __cddLocal.load({
       '.cddl-trace-unresolved button{margin:0 0 0 auto}',
       '@media (min-width:721px) and (max-width:900px){.cddl-trajectory{width:min(var(--cddl-trajectory-width,360px),52vw)!important;min-width:220px}.cddl-dock{right:min(var(--cddl-trajectory-width,360px),52vw)}.cddl-trace-step{grid-template-columns:34px minmax(0,1fr)}.cddl-trace-step-label{font-size:8px}}',
       '@media (max-width:720px){.cddl-trajectory:not(.is-collapsed){width:min(var(--cddl-trajectory-width,360px),82vw)!important;min-width:280px}.cddl-trajectory-toggle{display:block}.cddl-trajectory:not(.is-collapsed){box-shadow:-18px 0 42px rgba(0,0,0,.34)}.cddl-dock{right:44px;min-width:0;max-width:calc(100vw - 44px)}.cddl-trace-step{grid-template-columns:34px minmax(0,1fr)}.cddl-trace-step-label{font-size:8px}}',
+      // 托管在 rightbar 标签里：rightbar 给位置和宽度，这里只填满它给的盒子。
+      '.cddl-trajectory.is-hosted{position:relative!important;top:auto;right:auto;bottom:auto;height:100%;width:auto!important;min-width:0!important;max-width:none!important;box-shadow:none;border-left:none;z-index:auto}',
       '.cddl-rail{display:flex;flex-direction:column;min-height:0;height:100%}',
       '.cddl-rail-head{padding:6px 10px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}',
       '.cddl-rail-body{overflow:auto;padding:6px 4px 14px;display:flex;flex-direction:column;gap:7px;flex:1}',
@@ -6921,6 +6923,9 @@ __cddLocal.load({
 
     /** Fixed right column; history is never filtered by compaction/fade. */
     function TrajectorySidebar(props) {
+      // hosted：住在 dsh-plugin-rightbar 的「轨迹」标签里。位置、宽度、收起都归 rightbar，
+      // 这里不再 fixed、不写 --cddl-trajectory-width/top，也不画自己的拖宽手柄和收起按钮。
+      var hosted = props.hosted === true
       useShared()
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
       var rows = stepsOf()
@@ -6966,6 +6971,7 @@ __cddLocal.load({
       }, [rows.map(function (row) { return row.id || '' }).join('|'), shared.anchorCacheStamp])
 
       useEffect(function () {
+        if (hosted) return undefined
         document.documentElement.style.setProperty('--cddl-trajectory-width', width + 'px')
         try { window.localStorage.setItem(WIDTH_KEY, String(width)) } catch (e) { /* optional */ }
         return function () { document.documentElement.style.removeProperty('--cddl-trajectory-width') }
@@ -6975,6 +6981,7 @@ __cddLocal.load({
       // Follow Chat's real scroll-area top so DSH's complete session header
       // remains visible even if the host changes its header height.
       useEffect(function () {
+        if (hosted) return undefined
         var frame = null
         var syncTop = function () {
           frame = null
@@ -7064,13 +7071,13 @@ __cddLocal.load({
       }
 
       return h('aside', {
-        className: 'cddl-trajectory' + (collapsed ? ' is-collapsed' : ''),
-        style: { width: width + 'px' },
+        className: 'cddl-trajectory' + (hosted ? ' is-hosted' : (collapsed ? ' is-collapsed' : '')),
+        style: hosted ? undefined : { width: width + 'px' },
         'data-cdd-trajectory': 'persistent',
         // 两个插件都挂这条侧栏、叠在同一个位置：谁的图开着显示谁（代码窗口在它里面），另一条藏起来，见 styles/graph.js。
         'data-cdd-view': shared.viewMounted > 0 ? 'open' : 'closed',
       }, [
-        h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
+        hosted ? null : h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
         // The source lives here, not over the graph. This edge is one place
         // with several tenants; reading a function should cost the graph
         // nothing, and the graph is the thing you came to look at.
@@ -7083,7 +7090,7 @@ __cddLocal.load({
             h('strong', { key: 'strong' }, '轨迹'),
             h('span', { key: 'count' }, turns.length + ' 轮 · ' + rows.length + ' Anchor 记录'),
           ]),
-          h('button', {
+          hosted ? null : h('button', {
             key: 'collapse', className: 'cddl-trajectory-toggle',
             'aria-expanded': collapsed ? 'false' : 'true',
             'aria-label': collapsed ? '展开代码轨迹' : '收起代码轨迹',
@@ -7903,6 +7910,19 @@ __cddLocal.load({
     var __view_stream = require('dsh-cdd-lens/view/stream')
     var TrajectorySidebar = __view_stream.TrajectorySidebar
 
+    // 轨迹栏是否已被 dsh-plugin-rightbar 托管。rightbar 是可选的：没装就永远 false，
+    // 轨迹栏照旧自己浮着；装了，entry.js 的 inject 把它置 true，浮动的那条就不画。
+    var hostedState = { value: false, listeners: new Set() }
+    function setTrajectoryHosted(value) {
+      hostedState.value = value === true
+      hostedState.listeners.forEach(function (fn) { fn() })
+    }
+    function subscribeHosted(fn) {
+      hostedState.listeners.add(fn)
+      return function () { hostedState.listeners.delete(fn) }
+    }
+    function readHosted() { return hostedState.value }
+
     /** Always-on data owner with no visible panel. */
     function LensRuntime(props) {
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
@@ -7919,13 +7939,14 @@ __cddLocal.load({
     }
 
     function LensOverlay(props) {
+      var hosted = React.useSyncExternalStore(subscribeHosted, readHosted, readHosted)
       return h(React.Fragment, null, [
         h(LensRuntime, { key: 'runtime', ctx: props.ctx }),
-        h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
+        hosted ? null : h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
       ])
     }
 
-    module.exports = { LensRuntime, LensOverlay }
+    module.exports = { LensRuntime, LensOverlay, setTrajectoryHosted }
     return module.exports
   },
 })
@@ -7948,7 +7969,7 @@ __cddLocal.load({
       '.cddl-root{position:absolute;right:16px;bottom:16px;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:400}',
       'body:has(.cddl-view) .cddl-root,body:has(.cddl-trajectory) .cddl-root{display:none}',
       // Header stays above the rail, but below DSH's workbench overlay layer.
-      'body:has(.cddl-trajectory) header:has([role="tablist"]){position:relative;z-index:var(--cddl-header-layer,19);width:calc(100% + var(--cddl-trajectory-width,360px))}',
+      'body:has(.cddl-trajectory:not(.is-hosted)) header:has([role="tablist"]){position:relative;z-index:var(--cddl-header-layer,19);width:calc(100% + var(--cddl-trajectory-width,360px))}',
       // Nothing reserves room for the trajectory column any more. Pushing
       // #root aside squeezed the graph — the thing you opened this for —
       // and on any tab where the column did not paint, the reserved band
@@ -8116,6 +8137,9 @@ __cddLocal.load({
     var Boundary = makeBoundary(React)
     var __shell_dock = require('dsh-cdd-lens/shell/dock')
     var LensOverlay = __shell_dock.LensOverlay
+    var setTrajectoryHosted = __shell_dock.setTrajectoryHosted
+    var __view_stream = require('dsh-cdd-lens/view/stream')
+    var TrajectorySidebar = __view_stream.TrajectorySidebar
     var __styles_shell = require('dsh-cdd-lens/styles/shell')
     var SHELL_CSS = __styles_shell.SHELL_CSS
     var __styles_graph = require('dsh-cdd-lens/styles/graph')
@@ -8156,6 +8180,19 @@ __cddLocal.load({
       slots.inject('shell.overlay', function () {
         return slots.register({ name: 'shell.overlay', id: 'cdd-lens', order: 50 },
           function () { return h(LensOverlay, { ctx: ctx }) })
+      })
+
+      // 可选：装了 dsh-plugin-rightbar 就把轨迹栏挂成它的「轨迹」标签。没装时 rightbar.tab
+      // 永远不会被声明，这个 inject 永远不触发，轨迹栏照旧自己浮着；rightbar 卸载时
+      // disposer 把托管标记放回去，浮动的轨迹栏自动回来。不是安装依赖。
+      slots.inject('rightbar.tab', function () {
+        var dispose = slots.register({ name: 'rightbar.tab', id: 'cdd-trajectory', order: 10, label: '轨迹' },
+          function () {
+            var rail = h(TrajectorySidebar, { ctx: ctx, hosted: true })
+            return Boundary === null ? rail : h(Boundary, null, rail)
+          })
+        setTrajectoryHosted(true)
+        return function () { dispose(); setTrajectoryHosted(false) }
       })
 
       slots.inject('conversation.view', function () {

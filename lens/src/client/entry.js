@@ -21,6 +21,9 @@ window.__ModuleLoader__.load({
     var Boundary = makeBoundary(React)
     var __shell_dock = require('dsh-cdd-lens/shell/dock')
     var LensOverlay = __shell_dock.LensOverlay
+    var setTrajectoryHosted = __shell_dock.setTrajectoryHosted
+    var __view_stream = require('dsh-cdd-lens/view/stream')
+    var TrajectorySidebar = __view_stream.TrajectorySidebar
     var __styles_shell = require('dsh-cdd-lens/styles/shell')
     var SHELL_CSS = __styles_shell.SHELL_CSS
     var __styles_graph = require('dsh-cdd-lens/styles/graph')
@@ -61,6 +64,19 @@ window.__ModuleLoader__.load({
       slots.inject('shell.overlay', function () {
         return slots.register({ name: 'shell.overlay', id: 'cdd-lens', order: 50 },
           function () { return h(LensOverlay, { ctx: ctx }) })
+      })
+
+      // 可选：装了 dsh-plugin-rightbar 就把轨迹栏挂成它的「轨迹」标签。没装时 rightbar.tab
+      // 永远不会被声明，这个 inject 永远不触发，轨迹栏照旧自己浮着；rightbar 卸载时
+      // disposer 把托管标记放回去，浮动的轨迹栏自动回来。不是安装依赖。
+      slots.inject('rightbar.tab', function () {
+        var dispose = slots.register({ name: 'rightbar.tab', id: 'cdd-trajectory', order: 10, label: '轨迹' },
+          function () {
+            var rail = h(TrajectorySidebar, { ctx: ctx, hosted: true })
+            return Boundary === null ? rail : h(Boundary, null, rail)
+          })
+        setTrajectoryHosted(true)
+        return function () { dispose(); setTrajectoryHosted(false) }
       })
 
       slots.inject('conversation.view', function () {

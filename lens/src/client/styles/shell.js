@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
       '.cddl-root{position:absolute;right:16px;bottom:16px;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:400}',
       'body:has(.cddl-view) .cddl-root,body:has(.cddl-trajectory) .cddl-root{display:none}',
       // Header stays above the rail, but below DSH's workbench overlay layer.
-      'body:has(.cddl-trajectory) header:has([role="tablist"]){position:relative;z-index:var(--cddl-header-layer,19);width:calc(100% + var(--cddl-trajectory-width,360px))}',
+      'body:has(.cddl-trajectory:not(.is-hosted)) header:has([role="tablist"]){position:relative;z-index:var(--cddl-header-layer,19);width:calc(100% + var(--cddl-trajectory-width,360px))}',
       // Nothing reserves room for the trajectory column any more. Pushing
       // #root aside squeezed the graph — the thing you opened this for —
       // and on any tab where the column did not paint, the reserved band

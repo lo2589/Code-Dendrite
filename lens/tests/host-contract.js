@@ -23,6 +23,12 @@ const LENS = path.join(__dirname, '..')
 const DSH = process.env.DSH_REPO || path.join(LENS, '..', '..', 'deepseek-harness')
 
 const read = (rel) => fs.readFileSync(path.join(DSH, rel), 'utf8')
+
+// 不是宿主的 slot，而是可选插件自己声明的 slot（lens 软接入，不是安装依赖）。
+// 这类 slot 不查宿主 slot-catalog，改查声明它的那个插件的源码里确实还声明着。
+const OPTIONAL_SLOTS = {
+  'rightbar.tab': path.join(LENS, '..', '..', 'dsh-plugin-rightbar', 'src', 'client.js'),
+}
 const lensSource = (rel) => fs.readFileSync(path.join(LENS, rel), 'utf8')
 
 let failed = 0
@@ -111,6 +117,12 @@ check('1. lens 注册的每个 slot 都在 slot-catalog 里，选项都被认', 
   const regs = lensRegistrations()
   assert.ok(regs.length > 0, 'lens 里一处 slots.register 都没找到，测试自己坏了')
   for (const reg of regs) {
+    if (OPTIONAL_SLOTS[reg.slot] !== undefined) {
+      const owner = OPTIONAL_SLOTS[reg.slot]
+      if (!fs.existsSync(owner)) { console.log(`     （${reg.slot} 的声明方不在 ${owner}，跳过）`); continue }
+      assert.ok(fs.readFileSync(owner, 'utf8').includes(`children: { '${reg.slot}': { kind: 'list'`), `${reg.file}: ${owner} 不再声明 list 型 '${reg.slot}'`)
+      continue
+    }
     const entry = catalogEntry(catalog, reg.slot)
     assert.ok(entry !== null, `${reg.file}: slot '${reg.slot}' 已不在 harness 的 slot-catalog 里`)
     const known = entry.options.map(o => o.name)

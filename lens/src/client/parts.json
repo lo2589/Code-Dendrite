@@ -778,12 +778,13 @@
     },
     {
       "file": "shell/dock.js",
-      "lines": 99,
+      "lines": 64,
       "exports": [
         "DOCK_WIDTH_KEY",
         "loadDockWidth",
         "LensDock",
-        "LensOverlay"
+        "LensOverlay",
+        "setTrajectoryHosted"
       ],
       "needs": {
         "shell/panel.js": [
@@ -817,7 +818,7 @@
     },
     {
       "file": "entry.js",
-      "lines": 81,
+      "lines": 97,
       "exports": [
         "apply"
       ],
@@ -826,7 +827,8 @@
           "GRAPH_CSS"
         ],
         "shell/dock.js": [
-          "LensOverlay"
+          "LensOverlay",
+          "setTrajectoryHosted"
         ],
         "shell/graphView.js": [
           "LensView"
@@ -837,6 +839,9 @@
         "runtime/api.js": [
           "BUILD",
           "api"
+        ],
+        "view/stream.js": [
+          "TrajectorySidebar"
         ]
       }
     },
