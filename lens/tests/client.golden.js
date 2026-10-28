@@ -4,8 +4,8 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_44_WIRE_LAYER_001
-// parts: 42
+// build: V1_62_RIGHTBAR_TAB_001
+// parts: 47
 
 ;(function () {
 var __cddHost = window.__ModuleLoader__
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_44_WIRE_LAYER_001'
+    var BUILD = 'V1_62_RIGHTBAR_TAB_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -159,7 +159,7 @@ __cddLocal.load({
         className: 'cddl-debugbar',
         style: {
           fontSize: '10px', lineHeight: '1.45', padding: '4px 8px',
-          borderBottom: '1px solid var(--dsw-alias-border-l2)',
+          borderTop: '1px solid var(--dsw-alias-border-l2)',
           background: 'var(--dsw-alias-bg-layer-3)',
           color: 'var(--dsw-alias-label-secondary)',
           fontFamily: 'var(--ds-font-family-code,monospace)',
@@ -707,7 +707,8 @@ __cddLocal.load({
     // User-authored node positions are the durable layout. Automatic focus
     // layout is derived in memory and never writes this table, so leaving a
     // highlighted chain restores the exact picture the user arranged.
-    var NODE_POSITIONS_KEY = 'cdd-lens.node-positions.v1'
+    // v2：换成文件框网格后，分层排版时代存下的拖动坐标（x 可能到 3000+）不能再用，会把节点甩出文件框、压到别的框上。
+    var NODE_POSITIONS_KEY = 'cdd-lens.node-positions.v2'
 
     function readAllNodePositions() {
       try {
@@ -752,6 +753,183 @@ __cddLocal.load({
   },
 })
 
+// dsh-cdd-lens — 位置：一次查看的坐标，以及它和现在这份代码的关系。
+//
+// 轨迹栏按「位置」记，不按 anchor 记：谁在第几轮第几步碰到了哪个 anchor。同一个
+// anchor 被看两次就是两条位置 —— 它们各有各的时刻，各记各的 hash。
+//
+//   位置 id = <session>|<turn>|<step>|<anchorId>
+//
+// 分隔符用 `|`：session 是 UUID（十六进制 + `-`），turn / step 是整数，这三段里
+// 不可能出现 `|`。anchorId 放最后一段，它自带 `/`、`:`、`.` 都不参与切分 —— 解析
+// 时只切前三个 `|`，剩下整段就是 anchorId。
+//
+// 每个位置存一个 hash：抓的那一刻这个 anchor 的代码哈希，之后永不改写。任何时候
+// 拿它跟现在的对，就知道这个位置过期没有。抓的时候就没抓住的（行对不上、隔了太
+// 久才补算）hash 是空串，判不了 —— 空串不是"没过期"，是"不知道"。
+//
+// ## 读窗口
+//
+// harness 的 read 结果 `meta.lines` 是 `ReadFileLine[]`（`{ number, text }`），
+// **不是行数**（packages/core/tools/src/presentation.ts::ReadResultView）。以前两处
+// 用 `Number.isInteger(meta.lines)` 判断，数组恒为 false，于是窗口整个算错：一类
+// 退化成"只有第一行"，一类退化成"整个文件"。readWindow 是那两处唯一的算法。
+__cddLocal.load({
+  id: 'dsh-cdd-lens/session/position',
+  factory: (require) => {
+    var module = { exports: {} }
+
+    var SEP = '|'
+
+    /** `<session>|<turn>|<step>|<anchorId>`。anchorId 放最后，它自带的 `|` 不影响解析。 */
+    function positionId(session, turn, step, anchorId) {
+      return [
+        session === undefined || session === null ? '' : String(session),
+        String(turn),
+        String(step),
+        String(anchorId),
+      ].join(SEP)
+    }
+
+    function parsePositionId(pid) {
+      var parts = String(pid).split(SEP)
+      if (parts.length < 4) return null
+      return {
+        session: parts[0],
+        turn: Number(parts[1]),
+        step: Number(parts[2]),
+        anchorId: parts.slice(3).join(SEP),
+      }
+    }
+
+    /** 读回来的那几行原文。不是数组就是没有（老记录、非 read、非 meta 事件）。 */
+    function windowLines(meta) {
+      var lines = meta === null || meta === undefined ? undefined : meta.lines
+      return Array.isArray(lines) ? lines : null
+    }
+
+    /**
+     * 一次 read 的 `[from, to]`。
+     *
+     * 正常一定走 `meta.lines` 这条：取最后一行的 `number` 当终点。没有数组时才退回
+     * `limit` / 整文件 —— `-1` 是"读到文件尾"在线上各处的写法。
+     */
+    function readWindow(meta, args) {
+      var m = meta || {}
+      var a = args || {}
+      var from = Number.isInteger(m.offset) ? m.offset : (Number.isInteger(a.offset) ? a.offset : 1)
+      var lines = windowLines(m)
+      if (lines !== null && lines.length > 0) {
+        var last = lines[lines.length - 1]
+        var to = Number.isInteger(last.number) ? last.number : from + lines.length - 1
+        return { from: from, to: to }
+      }
+      if (Number.isInteger(m.lines)) return { from: from, to: from + m.lines - 1 }
+      if (Number.isInteger(a.limit)) return { from: from, to: from + a.limit - 1 }
+      return { from: from, to: -1 }
+    }
+
+    /**
+     * 位置过期没有。
+     *
+     * `unknown` 不是"没过期"，是判不了：抓的时候 hash 就没抓住。
+     */
+    function staleOf(stored, current) {
+      if (typeof stored !== 'string' || stored === '') return 'unknown'
+      if (typeof current !== 'string' || current === '') return 'unknown'
+      return stored === current ? 'ok' : 'stale'
+    }
+
+    function intOrNull(value) {
+      return Number.isInteger(value) ? value : null
+    }
+
+    /**
+     * 这次查看读到了这个 anchor 的多少。
+     *
+     * 读窗口和 anchor 是两个区间，读到的部分就是**它们的交集**：`[max(start,from),
+     * min(end,to)]`。实测 535 次 read 里只有 28% 是整文件读，其余首尾至少有一端切
+     * 在函数中间，所以"完整落在窗口里"是少数。
+     *
+     * 不完整**不是**"没碰到" —— 它照样是一条位置，照样记。这里只是把"只扫到尾巴
+     * 11 行"和"整只读过"分开，好让界面上不是同一件事。
+     *
+     * @returns null 表示算不出来（anchor 没有行号，或窗口本身没有行号）。
+     */
+    function coverageOf(anchor, from, to) {
+      var a = anchor || {}
+      var start = intOrNull(a.start !== undefined ? a.start : a.line_start)
+      var end = intOrNull(a.end !== undefined ? a.end : a.line_end)
+      var lo = intOrNull(from)
+      // `-1` 是"读到文件尾"在线上各处的写法。
+      var hi = to === -1 ? Infinity : intOrNull(to)
+      if (start === null || end === null || lo === null || hi === null) return null
+      var readFrom = Math.max(start, lo)
+      var readTo = Math.min(end, hi)
+      if (readTo < readFrom) return null
+      return {
+        readFrom: readFrom, readTo: readTo,
+        span: readTo - readFrom + 1, total: end - start + 1,
+        complete: start >= lo && end <= hi,
+      }
+    }
+
+    // ---- 位置 hash 的账本：抓到一次，之后永不改写 ---------------------------
+    //
+    // 「存抓那一刻的 hash」以前只是句注释：轨迹每重算一次，hash 就按**当前**索引重新
+    // 算一遍，于是它永远等于当前值 —— 自己跟自己比，过期这件事根本不可能发生。真正
+    // 要做的是把第一次抓到的值记下来，后面只读不写。
+    var HASH_KEY = 'cdd-lens.position-hash.v1'
+    var LIMIT = 4000
+    var frozen = null
+
+    function loadFrozen() {
+      if (frozen !== null) return frozen
+      frozen = {}
+      try {
+        var raw = window.localStorage.getItem(HASH_KEY)
+        if (raw) frozen = JSON.parse(raw) || {}
+      } catch (e) { frozen = {} }
+      return frozen
+    }
+
+    function saveFrozen(all) {
+      var keys = Object.keys(all)
+      if (keys.length > LIMIT) {
+        // 超了就丢最早的一批：位置是只增不减的流水，旧的让位给新的。
+        keys.slice(0, keys.length - LIMIT).forEach(function (key) { delete all[key] })
+      }
+      try { window.localStorage.setItem(HASH_KEY, JSON.stringify(all)) } catch (e) { /* 存不下不致命 */ }
+    }
+
+    /**
+     * 这个位置该用哪个 hash：第一次抓到的那个。
+     *
+     * @param pid - 位置 id（session|轮次|step|anchor）。
+     * @param captured - 这一次算出来的 hash；空串表示没抓住，不记。
+     * @returns 账本里的那个值；从没抓住过就返回空串（判不了，不是没过期）。
+     */
+    function freezeHash(pid, captured) {
+      if (typeof pid !== 'string' || pid === '') return typeof captured === 'string' ? captured : ''
+      var all = loadFrozen()
+      if (typeof all[pid] === 'string' && all[pid] !== '') return all[pid]
+      if (typeof captured !== 'string' || captured === '') return ''
+      all[pid] = captured
+      saveFrozen(all)
+      return captured
+    }
+
+    /** 测试用：把账本清空，不碰别的状态。 */
+    function forgetFrozen() {
+      frozen = {}
+      try { window.localStorage.removeItem(HASH_KEY) } catch (e) { /* optional */ }
+    }
+
+    module.exports = { SEP, positionId, parsePositionId, readWindow, windowLines, staleOf, coverageOf, freezeHash, forgetFrozen }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — Folding a session transcript into anchor touches.
 //
 // One module of the browser half. The parts are concatenated in dependency
@@ -761,6 +939,9 @@ __cddLocal.load({
   id: 'dsh-cdd-lens/session/trajectory',
   factory: (require) => {
     var module = { exports: {} }
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var readWindow = __session_position.readWindow
+    var windowLines = __session_position.windowLines
 
     // ---- folding the session, off the Trajectory target --------------------
     //
@@ -815,16 +996,13 @@ __cddLocal.load({
       if (verb === 'read') {
         var file = (meta && meta.path) || args.file_path
         if (typeof file !== 'string') return out
-        var from = (meta && Number.isInteger(meta.offset)) ? meta.offset
-          : (Number.isInteger(args.offset) ? args.offset : 1)
-        var span = (meta && Number.isInteger(meta.lines)) ? meta.lines
-          : (Number.isInteger(args.limit) ? args.limit : null)
-        // No limit means the agent opened the whole file, which is most reads.
-        // -1 says so on the wire; resolving such a read to whatever anchor
-        // contains line 1 finds nothing (line 1 is imports) and was why a
-        // session that read eight files drew an empty graph.
+        var window = readWindow(meta, args)
+        // The window's own text rides along: it is the only copy of the code as
+        // it stood at this step, and the trajectory row shows that copy rather
+        // than today's file.
         out.push({
-          path: file, from: from, to: span === null ? -1 : from + span - 1,
+          path: file, from: window.from, to: window.to,
+          lines: windowLines(meta),
           text: null, verb: verb, tool: name, running: running, approx: false,
         })
         return out
@@ -921,7 +1099,10 @@ __cddLocal.load({
         if (touches.length === 0) return
         var turn = turnOf(seq)
         if (turn > maxTurn) maxTurn = turn
-        calls.push({ key: block.callId, seq: seq, turn: turn, touches: touches, running: running })
+        // `time` 是这一步落地的时刻（epoch ms）。位置记 hash 时要拿它判断这一步是
+        // 不是 lens 正在看的时候发生的：回放一份旧会话，那些 step 早于我们开始看，
+        // 那时候的代码我们没见过，hash 也就无从抓起。
+        calls.push({ key: block.callId, seq: seq, turn: turn, touches: touches, running: running, time: block.time })
       }
 
       nodes.forEach(function (node) {
@@ -970,6 +1151,35 @@ __cddLocal.load({
     var apiPost = __runtime_api2.apiPost
 
     /**
+     * 替轨迹问「现在的 anchor」时，哪些 id 真的要问。
+     *
+     * 问过的记下来：host 答不出的 id 再问多少遍都一样，不记就每次重渲染都打一轮
+     * /anchors。
+     *
+     * 但这份记录必须**跟着索引戳作废，并且在发请求之前判**。索引一重建，anchorCache
+     * 被清空，可这些 id 还留在"问过了"里——于是再也不去问，"现在的 hash"永远取不到，
+     * 整条轨迹卡死在「未知」，连没改过的函数也一样。只在响应里清没用：那一轮请求根本
+     * 不会发出去。
+     */
+    function askLedger() {
+      var seen = {}
+      var stamp
+      return {
+        pick: function (ids, nodes, cache, nowStamp) {
+          if (stamp !== nowStamp) { seen = {}; stamp = nowStamp }
+          var want = (ids || []).filter(function (id) {
+            return typeof id === 'string' && id !== ''
+              && (nodes || {})[id] === undefined && (cache || {})[id] === undefined && seen[id] === undefined
+          })
+          want.forEach(function (id) { seen[id] = true })
+          return want
+        },
+      }
+    }
+
+    var ledger = askLedger()
+
+    /**
      * The layer belongs on the node, so whatever draws the graph can ask a
      * node where it goes instead of working it out again. This only ever
      * writes stamps — nothing already in the graph is removed — so it is safe
@@ -996,6 +1206,27 @@ __cddLocal.load({
           return engine.refresh()
         },
 
+        /**
+         * 轨迹里那些不在图上的 anchor：把它们**现在**的记录拉回缓存。
+         *
+         * 判过期要两个 hash：抓那一刻存下的，和现在的。现在的那个以前只从图上和缓存里
+         * 找——可轨迹里绝大多数行的 anchor 并不在图上，于是"现在的"永远取到空串，位置
+         * 一律显示成"没过期"。那不是没过期，是**根本没去问**。
+         *
+         * 问回来之后：hash 对不上的标过期，host 答不出的留在「未知」，都不编。
+         */
+        ensureAnchors: function (ids) {
+          var want = ledger.pick(ids, (shared.graph || {}).nodes, shared.anchorCache, shared.anchorCacheStamp)
+          if (want.length === 0) return Promise.resolve()
+          return apiPost('/anchors', params(), { ids: want }).then(function (body) {
+            require('dsh-cdd-lens/engine/screen').remember(body.anchors, body.stamp)
+            require('dsh-cdd-lens/runtime/debug').note('graph',
+              '轨迹补 anchor：问 ' + want.length + ' 个，拿到 ' + Object.keys(body.anchors || {}).length
+                + ' 个，拿不到 ' + (body.missing || []).length + ' 个（判不了过期，标未知）')
+            publish()
+          }).catch(function () { /* 问不到就是判不了，界面照实标未知 */ })
+        },
+
         context: function () {
           // 还没有会话、也没有仓库：不问。问了 host 只能猜一个仓库，猜错的代价是把别的项目整份索引读进内存。
           var sid = session()
@@ -1018,7 +1249,12 @@ __cddLocal.load({
             if (stamp !== undefined && shared.graphStamp === undefined) shared.graphStamp = stamp
             ensureNodePositions(body.root)
             publish()
-            if (stamp !== undefined && shared.graphStamp !== stamp && shared.graph.order.length > 0) {
+            // 换版就重算，**不管图上有没有节点**。以前要求 `graph.order.length > 0`：
+            // 图是空的时候（只开着轨迹栏，没画任何节点）索引在外面重建了也不重算，
+            // anchorCache 里留着上一版的 anchor，拿旧 hash 跟旧 hash 比永远相等 ——
+            // 代码明明改过，位置却一直说「没过期」。
+            if (stamp !== undefined && shared.graphStamp !== stamp) {
+              require('dsh-cdd-lens/runtime/debug').note('graph', '索引换版，整屏重算（位置要按新 hash 重判过期）')
               return engine.revalidate().then(function () { return body })
             }
             return body
@@ -1087,7 +1323,7 @@ __cddLocal.load({
       }
     }
 
-    module.exports = { fetchMethods }
+    module.exports = { askLedger, fetchMethods }
     return module.exports
   },
 })
@@ -1178,7 +1414,9 @@ __cddLocal.load({
           shared.lit = null
           var ui = uiOf(shared.graph, id)
           if (ui !== null) ui.viewedAt = shared.turn
-          requestViewport(id, 'center')
+          // 点一张卡片 / 在逻辑图中定位：看得见就不动视口，看不见才带过来。
+          // 以前是 center——点一下你正看着的卡片，整张图就滑一下去居中它，焦点丢了。
+          requestViewport(id, 'ensure')
           publish()
           return engine.source(id)
         },
@@ -1282,6 +1520,11 @@ __cddLocal.load({
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var positionId = __session_position.positionId
+    var windowLines = __session_position.windowLines
+    var coverageOf = __session_position.coverageOf
+    var freezeHash = __session_position.freezeHash
 
     /** 每次调用是它那一轮的第几步：t15s3 的那个 3，每轮从 1 开始数。 */
     function stepsOf(snap) {
@@ -1322,8 +1565,24 @@ __cddLocal.load({
       record.events.push(event)
     }
 
+    /** 这个 anchor 现在记录在索引里的 hash（拿不到就是空串）。 */
+    function currentHash(call, anchor) {
+      var hash = typeof anchor.hash === 'string' ? anchor.hash : ''
+      if (hash === '') return ''
+      // 位置要记的是"抓的那一刻这个 anchor 的代码"。只有这一步发生在 lens 真的在看
+      // 这个会话之后，索引里的那份才等于那一刻的代码。回放旧会话时索引描述的是今天
+      // 的文件，拿今天的 hash 冒充当时的，这个位置就会假装"没过期"—— 那是假话，
+      // 所以这种位置存空串：判不了，不是没过期。
+      var since = shared.watchSince
+      if (!Number.isFinite(since)) return ''
+      var at = call.time
+      // 还在跑的调用没有落地时刻，它就是此刻。
+      if (!Number.isFinite(at)) return hash
+      return at >= since ? hash : ''
+    }
+
     /** 解析结果 → 每个 anchor 一条轨迹记录；落不到 anchor 的文件照实列出，不丢。 */
-    function foldTrace(snap) {
+    function foldTrace(snap, sessionId) {
       var stepOf = stepsOf(snap)
       var byAnchor = {}
       var unresolved = {}
@@ -1333,11 +1592,23 @@ __cddLocal.load({
           if (hit === undefined) return
           var at = { turn: call.turn, step: stepOf[call.key] || 1, verb: touch.verb }
           if (hit.anchors.length === 0) { noteUnresolved(unresolved, call, touch, hit, at); return }
+          // 这个 step 抓下来的那几行原文。轨迹栏展开看的就是它，不是今天的文件 ——
+          // 位置记的是"那一刻看到的代码"，现在文件什么样是另一件事（看过期标记）。
+          var lines = windowLines(touch)
           hit.anchors.forEach(function (anchor) {
+            var pid = positionId(sessionId, call.turn, at.step, anchor.id)
             noteAnchor(byAnchor, call, anchor, {
               turn: call.turn, step: at.step, verb: touch.verb, tool: touch.tool,
               approx: touch.approx === true || hit.approx === true,
               onSurface: call.remembered !== false, working: call.running === true,
+              // 位置 id：这次查看的坐标。同一 anchor 被看多次 → 多条位置，各有各的 hash。
+              pid: pid,
+              // 抓的那一刻这个 anchor 的 hash，之后永不改写 —— 由账本保证：轨迹每次
+              // 重算都会走到这里，不冻住的话这一位就会被**当前**索引的 hash 盖掉，
+              // 位置永远等于现在，过期就再也标不出来。
+              hash: freezeHash(pid, currentHash(call, anchor)),
+              lines: lines,
+              coverage: coverageOf(anchor, touch.from, touch.to),
             })
           })
         })
@@ -1413,7 +1684,7 @@ __cddLocal.load({
           })
 
           var after = function () {
-            var folded = foldTrace(snap)
+            var folded = foldTrace(snap, session())
             shared.trace = folded.byAnchor
             shared.unresolved = folded.unresolved
             shared.order = rankOf(snap)
@@ -1530,6 +1801,58 @@ __cddLocal.load({
   },
 })
 
+// dsh-cdd-lens — 工具栏上两个保留轮数的数字框。
+//   editKeep：每个节点自己的计时器，edit 一次加 N 轮，过一轮减 1（默认 7）
+//   readKeep：看过的节点第一次留 N 轮，再看 +1，过一轮减 1（默认 3）
+//   用户：「算了搞个可以设置的数字吧」「edit和read都可以设置嘛」
+// 默认值和 compute/evidence.js 同一个；设过的数存在浏览器里，下次打开还是它。
+__cddLocal.load({
+  id: 'dsh-cdd-lens/engine/keep',
+  factory: (require) => {
+    var module = { exports: {} }
+    var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
+    var note = __runtime_debug.note
+
+    var KEEPS = {
+      editKeep: { key: 'cdd-lens.edit-keep.v1', fallback: 7, label: 'edit 保留' },
+      readKeep: { key: 'cdd-lens.read-keep.v1', fallback: 3, label: 'read 保留' },
+    }
+
+    /** 上次在工具栏设过的数，没设过就是默认。@param field - 'editKeep' | 'readKeep' */
+    function savedKeep(field) {
+      try {
+        var n = Number(window.localStorage.getItem(KEEPS[field].key))
+        if (Number.isInteger(n) && n >= 1 && n <= 99) return n
+      } catch (e) { /* 浏览器存储可选 */ }
+      return KEEPS[field].fallback
+    }
+
+    /** 视图里这一项现在是几轮。 */
+    function keepOf(view, field) {
+      return view[field] || KEEPS[field].fallback
+    }
+
+    /**
+     * 改一项保留轮数：不在 1–99 记 log 不改；改了存进浏览器。
+     * @returns 真的改了返回 true（调用方据此重算屏幕）。
+     */
+    function applyKeep(view, field, value) {
+      var spec = KEEPS[field]
+      if (spec === undefined) return false
+      var n = Math.round(Number(value))
+      if (!(n >= 1 && n <= 99)) { note('btn', '✗ ' + spec.label + '轮数要在 1–99：' + value); return false }
+      if (view[field] === n) return false
+      note('btn', '设置 ' + spec.label + ' ' + keepOf(view, field) + ' → ' + n + ' 轮')
+      view[field] = n
+      try { window.localStorage.setItem(spec.key, String(n)) } catch (e) { /* 浏览器存储可选 */ }
+      return true
+    }
+
+    module.exports = { KEEPS, savedKeep, keepOf, applyKeep }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — 按钮 → 图。每一步都记带时间的 log（runtime/debug）。
 //
 // 展开（点 ⬆️ / ⬇️）走直线：
@@ -1559,6 +1882,10 @@ __cddLocal.load({
     var publish = __state_store.publish
     var requestViewport = __state_store.requestViewport
     var shared = __state_store.shared
+    var __engine_keep = require('dsh-cdd-lens/engine/keep')
+    var savedKeep = __engine_keep.savedKeep
+    var keepOf = __engine_keep.keepOf
+    var applyKeep = __engine_keep.applyKeep
 
     var RELATIONS = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
     var TREES = ['degree1', 'degree2', 'edit']
@@ -1571,7 +1898,7 @@ __cddLocal.load({
     function defaultView() {
       var rels = {}
       RELATIONS.forEach(function (r) { rels[r] = true })
-      return { tree: 'degree2', rels: rels, pins: [], opens: [] }
+      return { tree: 'degree2', rels: rels, pins: [], opens: [], editKeep: savedKeep('editKeep'), readKeep: savedKeep('readKeep'), openFiles: [] }
     }
 
     function viewOf() {
@@ -1712,7 +2039,7 @@ __cddLocal.load({
         var t0 = Date.now()
         var known = shared.anchorCacheStamp === undefined ? [] : Object.keys(cacheOf())
         note('screen', '→ /screen 树=' + view.tree + ' 展开=' + view.opens.length + ' pin=' + view.pins.filter(function (p) { return p.until === null || p.until === undefined }).length
-          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · 已缓存 anchor ' + known.length)
+          + ' 关系=' + RELATIONS.filter(function (r) { return view.rels[r] }).join(',') + ' · edit 保留 ' + keepOf(view, 'editKeep') + ' 轮 · read 保留 ' + keepOf(view, 'readKeep') + ' 轮 · 已缓存 anchor ' + known.length)
         return postJson('/screen', params(), { state: view, known: known, knownStamp: shared.anchorCacheStamp === undefined ? null : shared.anchorCacheStamp }).then(function (body) {
           if (!Array.isArray(body.nodes)) {
             note('screen', '← 没有仓库：' + (body.reason || 'no-root') + ' · 屏幕不变 · ' + (Date.now() - t0) + 'ms')
@@ -1724,6 +2051,7 @@ __cddLocal.load({
           note('screen', '← 节点 ' + body.nodes.length + ' · 旁边 ' + body.side.length + ' · 边 ' + body.edges.length
             + ' · seed ' + body.seeds + ' · 违例 ' + (body.violations || []).length
             + ' · 响应 ' + kb(body.__bytes) + '（新发 anchor ' + fresh + ' 个）· ' + (Date.now() - t0) + 'ms'
+            + (body.timing ? '（读会话 ' + body.timing.log + 'ms · ' + body.timing.source + ' · 计算 ' + body.timing.compute + 'ms）' : '')
             + (body.reason ? ' · ' + body.reason : ''))
           ;(body.expansions || []).forEach(function (x) {
             if (x.skipped) note('screen', '  展开被跳过 ' + shortId(x.id) + ' ' + x.rel + x.dir + '：' + (x.skipped === 'relation-off' ? '这个关系没开' : '节点不在屏幕上'))
@@ -1814,6 +2142,22 @@ __cddLocal.load({
           return engine.refresh()
         },
 
+        /** edit / read 保留几轮（见 engine/keep.js）。@param field - 'editKeep' | 'readKeep'。 */
+        setKeep: function (field, value) {
+          return applyKeep(viewOf(), field, value) ? engine.refresh() : Promise.resolve()
+        },
+
+        /** 文件框 + / −：点开看这个文件的全部节点，再点折叠回只留层级高的和 pin 的。@param key - 'tree:文件' 或 'side:文件'。 */
+        toggleFile: function (key) {
+          var view = viewOf()
+          view.openFiles = view.openFiles || []
+          var at = view.openFiles.indexOf(key)
+          if (at >= 0) view.openFiles.splice(at, 1)
+          else view.openFiles.push(key)
+          note('btn', '按下 ' + (at >= 0 ? '− 折叠文件框 ' : '+ 展开文件框 ') + String(key).split('/').pop())
+          return engine.refresh()
+        },
+
         isOpen: function (id, rel, dir) {
           return viewOf().opens.some(function (o) { return o.id === id && o.rel === rel && o.dir === dir })
         },
@@ -1875,13 +2219,14 @@ __cddLocal.load({
           note('btn', '按下 清空（去掉 ' + view.opens.length + ' 个展开、' + view.pins.length + ' 个 pin）')
           view.opens = []
           view.pins = []
+          view.openFiles = []
           shared.lit = null
           return engine.refresh()
         },
       }
     }
 
-    module.exports = { TREES, RELATIONS, screenMethods }
+    module.exports = { TREES, RELATIONS, remember, screenMethods }
     return module.exports
   },
 })
@@ -2034,6 +2379,8 @@ __cddLocal.load({
           shared.screen = null
           shared.anchorCache = {}
           shared.anchorCacheStamp = undefined
+          // 框的先后属于那个会话：换会话按交流重新算。
+          shared.boxOrder = null
           shared.evidenceSignature = null
           shared.trace = {}
           shared.resolved = {}
@@ -2046,6 +2393,9 @@ __cddLocal.load({
           shared.outline = undefined
           shared.fileCache = {}
           shared.sourceCache = {}
+          // 从这个时刻起我们真的在看这个会话：只有在此之后落地的 step，它的 hash 才
+          // 是"抓的时候"那个。再早的都是回放，那时候的代码我们没看见（见 ingest）。
+          shared.watchSince = Date.now()
           publish()
           if (id === undefined || id === null) return
           // A diagnostic handle, deliberately kept: when the graph is empty the
@@ -2109,6 +2459,8 @@ __cddLocal.load({
     var useRef = React.useRef
     var __state_store = require('dsh-cdd-lens/state/store')
     var shared = __state_store.shared
+    var __session_position = require('dsh-cdd-lens/session/position')
+    var staleOf = __session_position.staleOf
 
     // ---- presentation helpers ---------------------------------------------
 
@@ -2182,7 +2534,69 @@ __cddLocal.load({
       return parts.length <= 2 ? file : '…/' + parts.slice(-2).join('/')
     }
 
-    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short }
+    // ---- 位置：这一刻的 anchor 和现在的关系 ----------------------------------
+
+    /**
+     * 这个 anchor **现在**的 hash。
+     *
+     * 图上节点的记录就是当前索引里的记录（`/screen` 发的），anchor 缓存同理 ——
+     * 两边描述的都是"现在的代码"。都没有就返回空串：那一位判不了过期。
+     */
+    function currentHashOf(id) {
+      var nodes = shared.graph === undefined || shared.graph === null ? undefined : shared.graph.nodes
+      var node = nodes === undefined || nodes === null ? undefined : nodes[id]
+      if (node !== undefined && node !== null && typeof node.hash === 'string') return node.hash
+      var cached = (shared.anchorCache || {})[id]
+      if (cached !== undefined && cached !== null && typeof cached.hash === 'string') return cached.hash
+      return ''
+    }
+
+    /**
+     * 这个位置过期没有：存下来的 hash 和现在的对不上，就是这份代码在那之后改过。
+     *
+     * @param row - 一条位置（轨迹栏的行，或 anchor 记录里的一条经历）。
+     * @param id - 它属于哪个 anchor。轨迹栏的行自己带 `id`；「经历」面板的一条经历不带
+     *   （它挂在 anchor 记录下面），所以调用方要把 anchor id 传进来。
+     *
+     * 空 hash 是**判不了**，不是没过期 —— 抓的时候就没抓住（回放旧会话、anchor 本来
+     * 就没有 hash），这种情况不打过期标记，因为打了就是编。
+     */
+    function expiredOf(row, id) {
+      return positionStateOf(row, id) === 'stale'
+    }
+
+    /**
+     * 这个位置和现在的代码是什么关系：`ok` 没变 · `stale` 变过 · `unknown` 判不了。
+     *
+     * 三态必须一路传到界面。把 `unknown` 并进 `ok`，就是拿"没抓住 hash"冒充"没过期"；
+     * 并进 `stale` 同样是编。界面上"判不了"要自己占一格，不借别人的名字。
+     */
+    function positionStateOf(row, id) {
+      if (row === undefined || row === null) return 'unknown'
+      var anchorId = id === undefined ? row.id : id
+      return staleOf(row.hash, currentHashOf(anchorId))
+    }
+
+    /**
+     * 这个 anchor 在图上该不该变灰：看它**最近一次**被看到的那个位置。
+     *
+     * 只看最近一次：早先那次过期不算数——后来又看过一遍、而且对得上，那它就是新的。
+     * 返回 'ok' / 'stale' / 'unknown'，判不了就是判不了，不拿灰色去冒充"变过"。
+     */
+    function recordStateOf(id) {
+      var record = stateOf(id)
+      var events = record === null || record === undefined ? [] : (record.events || [])
+      if (events.length === 0) return 'unknown'
+      return positionStateOf(events[events.length - 1], id)
+    }
+
+    /** 只读到一部分：窗口切在函数中间。不完整不是"没碰到"，仍然是一条位置。 */
+    function partialOf(row) {
+      var cover = row === undefined || row === null ? undefined : row.coverage
+      return cover !== undefined && cover !== null && cover.complete === false
+    }
+
+    module.exports = { stateOf, dotClass, orderOf, turnLabel, degenerate, short, currentHashOf, expiredOf, positionStateOf, recordStateOf, partialOf }
     return module.exports
   },
 })
@@ -2268,7 +2682,7 @@ __cddLocal.load({
             key: dir + ':' + rel,
             'data-relation': rel,
             'data-count': n,
-            title: (open ? '收起' : '展开') + (dir === 'up' ? '：谁在用它（' : '：它在用谁（') + n + '） · ' + rel,
+            title: (open ? '收起' : '展开') + '：' + (rel === 'dataflow' ? (dir === 'up' ? '数据从谁流进来' : '数据流到谁那里去') : (dir === 'up' ? '谁在用它' : '它在用谁')) + '（' + n + '） · ' + rel,
             className: 'cddl-rel-' + rel + (open ? ' on' : ''),
             onClick: function (e) { e.stopPropagation(); engine.toggleOpen(id, rel, dir) },
           }, (dir === 'up' ? '↑' : '↓') + n))
@@ -2563,6 +2977,8 @@ __cddLocal.load({
     var dotClass = __view_record.dotClass
     var short = __view_record.short
     var stateOf = __view_record.stateOf
+    var positionStateOf = __view_record.positionStateOf
+    var partialOf = __view_record.partialOf
 
     // ---- source ------------------------------------------------------------
 
@@ -2629,13 +3045,26 @@ __cddLocal.load({
       return h('div', { className: 'cddl-hist' }, [
         h('h4', { key: 'h' }, '这个 anchor 的经历'),
       ].concat(record.events.map(function (event, i) {
-        return h('div', { key: i, className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') }, [
+        // 每一条经历就是一个位置，三态：对不上是过期，拿不到 hash 是判不了（未知）。
+        var position = positionStateOf(event, shared.selected)
+        var expired = position === 'stale'
+        var unknown = position === 'unknown'
+        var partial = partialOf(event)
+        return h('div', {
+          key: i,
+          className: 'cddl-hrow' + (event.onSurface ? '' : ' cddl-faded') + (expired ? ' cddl-expired' : ''),
+          'data-cdd-position-id': event.pid || '',
+          'data-cdd-position-stale': position,
+        }, [
           h('span', { key: 't', className: 'cddl-t' }, 'T' + event.turn),
           h('span', { key: 'd', className: dotClass({ state: event.working ? 'working' : event.verb === 'edit' ? 'edited' : 'viewed' }) }),
           h('span', { key: 'x' }, event.tool
             + (event.working ? ' · 正在执行' : '')
             + (event.approx ? ' · 行号近似' : '')
             + (event.onSurface ? '' : ' · 已被压缩')),
+          expired ? h('span', { key: 's', className: 'cddl-hist-tag' }, '过期') : null,
+          unknown ? h('span', { key: 'u', className: 'cddl-hist-tag cddl-hist-part', title: '判不了过期：抓的时候没抓住 hash，或者这个 anchor 现在查不到' }, '未知') : null,
+          partial ? h('span', { key: 'p', className: 'cddl-hist-tag cddl-hist-part' }, '部分') : null,
           event.agent ? h('span', { key: 'a', className: 'cddl-agent' }, event.agent) : null,
           event.reason ? h('span', { key: 'r', className: 'cddl-reason' }, event.reason) : null,
         ])
@@ -2811,6 +3240,7 @@ __cddLocal.load({
     var __view_record = require('dsh-cdd-lens/view/record')
     var dotClass = __view_record.dotClass
     var stateOf = __view_record.stateOf
+    var recordStateOf = __view_record.recordStateOf
     var turnLabel = __view_record.turnLabel
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
@@ -2840,7 +3270,7 @@ __cddLocal.load({
           var busy = engine.isBusy(id, rel, dir)
           out.push(h('button', {
             key: dir + ':' + rel,
-            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (dir === 'up' ? '谁在用它' : '它在用谁') + '（' + n + '）\n点一下：展开/收起',
+            title: (busy ? '正在展开…\n' : '') + REL_LABEL[rel] + ' · ' + (rel === 'dataflow' ? (dir === 'up' ? '数据从谁流进来' : '数据流到谁那里去') : (dir === 'up' ? '谁在用它' : '它在用谁')) + '（' + n + '）\n点一下：展开/收起',
             className: 'cddl-action-' + dir + ' cddl-rel-' + rel + (open ? ' on' : '') + (busy ? ' cddl-busy' : ''),
             'aria-busy': busy ? 'true' : 'false',
             'data-action': dir === 'up' ? 'expand-callers' : 'expand-callees',
@@ -2896,7 +3326,10 @@ __cddLocal.load({
       }
       return [p.x, p.y, p.w, p.h, p.baseX, p.baseY, p.side ? 1 : 0, p.label, p.flowAxis,
         shared.selected === id ? 1 : 0, lit, engine.isPinned(id) ? 1 : 0, openSlots(id), busySlots(engine, id),
-        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members].join('|')
+        JSON.stringify(buttonsOf(id)), recordSig(stateOf(id)), ui.members ? 1 : 0, members,
+        // 过期状态也要进签名：它读的是 anchor 的 hash，索引换版后 hash 变了而这里不变，
+        // 卡片就会一直停在"没变灰"的旧样子。
+        recordStateOf(id)].join('|')
     }
 
     /** 拖动：卡片用 transform 跟着指针，线层只改这张卡片的线；松手 publish 一次、重排一次。 */
@@ -2952,6 +3385,8 @@ __cddLocal.load({
       var anchor = p.node
       var ui = uiOf(shared.graph, p.id) || {}
       var record = stateOf(p.id)
+      // 你最近一次看这个 anchor 时的那份代码，和现在还是不是同一份。
+      var position = recordStateOf(p.id)
       var faded = record !== null && record !== undefined && !record.remembered
       var selected = shared.selected === p.id
       var memberCount = memberCountOf(anchor)
@@ -3011,9 +3446,13 @@ __cddLocal.load({
         h('span', { key: 'port-out', className: 'cddl-port cddl-port-out' + (vertical ? ' cddl-port-vbottom' : ''), 'data-port': 'out', title: '关系离开此 Anchor' }),
       ]
       return h('div', {
-        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : ''),
+        className: 'cddl-node-shell' + (p.side ? ' cddl-shell-island cddl-side' : '') + (flow ? ' cddl-node-flow' : '')
+          + (position === 'stale' ? ' cddl-stale' : ''),
         style: flow ? { width: p.w + 'px' } : { left: p.x + 'px', top: p.y + 'px', width: p.w + 'px' },
         'data-node-id': p.id,
+        // 这个节点你看过的那一版还作不作数：ok 作数 · stale 之后改过（整块变灰）·
+        // unknown 判不了。图上只有 stale 变灰，判不了不许拿灰色冒充。
+        'data-cdd-node-stale': position,
         'data-side': p.side ? 'true' : 'false',
         // 有哪些「方向:关系」开着，供外部测试读。
         'data-open': openSlots(p.id),
@@ -3112,7 +3551,9 @@ __cddLocal.load({
         }
       }, [props.width, props.zoom])
 
-      if (st.overflow <= 2) return null
+      // 没有横向溢出也占着这一行，只是看不见：以前直接不渲染，一溢出就冒出来占掉约 15px，
+      // 画布被挤矮；正好滚在底部时浏览器把滚动位置往回夹，整张图在屏幕上平移 15px——丢焦点。
+      if (st.overflow <= 2) return h('div', { className: 'cddl-hscroll cddl-hscroll-idle', 'aria-hidden': 'true' })
 
       var onDown = function (e) {
         var el = props.canvasRef.current
@@ -3147,6 +3588,84 @@ __cddLocal.load({
   },
 })
 
+// dsh-cdd-lens — 焦点锁：重排之后，正在看的那张卡片不许跑。
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+__cddLocal.load({
+  id: 'dsh-cdd-lens/view/focusLock',
+  factory: (require) => {
+    var module = { exports: {} }
+    var React = require('react')
+    var useEffect = React.useEffect
+    var useRef = React.useRef
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
+
+    /** 这个节点在**内容坐标**里的位置（和滚到哪儿无关）。 */
+    function spotOf(scroller, id) {
+      if (scroller === null || scroller === undefined || typeof id !== 'string' || id === '') return null
+      var el = null
+      var all = scroller.querySelectorAll('[data-node-id]')
+      for (var i = 0; i < all.length; i += 1) {
+        if (all[i].getAttribute('data-node-id') === id) { el = all[i]; break }
+      }
+      if (el === null) return null
+      return { x: el.offsetLeft, y: el.offsetTop }
+    }
+
+    /** 该钉住谁：选中的那张；没有选中就钉视口中间那张。 */
+    function pickFocus(scroller) {
+      if (typeof shared.selected === 'string' && spotOf(scroller, shared.selected) !== null) return shared.selected
+      var mid = scroller.scrollTop + scroller.clientHeight / 2
+      var all = scroller.querySelectorAll('[data-node-id]')
+      var best = null
+      var bestGap = Infinity
+      for (var i = 0; i < all.length; i += 1) {
+        var gap = Math.abs(all[i].offsetTop + all[i].offsetHeight / 2 - mid)
+        if (gap < bestGap) { bestGap = gap; best = all[i].getAttribute('data-node-id') }
+      }
+      return best
+    }
+
+    /**
+     * 重排后把焦点卡片钉回原来的屏幕位置，整张画布跟着它挪。
+     *
+     * 布局重算会让整列卡片平移——实测索引换一版，9 张卡片里 8 张动了，竖直 69px。
+     * 人正盯着一张卡片追代码，卡片跑了就是丢焦点。这里不碰布局怎么算，只在它算完
+     * 之后，按焦点卡片在内容坐标里的位移，把画布滚动同样多。
+     *
+     * 为什么用内容坐标而不是屏幕坐标：用户自己滚动只改 scrollTop、不改内容坐标，
+     * 所以这把锁不会跟用户的滚动打架；只有布局真的挪了东西，它才出手。
+     *
+     * 换了焦点（点了别的卡片）的那一次只记位置、不补偿：那次移动是用户自己要的。
+     */
+    function useFocusLock(scrollerRef) {
+      var mark = useRef(null)
+      useEffect(function () {
+        var scroller = scrollerRef === null || scrollerRef === undefined ? null : scrollerRef.current
+        if (scroller === null || scroller === undefined || scroller.querySelectorAll === undefined) return
+        var kept = mark.current !== null && spotOf(scroller, mark.current.id) !== null ? mark.current.id : null
+        var id = typeof shared.selected === 'string' && spotOf(scroller, shared.selected) !== null
+          ? shared.selected
+          : (kept !== null ? kept : pickFocus(scroller))
+        var now = spotOf(scroller, id)
+        if (now === null) { mark.current = null; return }
+        var was = mark.current
+        if (was !== null && was.id === id && (was.x !== now.x || was.y !== now.y)) {
+          scroller.scrollLeft += now.x - was.x
+          scroller.scrollTop += now.y - was.y
+        }
+        mark.current = { id: id, x: now.x, y: now.y }
+      })
+    }
+
+    module.exports = { spotOf, pickFocus, useFocusLock }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — Stylesheet: the drawing itself.
 //
 // One module of the browser half. The parts are concatenated in dependency
@@ -3166,6 +3685,7 @@ __cddLocal.load({
       '.cddl-canvaswrap::-webkit-scrollbar{width:12px;height:12px}',
       '.cddl-hscroll{grid-column:1;grid-row:2;align-self:end;position:relative;height:12px;margin:0 2px 2px;border-radius:6px;background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.10));cursor:pointer;z-index:3}',
       '.cddl-hscroll-thumb{position:absolute;top:2px;bottom:2px;border-radius:5px;background:var(--dsw-alias-border-l4);pointer-events:none}',
+      '.cddl-hscroll-idle{visibility:hidden;pointer-events:none}',
       '.cddl-hscroll:hover .cddl-hscroll-thumb{background:var(--dsw-alias-label-caption)}',
       '.cddl-canvaswrap::-webkit-scrollbar-track{background:var(--dsw-alias-scrollbar-bg-l2,rgba(127,127,127,.08))}',
       '.cddl-canvaswrap::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l4);border-radius:7px;border:3px solid transparent;background-clip:content-box}',
@@ -3205,12 +3725,16 @@ __cddLocal.load({
       '.cddl-arrowhead.cddl-hot{opacity:1}',
       '.cddl-arrowhead.cddl-cold{opacity:.22}',
       '.cddl-filebox{position:absolute;box-sizing:border-box;border:2px dashed var(--dsw-alias-border-l4);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-2) 34%,transparent)}',
-      '.cddl-filebox strong{position:absolute;left:14px;top:10px;max-width:390px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 12px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-primary)}',
+      '.cddl-filebox strong{position:absolute;left:14px;top:10px;max-width:calc(100% - 96px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 12px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-primary)}',
       '.cddl-filebox span{position:absolute;right:14px;top:10px;font:10px var(--ds-font-family-code,monospace);color:var(--dsw-alias-label-caption)}',
       // The flow skin's column guide: a hairline and a quiet label, no fill.
       // A frame that reads as a box is the board skin's claim that these
       // anchors belong together; a column says only how deep the chain is, and
       // drawing it as a box is what made the two skins indistinguishable.
+      '.cddl-sidebox{border-style:dotted;background:transparent}',
+      '.cddl-filebox .cddl-foldwrap{pointer-events:auto}',
+      '.cddl-fold{margin-left:6px;min-width:26px;height:18px;padding:0 6px;border:1px solid var(--dsw-alias-border-l3);border-radius:5px;background:var(--dsw-alias-bg-layer-3);color:var(--dsw-alias-label-primary);font:700 11px var(--ds-font-family-code,monospace);cursor:pointer}',
+      '.cddl-fold:hover{border-color:var(--dsw-alias-state-business-primary)}',
       '.cddl-flowbox{border-width:1px;border-color:var(--dsw-alias-border-l2);border-radius:9px;background:transparent}',
       '.cddl-flowbox strong{font-weight:500;color:var(--dsw-alias-label-caption)}',
       '.cddl-flowbox span{display:none}',
@@ -3222,6 +3746,7 @@ __cddLocal.load({
       // DSH owns overlay layer 20. Keep the persistent rail below that layer,
       // while its reserved #root margin keeps it visible beside normal Chat.
       '.cddl-trajectory{position:fixed;right:0;top:var(--cddl-trajectory-top,0);bottom:0;z-index:var(--cddl-trajectory-layer,18);box-sizing:border-box;pointer-events:auto;display:flex;flex-direction:column;min-width:280px;max-width:520px;color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l3);box-shadow:-8px 0 24px rgba(0,0,0,.16);font-family:var(--dsw-font-family,inherit)}',
+      'body:has(.cddl-trajectory[data-cdd-view="open"]) .cddl-trajectory[data-cdd-view="closed"]{display:none}',
       '.cddl-trajectory-resize{position:absolute;left:-6px;top:0;bottom:0;width:12px;cursor:ew-resize;z-index:5}',
       '.cddl-trajectory-resize:hover{background:color-mix(in srgb,var(--dsw-alias-state-business-primary) 24%,transparent)}',
       '.cddl-trajectory-head{height:56px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);flex:none}',
@@ -3256,8 +3781,13 @@ __cddLocal.load({
       '.cddl-trace-step-rows{display:flex;flex-direction:column;gap:4px;min-width:0}',
       '.cddl-trace-anchor{border:1px solid var(--dsw-alias-border-l2);border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-1)}',
       '.cddl-trace-anchor.is-open{border-color:var(--dsw-alias-border-l4)}',
-      '.cddl-trace-anchor-main{width:100%;min-height:31px;display:grid;grid-template-columns:12px 8px minmax(0,1fr) auto;align-items:center;gap:6px;padding:5px 7px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left}',
+      '.cddl-trace-expired{border-color:var(--dsw-alias-state-warn-primary)}',
+      '.cddl-trace-anchor-main{width:100%;min-height:31px;display:grid;grid-template-columns:12px 8px minmax(0,1fr) auto auto auto;align-items:center;gap:6px;padding:5px 7px;border:0;background:transparent;color:inherit;cursor:pointer;text-align:left}',
       '.cddl-trace-anchor-main:hover{background:var(--dsw-alias-interactive-bg-hover)}',
+      '.cddl-trace-expired-tag,.cddl-trace-partial-tag,.cddl-trace-unknown-tag{font-size:8px;line-height:1;padding:2px 4px;border-radius:3px;white-space:nowrap}',
+      '.cddl-trace-unknown-tag{color:var(--dsw-alias-label-dimmed);border:1px dashed var(--dsw-alias-border-l3)}',
+      '.cddl-trace-expired-tag{color:var(--dsw-alias-state-warn-primary);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
+      '.cddl-trace-partial-tag{color:var(--dsw-alias-label-dimmed);border:1px solid var(--dsw-alias-border-l3)}',
       '.cddl-trace-chevron{font-size:10px;color:var(--dsw-alias-label-caption)}',
       '.cddl-trace-dot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-business-primary)}',
       '.cddl-trace-edited .cddl-trace-dot{background:var(--dsw-alias-state-warn-primary)}',
@@ -3279,6 +3809,8 @@ __cddLocal.load({
       '.cddl-trace-unresolved button{margin:0 0 0 auto}',
       '@media (min-width:721px) and (max-width:900px){.cddl-trajectory{width:min(var(--cddl-trajectory-width,360px),52vw)!important;min-width:220px}.cddl-dock{right:min(var(--cddl-trajectory-width,360px),52vw)}.cddl-trace-step{grid-template-columns:34px minmax(0,1fr)}.cddl-trace-step-label{font-size:8px}}',
       '@media (max-width:720px){.cddl-trajectory:not(.is-collapsed){width:min(var(--cddl-trajectory-width,360px),82vw)!important;min-width:280px}.cddl-trajectory-toggle{display:block}.cddl-trajectory:not(.is-collapsed){box-shadow:-18px 0 42px rgba(0,0,0,.34)}.cddl-dock{right:44px;min-width:0;max-width:calc(100vw - 44px)}.cddl-trace-step{grid-template-columns:34px minmax(0,1fr)}.cddl-trace-step-label{font-size:8px}}',
+      // 托管在 rightbar 标签里：rightbar 给位置和宽度，这里只填满它给的盒子。
+      '.cddl-trajectory.is-hosted{position:relative!important;top:auto;right:auto;bottom:auto;height:100%;width:auto!important;min-width:0!important;max-width:none!important;box-shadow:none;border-left:none;z-index:auto}',
       '.cddl-rail{display:flex;flex-direction:column;min-height:0;height:100%}',
       '.cddl-rail-head{padding:6px 10px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);border-bottom:1px solid var(--dsw-alias-border-l1);flex:none}',
       '.cddl-rail-body{overflow:auto;padding:6px 4px 14px;display:flex;flex-direction:column;gap:7px;flex:1}',
@@ -3326,9 +3858,17 @@ __cddLocal.load({
       '.cddl-port-out{right:-6px;background:var(--dsw-alias-state-warn-primary)}',
       '.cddl-port-vtop{left:50%;top:-6px;transform:translateX(-50%)}',
       '.cddl-port-vbottom{left:50%;top:auto;bottom:-6px;transform:translateX(-50%)}',
-      '.cddl-node-actions{display:flex;gap:4px;margin-top:4px;z-index:2}',
+      '.cddl-node-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;z-index:2}',
       '.cddl-node-actions button{font-size:10px}',
       '.cddl-node-shell:hover .cddl-node-actions,.cddl-node-shell:focus-within .cddl-node-actions{opacity:1}',
+      // 过期：你看过的那一版代码之后改过了。
+      //
+      // 只去色 + 虚线边，**不碰透明度**：透明度是「已被压缩」(.cddl-faded) 的通道，
+      // 两件事共用一个通道，人就分不出眼前这张卡是哪一种。
+      //
+      // 也不做 hover 变色：鼠标进出各变一次，正盯着它的人等于被晃了两下 —— 那是丢焦点。
+      '.cddl-node-shell.cddl-stale .cddl-gnode{filter:grayscale(1)}',
+      '.cddl-node-shell.cddl-stale .cddl-gnode{border-style:dashed}',
       '.cddl-node-actions button{min-width:26px;height:19px;padding:0 5px;border-radius:5px;cursor:pointer;font:700 11px var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-state-business-tertiary)}',
       '.cddl-node-actions .cddl-action-collapse:not(:disabled){color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-tertiary)}',
       '.cddl-node-actions button:hover:not(:disabled),.cddl-node-actions button.on{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}',
@@ -3440,6 +3980,7 @@ __cddLocal.load({
       var symLine = pxFrom(css, '.cddl-gnode .cddl-sym', 'line-height')
       var actionsGap = pxFrom(css, '.cddl-node-actions', 'margin-top')
       var actionsRow = pxFrom(css, '.cddl-node-actions button', 'height')
+      var actionsWrapGap = pxFrom(css, '.cddl-node-actions', 'gap')
       var membersTop = pxFrom(css, '.cddl-members', 'margin-top')
       var membersPad = pxFrom(css, '.cddl-members', 'padding-top')
       var memberPad = pxFrom(css, '.cddl-m', 'padding')
@@ -3455,6 +3996,8 @@ __cddLocal.load({
       return {
         symLine: symLine,
         base: border * 2 + pad * 2 + symLine + actionsGap + actionsRow,
+        // 按钮换到下一行多出来的高度：一行按钮高 + 行间距（.cddl-node-actions 的 gap）。
+        actionRow: actionsRow + or(actionsWrapGap, 4),
         // A member row is its own padding twice plus one line of text; the
         // divider above the list is a border plus the padding either side.
         membersChrome: or(membersTop, 6) + border + or(membersPad, 5),
@@ -3481,8 +4024,36 @@ __cddLocal.load({
     var cardBox = __layout_cardBox.cardBox
     var __graph_model = require('dsh-cdd-lens/graph/model')
     var uiOf = __graph_model.uiOf
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
 
     var SYMBOL_FONT = '11.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    // 卡片上的名字实际是 13.5px/500（.cddl-gnode .cddl-sym）：按它量，不按 11.5px 量。
+    var CARD_FONT = '500 13.5px ui-monospace, SFMono-Regular, Menlo, monospace'
+    // 卡片宽只看自己的名字，上下限固定：一个长名字不再把整张图的卡片都撑宽。
+    var CARD_MIN = 170
+    var CARD_MAX = 260
+    var REL_ORDER = ['call', 'dataflow', 'inherit', 'dispatch', 'impact']
+
+    /** 按钮一行放不下就换行：按 node.js 画的按钮（箭头 + 数字 + 关系名，再加 pin）估宽，数出几行。 */
+    function actionRows(id, width) {
+      var counts = (shared.screen && shared.screen.buttons && shared.screen.buttons[id]) || {}
+      var widths = []
+      REL_ORDER.forEach(function (rel) {
+        ['up', 'down'].forEach(function (dir) {
+          var n = counts[rel + dir]
+          if (n > 0) widths.push(Math.max(26, 12 + 6.6 * (1 + String(n).length) + 5 + 4.8 * rel.length))
+        })
+      })
+      widths.push(32)
+      var room = width - 22
+      var rows = 1
+      var used = 0
+      widths.forEach(function (w) {
+        if (used > 0 && used + 4 + w > room) { rows += 1; used = w } else used += (used > 0 ? 4 : 0) + w
+      })
+      return rows
+    }
     var measurer = null
     var measured = {}
 
@@ -3667,19 +4238,16 @@ __cddLocal.load({
         var node = graph.nodes[id]
         var ui = uiOf(graph, id) || {}
         var text = label[id] === undefined ? shortSymbol(node.symbol) : label[id]
-        var badge = 46
-        var chrome = 22 + 14 + 16
-        // Keep one small readability gutter between the symbol and its badges;
-        // exact text width left `dispatch_command` wrapping at the underscore.
-        var own = Math.ceil(textWidth(text, SYMBOL_FONT)) + badge + chrome + 72
-        var width = Math.max(150, Math.min(NODE_W, widthLimit || NODE_W, own))
+        // 名字宽 + 右边行号 / 类标记的位置；夹在 170–260 之间，超出的名字在卡片里折行。
+        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
+        var nameW = Math.ceil(textWidth(text, CARD_FONT))
+        var width = Math.round(Math.max(CARD_MIN, Math.min(CARD_MAX, widthLimit || CARD_MAX, nameW + reserved)))
         // Colliding names intentionally keep their fully-qualified symbol.
         // On a narrow vertical canvas the name wraps inside the card instead
         // of silently making the whole graph horizontally scrollable.
-        var reserved = node.symbol_type === 'class' || (Array.isArray(node.own_methods) && node.own_methods.length > 0) ? 142 : 96
         var textRoom = Math.max(72, width - reserved)
-        var lines = Math.max(1, Math.ceil(textWidth(text, SYMBOL_FONT) / textRoom))
-        var wrapped = (lines - 1) * CARD.symLine
+        var lines = Math.max(1, Math.ceil(nameW / textRoom))
+        var wrapped = (lines - 1) * CARD.symLine + (actionRows(id, width) - 1) * CARD.actionRow
         return {
           // Never wider than the space there is, never so narrow the buttons
           // underneath do not fit.
@@ -5027,15 +5595,693 @@ __cddLocal.load({
   },
 })
 
+// dsh-cdd-lens — 文件框网格，按用户定的排法：
+//
+//   1. 算显示区域：能放几列 = 可用宽度 ÷ 一格宽
+//   2. 算每个文件框大小：框里 anchor 单列竖排
+//   3. 从左往右轮着摆，第一行顶端对齐；
+//      后面的行「根据上一个排」：放在那一列上一个框的下面，中间空一个 anchor 的高度
+//   4. 先算距离：文件夹之间、文件之间边多的挨着放（顺序挨着 → 格子挨着）
+//   5. 每排一行先看各列底边：比最短那列的底边高出「平均文件框高度的一半」的列这一行不填，
+//      尽量让一行的文件框底边一致；下一行重算（用户：「比最短边高1/2平均文件框的，就不填，尽量让一行的文件框底边一致」）
+//   展开不跳：画过的文件保持原来的先后，新文件接在后面（换会话、恢复自动布局时重新算）
+// 旁边的 seed 同样排，放在树的下面。线：每条边一根，从源节点右口到目标节点左口。
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+__cddLocal.load({
+  id: 'dsh-cdd-lens/layout/fileGrid',
+  factory: (require) => {
+    var module = { exports: {} }
+    var __graph_model = require('dsh-cdd-lens/graph/model')
+    var placeOf = __graph_model.placeOf
+    var __state_store = require('dsh-cdd-lens/state/store')
+    var shared = __state_store.shared
+    var PORT_OFFSET = 0.5
+    var SECTION_GAP = 36
+
+    function portsFor(x, y, w, h) {
+      return { in: { x: x - PORT_OFFSET, y: y + h / 2 }, out: { x: x + w + PORT_OFFSET, y: y + h / 2 } }
+    }
+
+    function shortFile(file) {
+      var parts = String(file || '').split('/')
+      return parts.length <= 2 ? String(file) : '…/' + parts.slice(-2).join('/')
+    }
+
+    function dirOf(file) {
+      var parts = String(file || '').split('/')
+      return parts.length > 1 ? parts.slice(0, -1).join('/') : '.'
+    }
+
+    /** 画过的位置（同一种：树 / 旁边），没有就是 null。 */
+    function known(graph, id, side) {
+      var at = placeOf(graph, id)
+      if (at === null || typeof at.x !== 'number' || typeof at.y !== 'number') return null
+      return (at.side === true) === side ? at : null
+    }
+
+    /** 文件 → 框里的 anchor（单列）：画过的按原来的上下，新的按行号接在后面。 */
+    function byFileOf(graph, ids, side) {
+      var out = {}
+      ids.forEach(function (id) {
+        var file = graph.nodes[id].file
+        if (out[file] === undefined) out[file] = []
+        out[file].push(id)
+      })
+      Object.keys(out).forEach(function (file) {
+        out[file].sort(function (a, b) {
+          var pa = known(graph, a, side)
+          var pb = known(graph, b, side)
+          if (pa !== null && pb !== null) return pa.y - pb.y
+          if (pa !== null || pb !== null) return pa !== null ? -1 : 1
+          return (graph.nodes[a].line_start || 0) - (graph.nodes[b].line_start || 0) || (a < b ? -1 : 1)
+        })
+      })
+      return out
+    }
+
+    /** 文件两两之间的边数（不分方向）。 */
+    function fileWeights(graph, byFile) {
+      var fileOf = {}
+      Object.keys(byFile).forEach(function (file) { byFile[file].forEach(function (id) { fileOf[id] = file }) })
+      var w = {}
+      graph.edges.forEach(function (e) {
+        var a = fileOf[e.from]
+        var b = fileOf[e.to]
+        if (a === undefined || b === undefined || a === b) return
+        var k = a < b ? a + '\0' + b : b + '\0' + a
+        w[k] = (w[k] || 0) + 1
+      })
+      return function (a, b) { return a === b ? 0 : w[a < b ? a + '\0' + b : b + '\0' + a] || 0 }
+    }
+
+    /**
+     * 交流多的挨着：先放和全体交流最多的；之后每次挑和「刚放的一格宽度内那几个」交流最多的，
+     * 平手看和已经放好的全体交流多少，再平手按路径。
+     * @param window - 往回看几个（= 列数：左边邻居和上面邻居都在这个范围里）。
+     */
+    function greedyOrder(items, weight, window) {
+      var rest = items.slice().sort()
+      if (rest.length === 0) return []
+      var total = function (x) { return rest.reduce(function (s, y) { return s + weight(x, y) }, 0) }
+      var first = rest.slice().sort(function (a, b) { return total(b) - total(a) || (a < b ? -1 : 1) })[0]
+      var order = [first]
+      rest.splice(rest.indexOf(first), 1)
+      while (rest.length > 0) {
+        var recent = order.slice(-Math.max(1, window))
+        var best = rest[0]
+        var bestScore = -1
+        rest.forEach(function (x) {
+          var near = recent.reduce(function (s, y) { return s + weight(x, y) }, 0)
+          var all = order.reduce(function (s, y) { return s + weight(x, y) }, 0)
+          var score = near * 100000 + all
+          if (score > bestScore) { best = x; bestScore = score }
+        })
+        order.push(best)
+        rest.splice(rest.indexOf(best), 1)
+      }
+      return order
+    }
+
+    /** 先排文件夹（文件夹之间边多的挨着），文件夹里再排文件（文件之间边多的挨着）。 */
+    function communicationOrder(files, weight, cols) {
+      var folders = {}
+      files.forEach(function (f) { (folders[dirOf(f)] = folders[dirOf(f)] || []).push(f) })
+      var folderWeight = function (a, b) {
+        var s = 0
+        folders[a].forEach(function (x) { folders[b].forEach(function (y) { s += weight(x, y) }) })
+        return s
+      }
+      var out = []
+      greedyOrder(Object.keys(folders), folderWeight, 1).forEach(function (dir) {
+        out = out.concat(greedyOrder(folders[dir], weight, cols))
+      })
+      return out
+    }
+
+    /** 这一段框的先后：画过的保持原来的先后，新文件按交流顺序接在后面；记下来给下次用。 */
+    function stableOrder(section, files, weight, cols) {
+      shared.boxOrder = shared.boxOrder || {}
+      var present = {}
+      files.forEach(function (f) { present[f] = true })
+      var kept = (shared.boxOrder[section] || []).filter(function (f) { return present[f] === true })
+      var keptSet = {}
+      kept.forEach(function (f) { keptSet[f] = true })
+      var fresh = communicationOrder(files.filter(function (f) { return keptSet[f] !== true }), weight, cols)
+      var order = kept.concat(fresh)
+      shared.boxOrder[section] = order
+      return order
+    }
+
+    function boxHeight(ids, g) {
+      return g.head + ids.reduce(function (s, id) { return s + g.size[id].h }, 0) + Math.max(0, ids.length - 1) * g.innerY + g.pad
+    }
+
+    /**
+     * 这一行填哪几列：底边比最短那列高出「平均文件框高度的一半」以上的列不填，尽量让一行底边一致。
+     * 门槛跟着框的实际大小走：框普遍矮，差一点就算差得多；框普遍高，差同样多不算什么。
+     * 例：底边 [45, 30, 30, 25]、平均框高 30 → 门槛 25 + 15 = 40 → 45 不填，填后 3 列。
+     * @param bottoms - 每列现在的底边（还没放框的列 = 这一段的顶）。
+     * @param avgBox - 这一段文件框的平均高度（像素）。
+     * @returns 这一行要填的列号，从左往右。
+     */
+    function eligibleColumns(bottoms, avgBox) {
+      if (bottoms.length === 0) return []
+      var shortest = Math.min.apply(null, bottoms)
+      var out = []
+      bottoms.forEach(function (b, col) { if (b - shortest <= avgBox / 2 + 1e-6) out.push(col) })
+      return out
+    }
+
+    /**
+     * 一段（树 / 旁边）：一行一行排。每行先挑出不太长的列（eligibleColumns，比最短底边高出平均框高一半的不填），从左往右每列放一个框，
+     * 放在那一列上一个框的下面、空一个 anchor 的高度；这一行放完再重算下一行。第一行各列一样高，顶端对齐。
+     * @returns 这一段最下面那个框的下沿；没有框时是 top。
+     */
+    function packSection(graph, byFile, order, top, g, side, placed, boxes) {
+      var bottoms = []
+      var used = []
+      for (var c = 0; c < g.cols; c += 1) { bottoms.push(top); used.push(false) }
+      var avgBox = order.length === 0 ? 0 : order.reduce(function (sum, f) { return sum + boxHeight(byFile[f], g) }, 0) / order.length
+      var k = 0
+      while (k < order.length) {
+        eligibleColumns(bottoms, avgBox).forEach(function (col) {
+          if (k >= order.length) return
+          var file = order[k]
+          k += 1
+          var ids = byFile[file]
+          var y = used[col] ? bottoms[col] + g.anchorGap : top
+          var x = g.left + col * (g.cellW + g.gapX)
+          var h = boxHeight(ids, g)
+          boxes.push({ file: file, label: shortFile(file), x: x, y: y, w: g.cellW, h: h, count: ids.length, frame: side ? 'side' : 'tree' })
+          var ny = y + g.head
+          ids.forEach(function (id) {
+            var nh = g.size[id].h
+            placed.push({
+              id: id, node: graph.nodes[id], anchor: graph.nodes[id],
+              x: x + g.pad, y: ny, w: g.cardW, h: nh,
+              file: file, layer: 'box:' + (side ? 'side:' : '') + file, tree: 0, label: g.label[id],
+              ports: portsFor(x + g.pad, ny, g.cardW, nh), flowDir: 'ltr', boxKey: file, side: side,
+            })
+            ny += nh + g.innerY
+          })
+          bottoms[col] = y + h
+          used[col] = true
+        })
+      }
+      return Math.max.apply(null, bottoms)
+    }
+
+    function polylinesFor(graph, placed) {
+      var byId = {}
+      placed.forEach(function (p) { byId[p.id] = p })
+      var out = []
+      graph.edges.forEach(function (e) {
+        var a = byId[e.from]
+        var b = byId[e.to]
+        if (a === undefined || b === undefined) return
+        var types = e.types || ['call']
+        out.push({
+          id: e.from + '→' + e.to + ':' + types.join(','),
+          from: e.from, to: e.to, type: types[0], types: types, reversed: false, faded: false,
+          fromFile: a.file, toFile: b.file, pts: [a.ports.out, b.ports.in],
+          sourcePort: { side: 'right', point: a.ports.out }, targetPort: { side: 'left', point: b.ports.in },
+          status: 'ok',
+        })
+      })
+      return out
+    }
+
+    /** 卡片宽：画过就沿用画过的宽（新来的长名字折行），没画过取最宽的名字；高度优先用浏览器实测的。 */
+    function cardWidth(graph, included, side, metrics) {
+      var drawn = 0
+      included.forEach(function (id) { var at = known(graph, id, false); if (at !== null && at.w > drawn) drawn = at.w })
+      side.forEach(function (id) { var at = known(graph, id, true); if (at !== null && at.w > drawn) drawn = at.w })
+      var size = {}
+      var widest = 0
+      included.concat(side).forEach(function (id) {
+        size[id] = drawn > 0 ? metrics.sizeOf(id, drawn) : metrics.sizeOf(id)
+        if (size[id].w > widest) widest = size[id].w
+      })
+      var cardW = drawn > 0 ? drawn : widest
+      // 浏览器里真画出来的高度（同一个卡片宽量的）优先：按 CSS 估的高度估小了，卡片会撑出文件框、压到下一个框。
+      var measured = shared.cardHeights || {}
+      Object.keys(size).forEach(function (id) {
+        var m = measured[id]
+        if (m && Math.abs(m.w - cardW) < 1 && m.h > 0) size[id] = { w: size[id].w, h: m.h }
+      })
+      return { cardW: cardW, size: size }
+    }
+
+    /**
+     * @param included - 树里的节点（screen.nodes）。
+     * @param side - 旁边的 seed（screen.side）。
+     * @returns { placed, polylines, boxes, rows, cols, canvasY }
+     */
+    function placeFileGrid(graph, included, side, metrics, avail) {
+      var card = cardWidth(graph, included, side, metrics)
+      var pad = metrics.BOX_PAD
+      var gapX = metrics.BOX_GAP_X
+      var cellW = card.cardW + 2 * pad
+      var usable = Math.max(cellW, (avail || 0) - 2 * metrics.PAD)
+      var heights = Object.keys(card.size).map(function (id) { return card.size[id].h })
+      var g = {
+        cols: Math.max(1, Math.floor((usable + gapX) / (cellW + gapX))),
+        cellW: cellW, cardW: card.cardW, pad: pad, gapX: gapX,
+        // 同一列上下两个框之间空一个 anchor 的高度：取所有卡片的平均高度。
+        anchorGap: heights.length > 0 ? heights.reduce(function (sum, h) { return sum + h }, 0) / heights.length : metrics.BOX_GAP_Y,
+        head: metrics.BOX_HEAD, innerY: metrics.INNER_GAP_Y,
+        left: metrics.PAD, size: card.size, label: metrics.label,
+      }
+      var placed = []
+      var boxes = []
+      var rows = []
+      var bottom = metrics.PAD
+      if (included.length > 0) {
+        var tree = byFileOf(graph, included, false)
+        var treeOrder = stableOrder('tree', Object.keys(tree), fileWeights(graph, tree), g.cols)
+        bottom = packSection(graph, tree, treeOrder, metrics.PAD, g, false, placed, boxes)
+      }
+      if (side.length > 0) {
+        var labelY = included.length > 0 ? bottom + SECTION_GAP : metrics.PAD + 16
+        rows.push({ x: metrics.PAD, y: labelY, label: '旁边 · 不在当前树里的 seed（' + side.length + '）', ids: side, island: false })
+        var rest = byFileOf(graph, side, true)
+        var sideOrder = stableOrder('side', Object.keys(rest), fileWeights(graph, rest), g.cols)
+        bottom = packSection(graph, rest, sideOrder, labelY + 8, g, true, placed, boxes)
+      }
+      // grid 一并交出去：增量布局（stable.js）给新卡片找位置时要用同一套尺寸。
+      return { placed: placed, polylines: polylinesFor(graph, placed), boxes: boxes, rows: rows, cols: g.cols, canvasY: bottom, grid: g }
+    }
+
+    module.exports = { placeFileGrid, polylinesFor, portsFor, greedyOrder, communicationOrder, eligibleColumns }
+    return module.exports
+  },
+})
+
+// dsh-cdd-lens — 文件框最后收一遍：框永远不叠。
+//
+// 用户：「你先把框不重叠搞定吧，文件框到处乱叠」。
+// 文件框网格排的时候框不叠，但排完之后节点还会被挪（实测卡片更高、手工拖动……），
+// 框却停在排版时的位置，节点就撑出框、压到别的框上。所以画线之前再收一遍：
+//   1. 每个框按框里（没被手工拖过的）节点的实际位置重算，节点撑出去多少框长多少
+//   2. 从上往下，压住前面已经放好的框，就连同框里的节点整体往下推，保留框间距
+//   3. 「旁边」标题跟到树的框下面，旁边的框从标题下面开始
+// 手工拖过的节点不算进任何框，留在用户放的位置。
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+__cddLocal.load({
+  id: 'dsh-cdd-lens/layout/settle',
+  factory: (require) => {
+    var module = { exports: {} }
+    var SECTION_GAP = 36
+
+    function keyOf(frameSide, file) {
+      return (frameSide ? 'side:' : 'tree:') + file
+    }
+
+    /** 两个矩形靠得比 gap 还近（含重叠）。刚好隔 gap 的不算。 */
+    function tooClose(a, b, gap) {
+      return a.x < b.x + b.w + gap - 1 && b.x < a.x + a.w + gap - 1
+        && a.y < b.y + b.h + gap - 1 && b.y < a.y + a.h + gap - 1
+    }
+
+    /** 框 = 排版时的框 ∪ 框里节点的实际范围（左右留 pad、上面留框头、下面留 pad）。 */
+    function grow(base, members, pad, head) {
+      if (members.length === 0) return Object.assign({}, base)
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      members.forEach(function (p) {
+        if (p.x < minX) minX = p.x
+        if (p.y < minY) minY = p.y
+        if (p.x + p.w > maxX) maxX = p.x + p.w
+        if (p.y + p.h > maxY) maxY = p.y + p.h
+      })
+      var x = Math.min(base.x, minX - pad)
+      var y = Math.min(base.y, minY - head)
+      return Object.assign({}, base, {
+        x: x, y: y,
+        w: Math.max(base.x + base.w, maxX + pad) - x,
+        h: Math.max(base.y + base.h, maxY + pad) - y,
+      })
+    }
+
+    /**
+     * 一段（树 / 旁边）：按从上到下、从左到右的顺序，压住前面已经放好的框就往下推到它下面。
+     * @returns 这一段最下面那个框的下沿；没有框时是 floor。
+     */
+    function settleSection(boxes, membersOf, floor, gap) {
+      var done = []
+      boxes.slice().sort(function (a, b) { return a.y - b.y || a.x - b.x }).forEach(function (box) {
+        var dy = Math.max(0, floor - box.y)
+        for (var guard = 0; guard < boxes.length + 1; guard += 1) {
+          var moved = { x: box.x, y: box.y + dy, w: box.w, h: box.h }
+          var hit = null
+          for (var i = 0; i < done.length; i += 1) if (tooClose(moved, done[i], gap)) { hit = done[i]; break }
+          if (hit === null) break
+          dy = hit.y + hit.h + gap - box.y
+        }
+        if (dy > 0) {
+          box.y += dy
+          membersOf(box).forEach(function (p) { p.y += dy })
+        }
+        done.push(box)
+      })
+      return done.reduce(function (m, b) { return Math.max(m, b.y + b.h) }, floor)
+    }
+
+    /**
+     * @param place - { placed }：节点坐标，会被原地移动。
+     * @param laid - 文件框网格的结果：{ boxes, rows }。
+     * @param metrics - 读 BOX_PAD、BOX_HEAD、BOX_GAP_X、BOX_GAP_Y。
+     * @returns { boxes, rows }：收过之后的框和「旁边」标题。
+     */
+    function settleBoxes(place, laid, metrics) {
+      var byBox = {}
+      // 按「属于哪个框」认成员，不按文件名：同一个文件可能有两个框——老框保位不动，
+      // 新卡片接不进去时在下面另开一个续框（layout/stable.js）。按文件名认，两个框会
+      // 把这个文件的全部卡片都算进来，各自撑大、互相压住，再把老卡片推走。
+      // 没有 boxKey 的退回文件名，和原来一样。
+      place.placed.forEach(function (p) {
+        if (p.manual === true) return
+        var key = keyOf(p.side === true, p.boxKey !== undefined ? p.boxKey : p.file)
+        if (byBox[key] === undefined) byBox[key] = []
+        byBox[key].push(p)
+      })
+      var membersOf = function (b) { return byBox[keyOf(b.frame === 'side', b.boxKey !== undefined ? b.boxKey : b.file)] || [] }
+      var boxes = (laid.boxes || []).map(function (b) { return grow(b, membersOf(b), metrics.BOX_PAD, metrics.BOX_HEAD) })
+      var rows = (laid.rows || []).map(function (r) { return Object.assign({}, r) })
+      var gap = Math.min(metrics.BOX_GAP_X, metrics.BOX_GAP_Y)
+      var tree = boxes.filter(function (b) { return b.frame !== 'side' })
+      var side = boxes.filter(function (b) { return b.frame === 'side' })
+      var treeBottom = settleSection(tree, membersOf, -Infinity, gap)
+      // 保位（layout/stable.js）时不再强制「旁边整段压在树的下面」：新卡片放在整张图最下面，
+      // 树区因此变长，照这条规矩会把整个旁边区推到新树区底下——实测 4 张老卡片一下跑了 1015px。
+      // 保位已经保证新框不压任何老框，这里只剩「框不重叠」一件事，老卡片原地不动。
+      if (side.length > 0 && laid.held) {
+        settleSection(side, membersOf, -Infinity, gap)
+        return { boxes: boxes, rows: rows }
+      }
+      if (side.length > 0) {
+        var labelY = rows.length > 0 ? rows[0].y : -Infinity
+        if (tree.length > 0) labelY = Math.max(labelY, treeBottom + SECTION_GAP)
+        if (rows.length > 0) rows[0].y = labelY
+        settleSection(side, membersOf, labelY + 8, gap)
+      }
+      return { boxes: boxes, rows: rows }
+    }
+
+    module.exports = { settleBoxes }
+    return module.exports
+  },
+})
+
+// dsh-cdd-lens — 焦点不能丢：老卡片原地不动，新卡片只往空地放。
+//
+// 做法照 cytoscape-expand-collapse：展开时已有的东西回到原坐标，只给新来的找地方；
+// 整体重排只在用户自己要求时做（「恢复自动布局」、改画布宽度、换会话）。
+//
+// One module of the browser half. The parts are concatenated in dependency
+// order into lib/client.js by scripts/build.js; each registers itself with
+// the loader and reaches the others through `require`.
+__cddLocal.load({
+  id: 'dsh-cdd-lens/layout/stable',
+  factory: (require) => {
+    var module = { exports: {} }
+
+    // 上一次画出来的样子：每张卡片在哪、属于哪个框、画布多宽。
+    var held = null
+
+    /**
+     * 记下这一张：下一次再变，就照这一张不动。
+     *
+     * 记列数，不记像素宽：展开后内容变高，画布右边冒出一条竖滚动条，宽度少十几像素。
+     * 按像素比，这就成了"用户改了宽度"、整张重排——实测焦点卡一下跑了 692px。
+     * 列数变了才是真的改了宽度。
+     */
+    function hold(placed, cols) {
+      // 这一张没画、但以前画过的卡片也记着：关掉一种关系它就消失，再打开它会回来——
+      // 回来时应该回到原来的地方，而不是被当成新卡片放到最下面（实测跑了 762px）。
+      var cards = held !== null && held.cols === cols ? Object.assign({}, held.cards) : {}
+      var drawn = {}
+      placed.forEach(function (p) {
+        cards[p.id] = { x: p.x, y: p.y, side: p.side === true, boxKey: p.boxKey }
+        drawn[p.id] = true
+      })
+      held = { cols: cols, cards: cards, drawn: drawn }
+    }
+
+    /** 用户要求重排：忘掉上一张，下一次整体重新装箱。 */
+    function forget() { held = null }
+
+    function hit(a, b, gap) {
+      return a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap
+    }
+
+    function keyOf(side, boxKey) { return (side ? 'side:' : 'tree:') + boxKey }
+
+    function continuationOf(file) { return file + '#续' }
+
+    /** 一个文件框：按里面卡片的实际位置围出来。 */
+    function frameOf(box, g) {
+      var top = Infinity
+      var bottom = -Infinity
+      var left = Infinity
+      box.members.forEach(function (p) {
+        top = Math.min(top, p.y)
+        bottom = Math.max(bottom, p.y + p.h)
+        left = Math.min(left, p.x)
+      })
+      var frame = {
+        file: box.file, label: box.label, x: left - g.pad, y: top - g.head, w: g.cellW,
+        h: bottom - top + g.head + g.pad, count: box.members.length, frame: box.side ? 'side' : 'tree',
+      }
+      if (box.boxKey !== box.file) frame.boxKey = box.boxKey
+      return frame
+    }
+
+    /**
+     * 同一个框里的老卡片：保持各自位置，只在卡片长高、压到下一张时把下一张往下让。
+     * 不让就叠在一起——那比挪一点更糟。只往下推，从不往上拉。
+     */
+    function restack(members, innerY) {
+      members.sort(function (a, b) { return a.y - b.y })
+      for (var i = 1; i < members.length; i += 1) {
+        var floor = members[i - 1].y + members[i - 1].h + innerY
+        if (members[i].y < floor) members[i].y = floor
+      }
+    }
+
+    /** 新卡片接在这个框的底下：框长高后不许碰到任何别的框。放不下返回 null。 */
+    function tryTail(box, card, boxes, g, gap) {
+      var last = box.members[box.members.length - 1]
+      var at = { x: last.x, y: last.y + last.h + g.innerY, w: card.w, h: card.h }
+      var grown = { x: box.frame.x, y: box.frame.y, w: box.frame.w, h: at.y + at.h + g.pad - box.frame.y }
+      var keys = Object.keys(boxes)
+      for (var i = 0; i < keys.length; i += 1) {
+        if (keys[i] === box.key) continue
+        if (hit(grown, boxes[keys[i]].frame, gap)) return null
+      }
+      return at
+    }
+
+    /** 放不进任何老框的新卡片：在整张图下面新开一片，按同一套网格一列一列排。 */
+    function packBelow(groups, top, g) {
+      var bottoms = []
+      for (var c = 0; c < g.cols; c += 1) bottoms.push(top)
+      groups.forEach(function (box) {
+        var col = bottoms.indexOf(Math.min.apply(null, bottoms))
+        var x = g.left + col * (g.cellW + g.gapX)
+        var y = bottoms[col] === top ? top : bottoms[col] + g.anchorGap
+        var ny = y + g.head
+        box.members.forEach(function (p) {
+          p.x = x + g.pad
+          p.y = ny
+          ny += p.h + g.innerY
+        })
+        bottoms[col] = ny - g.innerY + g.pad
+      })
+    }
+
+    function boxFor(boxes, side, file, boxKey, labels) {
+      var key = keyOf(side, boxKey)
+      if (boxes[key] === undefined) {
+        var base = labels[keyOf(side, file)] || file
+        boxes[key] = {
+          key: key, file: file, boxKey: boxKey, side: side, members: [],
+          label: boxKey === file ? base : base + '（续）',
+        }
+      }
+      return boxes[key]
+    }
+
+    /**
+     * 把这次的完整装箱结果改成「老的不动、新的放空地」。
+     *
+     * @param graph - shared.graph。
+     * @param laid - placeFileGrid 的结果（这次所有卡片的尺寸、所属文件都在里面，laid.grid 是网格参数）。
+     * @param gap - 框与框之间至少空多少（和收框那一步同一个数，收框就不会再推老卡片）。
+     * @param tools - { polylinesFor, portsFor }：连线和端口用 fileGrid 自己那一套，不另算。
+     * @returns 和 laid 同形状；第一次画、换了会话、网格列数变了时原样交回 laid。
+     */
+    function holdLayout(graph, laid, gap, tools) {
+      var g = laid.grid
+      if (held === null || g === undefined || held.cols !== g.cols) return laid
+      var labels = {}
+      laid.boxes.forEach(function (b) { labels[keyOf(b.frame === 'side', b.file)] = b.label })
+
+      var boxes = {}
+      var fresh = []
+      var ghosts = []
+      laid.placed.forEach(function (p) {
+        var at = held.cards[p.id]
+        var card = Object.assign({}, p)
+        // 以前画过、上一张没画：先放一边，等老卡片都归位了再看它的老位置还空不空。
+        if (at !== undefined && held.drawn[p.id] !== true) {
+          ghosts.push({ card: card, at: at })
+          return
+        }
+        // 上次画过就原地不动——**换没换区都一样**。关系开关一拨，一张卡片可能从「树」掉进
+        // 「旁边」或者反过来；以前把这种当成新卡片重新安置，实测一下就跑了 1617px，
+        // 跑到负坐标时还逼得整张图一起平移。换区只改它属于哪个框，不改它在哪。
+        if (at !== undefined) {
+          card.x = at.x
+          card.y = at.y
+          var sameSide = at.side === (p.side === true)
+          card.boxKey = sameSide && at.boxKey !== undefined ? at.boxKey : p.file
+          boxFor(boxes, card.side === true, card.file, card.boxKey, labels).members.push(card)
+        } else {
+          fresh.push(card)
+        }
+      })
+      // 一张老卡片都对不上：换了会话或者整张图都换了，没有焦点可保。
+      if (Object.keys(boxes).length === 0) return laid
+
+      var kept = 0
+      Object.keys(boxes).forEach(function (key) {
+        var box = boxes[key]
+        kept += box.members.length
+        restack(box.members, g.innerY)
+        box.frame = frameOf(box, g)
+      })
+
+      // 回来的卡片：老位置没被占、回去以后它的框也不碰别的框，就回原位；否则当新卡片。
+      // 每张的去向写进 notes，进布局日志：回原位了还是被谁挡住了，一眼看得见。
+      var notes = []
+      ghosts.forEach(function (ghost) {
+        var card = ghost.card
+        var spot = { x: ghost.at.x, y: ghost.at.y, w: card.w, h: card.h }
+        var sameSide = ghost.at.side === (card.side === true)
+        var boxKey = sameSide && ghost.at.boxKey !== undefined ? ghost.at.boxKey : card.file
+        var key = keyOf(card.side === true, boxKey)
+        var blocked = null
+        Object.keys(boxes).forEach(function (k) {
+          boxes[k].members.forEach(function (m) {
+            if (blocked === null && hit(spot, m, g.innerY - 1)) blocked = '卡片 ' + String(m.id).split('::').pop()
+          })
+        })
+        if (blocked === null) {
+          var probe = { members: (boxes[key] ? boxes[key].members : []).concat([spot]), file: card.file, boxKey: boxKey, side: card.side === true }
+          var grown = frameOf(probe, g)
+          // 同一个文件自己的框（树区、旁边区、续框）不算障碍：它们本来就挨着，原位曾经就在它们旁边。
+          // 以前把它们也算进去，卡片关掉再打开就回不了原位（实测被 side:record.js 挡住，跳了 762px）。
+          Object.keys(boxes).forEach(function (k) {
+            if (blocked === null && k !== key && boxes[k].file !== card.file && hit(grown, boxes[k].frame, gap)) blocked = '框 ' + k
+          })
+        }
+        if (blocked !== null) {
+          notes.push(String(card.id).split('::').pop() + ' 回不了原位（被' + blocked + '挡住）')
+          fresh.push(card)
+          return
+        }
+        notes.push(String(card.id).split('::').pop() + ' 回到原位')
+        card.x = spot.x
+        card.y = spot.y
+        card.boxKey = boxKey
+        var box = boxFor(boxes, card.side === true, card.file, boxKey, labels)
+        box.members.push(card)
+        box.members.sort(function (a, b) { return a.y - b.y })
+        box.frame = frameOf(box, g)
+        kept += 1
+      })
+
+      // 新卡片：先接主框，再接续框，都放不下才到下面另开。
+      var belowOrder = []
+      var below = {}
+      fresh.forEach(function (p) {
+        var side = p.side === true
+        var tries = [keyOf(side, p.file), keyOf(side, continuationOf(p.file))]
+        for (var i = 0; i < tries.length; i += 1) {
+          var box = boxes[tries[i]]
+          if (box === undefined) continue
+          var at = tryTail(box, p, boxes, g, gap)
+          if (at === null) continue
+          p.x = at.x
+          p.y = at.y
+          p.boxKey = box.boxKey
+          box.members.push(p)
+          box.frame = frameOf(box, g)
+          return
+        }
+        var boxKey = boxes[keyOf(side, p.file)] === undefined ? p.file : continuationOf(p.file)
+        var key = keyOf(side, boxKey)
+        if (below[key] === undefined) {
+          below[key] = boxFor({}, side, p.file, boxKey, labels)
+          belowOrder.push(key)
+        }
+        p.boxKey = boxKey
+        below[key].members.push(p)
+      })
+
+      var bottom = Object.keys(boxes).reduce(function (m, key) {
+        return Math.max(m, boxes[key].frame.y + boxes[key].frame.h)
+      }, -Infinity)
+      var groups = belowOrder.map(function (key) { return below[key] })
+      if (groups.length > 0) packBelow(groups, bottom + g.anchorGap, g)
+      groups.forEach(function (box) {
+        box.frame = frameOf(box, g)
+        boxes[box.key] = box
+      })
+
+      var frames = []
+      var placed = []
+      Object.keys(boxes).forEach(function (key) {
+        frames.push(boxes[key].frame)
+        boxes[key].members.forEach(function (p) {
+          p.ports = tools.portsFor(p.x, p.y, p.w, p.h)
+          placed.push(p)
+        })
+      })
+      // 画布高只按真画出来的框算：整体装箱那次的高度这里没用上，沿用它底下会多出一大块空白。
+      var canvasY = frames.reduce(function (m, f) { return Math.max(m, f.y + f.h) }, 0)
+      // 「旁边」那行标题跟着旁边区第一个框走，不按这次没用上的整体装箱位置摆。
+      var sideTop = frames.filter(function (f) { return f.frame === 'side' })
+        .reduce(function (m, f) { return Math.min(m, f.y) }, Infinity)
+      var rows = (laid.rows || []).map(function (r) {
+        return isFinite(sideTop) ? Object.assign({}, r, { y: sideTop - 16 }) : Object.assign({}, r)
+      })
+      return Object.assign({}, laid, {
+        placed: placed, boxes: frames, rows: rows, polylines: tools.polylinesFor(graph, placed),
+        canvasY: canvasY, held: { kept: kept, fresh: fresh.length, below: groups.length, notes: notes },
+      })
+    }
+
+    module.exports = { hold, forget, holdLayout }
+    return module.exports
+  },
+})
+
 // dsh-cdd-lens — One screen in, one drawing out.
 //
 // 画什么只认 shared.screen（后端计算单元 src/compute 的结果）：
-//   screen.nodes → 分层布局（layout/sugiyama）
-//   screen.side  → 不在当前树里的 seed，堆到树的下面，排成等宽的列
+//   screen.nodes → 按文件装进文件框，框铺成网格（layout/fileGrid）
+//   screen.side  → 不在当前树里的 seed，同样装框，放在树的下面
 //   screen.edges → 一条不少地出线（一条边一种类型）
 // 这里不做任何筛选：不看按钮状态、不看关系开关、不挑主干。
 //
-// 两段：结构（尺寸、分层、旁边的位置）只在图变了时重算并缓存；
+// 两段：结构（尺寸、文件框、节点位置）只在图变了时重算并缓存；
 // 拖动、选中、高亮这类不改图的更新只重放「坐标 → 接线 → 出线」，不重排。
 __cddLocal.load({
   id: 'dsh-cdd-lens/layout/layout',
@@ -5049,8 +6295,14 @@ __cddLocal.load({
     var fact = __runtime_debug.fact
     var __layout_metrics = require('dsh-cdd-lens/layout/metrics')
     var boxMetrics = __layout_metrics.boxMetrics
-    var __layout_sugiyama = require('dsh-cdd-lens/layout/sugiyama')
-    var sugiyama = __layout_sugiyama.sugiyama
+    var __layout_file_grid = require('dsh-cdd-lens/layout/fileGrid')
+    var placeFileGrid = __layout_file_grid.placeFileGrid
+    var gridTools = { polylinesFor: __layout_file_grid.polylinesFor, portsFor: __layout_file_grid.portsFor }
+    var __layout_stable = require('dsh-cdd-lens/layout/stable')
+    var holdLayout = __layout_stable.holdLayout
+    var hold = __layout_stable.hold
+    var __layout_settle = require('dsh-cdd-lens/layout/settle')
+    var settleBoxes = __layout_settle.settleBoxes
     var __layout_space = require('dsh-cdd-lens/layout/space')
     var reclaimStrays = __layout_space.reclaimStrays
     var separateOverlaps = __layout_space.separateOverlaps
@@ -5106,53 +6358,6 @@ __cddLocal.load({
       return { included: included, side: side, fileOrder: fileOrder }
     }
 
-    /**
-     * 不在当前树里的 seed：堆到树的下面，排成等宽的列（每列左沿对齐，列间留足角标的净空）。
-     * 画过的位置记住，下次照旧——树长高了旁边的节点也不跳；新来的接在已有的下面。
-     */
-    function placeSide(graph, side, metrics, top, avail) {
-      if (side.length === 0) return []
-      var gapX = metrics.LAYER_GAP_X
-      var gapY = metrics.BOX_GAP_Y
-      var width = side.reduce(function (m, id) { return Math.max(m, metrics.sizeOf(id).w) }, 0)
-      var usable = Math.max(width, (avail || 0) - metrics.PAD * 2)
-      var cols = Math.max(1, Math.floor((usable + gapX) / (width + gapX)))
-      var known = {}
-      var bottom = top - gapY
-      side.forEach(function (id) {
-        var at = placeOf(graph, id)
-        if (at === null || at.side !== true || typeof at.x !== 'number' || typeof at.y !== 'number') return
-        known[id] = at
-        bottom = Math.max(bottom, at.y + at.h)
-      })
-      var col = 0
-      var y = bottom + gapY
-      var rowH = 0
-      return side.map(function (id) {
-        var node = graph.nodes[id]
-        var h = metrics.sizeOf(id).h
-        var rec = {
-          id: id, node: node, anchor: node, w: width, h: h,
-          file: node.file, tree: 0, label: metrics.label[id],
-          flowDir: 'ltr', boxKey: node.file, side: true,
-        }
-        if (known[id] !== undefined) {
-          rec.x = known[id].x
-          rec.y = known[id].y
-          rec.layer = known[id].layer
-        } else {
-          if (col >= cols) { col = 0; y += rowH + gapY; rowH = 0 }
-          rec.x = metrics.PAD + col * (width + gapX)
-          rec.y = y
-          rec.layer = 'side:' + col
-          col += 1
-          if (h > rowH) rowH = h
-        }
-        rec.ports = portsFor(rec)
-        return rec
-      })
-    }
-
     function relationStats(graph, wires) {
       var stats = {}
       graph.edges.forEach(function (e) {
@@ -5183,7 +6388,8 @@ __cddLocal.load({
         var ui = graph.ui[id]
         if (ui && ui.members && ui.memberList) memberRows += ui.memberList.length + 1
       })
-      return [graph.order.length, graph.edges.length, avail || 0, memberRows].join('|')
+      // cardHeightsRev：浏览器量到卡片实际高度和估的不一样时加 1，文件框要按实际高度重排。
+      return [graph.order.length, graph.edges.length, avail || 0, memberRows, shared.cardHeightsRev || 0].join('|')
     }
 
     function structure(graph, avail) {
@@ -5192,18 +6398,16 @@ __cddLocal.load({
       var t0 = Date.now()
       var scope = screenScope(graph)
       var metrics = boxMetrics(graph, { included: scope.included.concat(scope.side), fileOrder: scope.fileOrder }, avail)
-      // 树：分层布局；画过的树节点位置冻结（旁边的旧位置不算，进树要重新排）。
-      var laid = sugiyama(graph, scope.included, metrics, function (id) {
-        var known = placeOf(graph, id)
-        if (known === null || known.side === true || typeof known.x !== 'number' || typeof known.y !== 'number') return null
-        return known
-      })
-      var sideTop = laid.placed.length > 0 ? laid.canvasY : metrics.PAD
-      var sidePlaced = placeSide(graph, scope.side, metrics, sideTop, avail)
-      var value = { scope: scope, metrics: metrics, laid: laid, sidePlaced: sidePlaced }
+      var laid = placeFileGrid(graph, scope.included, scope.side, metrics, avail)
+      // 焦点不能丢：上次画过的卡片原地不动，新来的只往空地放。
+      // 间距取收框那一步同一个数，新放的不贴着老框，收框就不会再去推老卡片。
+      laid = holdLayout(graph, laid, Math.min(metrics.BOX_GAP_X, metrics.BOX_GAP_Y), gridTools)
+      var value = { scope: scope, metrics: metrics, laid: laid }
       cached = { graph: graph, screen: shared.screen, key: key, value: value }
-      note('layout', '重排结构：树 ' + scope.included.length + ' · 旁边 ' + scope.side.length + ' · 边 ' + graph.edges.length
-        + ' · 层 ' + laid.layers + ' · ' + (Date.now() - t0) + 'ms')
+      note('layout', '文件框网格：树 ' + scope.included.length + ' · 旁边 ' + scope.side.length + ' · 文件框 ' + laid.boxes.length
+        + '（每行 ' + laid.cols + ' 格）· 边 ' + graph.edges.length + ' · 画布高 ' + Math.round(laid.canvasY) + ' · ' + (Date.now() - t0) + 'ms'
+        + (laid.held ? ' · 保位：老 ' + laid.held.kept + ' 张原地，新 ' + laid.held.fresh + ' 张（' + laid.held.below + ' 组放到下面）'
+          + (laid.held.notes && laid.held.notes.length > 0 ? ' · ' + laid.held.notes.join('；') : '') : ' · 整体重排'))
       return value
     }
 
@@ -5237,12 +6441,15 @@ __cddLocal.load({
       return [avail || 0, JSON.stringify(shared.nodePositions || {}), gather, shared.edgeFocus ? 1 : 0].join('\n')
     }
 
+    function shifted(list, dx, dy) {
+      return list.map(function (item) { return Object.assign({}, item, { x: item.x + dx, y: item.y + dy }) })
+    }
+
     function draw(graph, s, avail) {
       var metrics = s.metrics
       // 每次画都从缓存的结构拷一份记录出来：拖动、收拢、推开重叠只改这份拷贝。
-      var placed = s.laid.placed.concat(s.sidePlaced).map(function (p) { return Object.assign({}, p) })
-      var sideBottom = s.sidePlaced.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
-      var place = { placed: placed, rows: [], canvasY: Math.max(s.laid.canvasY, sideBottom + metrics.BOX_GAP_Y) }
+      var placed = s.laid.placed.map(function (p) { return Object.assign({}, p) })
+      var place = { placed: placed, rows: [], canvasY: s.laid.canvasY }
 
       // 手工拖过的坐标原样生效；跑偏的拉回来，再推开重叠。
       applySavedPositions(place, shared.nodePositions || {})
@@ -5252,6 +6459,8 @@ __cddLocal.load({
       place.placed.forEach(function (p) { orient.byId[p.id] = p })
       applyGather(graph, place, metrics)
       separateOverlaps(place, metrics)
+      // 文件框最后收一遍：框按框里节点的实际位置重算，互相压住的连同节点整体往下推——框永远不叠。
+      var settled = settleBoxes(place, s.laid, metrics)
       syncPorts(place)
 
       // ---- 出线：每条边一根线，一条不少 ----
@@ -5261,7 +6470,11 @@ __cddLocal.load({
 
       // ---- 尺寸：从画出来的东西反推 ----
       var fit = fitExtent(place, drawn, metrics)
+      var dx = 0
+      var dy = 0
       if (fit.dx > 0 || fit.dy > 0) {
+        dx = fit.dx
+        dy = fit.dy
         shiftDrawing(place, { polylines: polylines }, fit.dx, fit.dy)
         syncPorts(place)
         orient.byId = {}
@@ -5271,20 +6484,26 @@ __cddLocal.load({
         fit = fitExtent(place, drawn, metrics)
       }
       rememberPlaces(graph, place)
+      // 这一张就是下一次的「老位置」：下回再变，就照这一张不动。
+      hold(place.placed, s.laid.cols)
+      var files = shifted(settled.boxes, dx, dy)
+      var rows = shifted(settled.rows, dx, dy)
+      var maxX = files.reduce(function (m, b) { return Math.max(m, b.x + b.w) }, fit.maxX)
+      var maxY = files.reduce(function (m, b) { return Math.max(m, b.y + b.h) }, fit.maxY)
 
       var relations = relationStats(graph, drawn.wires)
       shared.wireStats = { drawn: drawn.wires.length, hidden: 0, total: graph.edges.length, relations: relations }
-      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + (s.laid.layers || 0) + 'L')
+      fact('layout', place.placed.length + 'n/' + drawn.wires.length + 'w/' + files.length + 'box')
       return {
         nodes: place.placed, wires: drawn.wires, labels: drawn.labels,
         junctions: drawn.junctions, arrows: drawn.arrows, unrouted: drawn.unrouted,
-        rows: [], files: [],
-        layers: s.laid.layers,
-        crossings: s.laid.crossings,
+        rows: rows, files: files,
+        layers: s.laid.cols,
+        crossings: 0,
         stats: { nodes: place.placed.length, wires: drawn.wires.length, relations: relations, wireTotal: graph.edges.length },
         arrowEvery: metrics.ARROW_EVERY,
-        width: Math.max(avail || 0, fit.maxX + metrics.PAD),
-        height: Math.max(360, fit.maxY + metrics.PAD),
+        width: Math.max(avail || 0, maxX + metrics.PAD),
+        height: Math.max(360, maxY + metrics.PAD),
       }
     }
 
@@ -5330,7 +6549,10 @@ __cddLocal.load({
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
     var __shell_chatSeat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chatSeat.openDockBesideChat
+    var jumpToGraph = __shell_chatSeat.jumpToGraph
+    var __view_record = require('dsh-cdd-lens/view/record')
+    var positionStateOf = __view_record.positionStateOf
+    var partialOf = __view_record.partialOf
 
     var WIDTH_KEY = 'cdd-lens.trajectory-width.v1'
     var EXPANDED_KEY = 'cdd-lens.trajectory-expanded.v1'
@@ -5355,6 +6577,8 @@ __cddLocal.load({
             key: key, id: id, turn: event.turn, step: step,
             verb: event.verb, tool: event.tool, working: event.working === true,
             agent: event.agent, reason: event.reason,
+            // 位置：这一刻的坐标、这一刻的 hash、这一刻抓到的源码。
+            pid: event.pid, hash: event.hash, lines: event.lines, coverage: event.coverage,
           }
           rows[key] = rows[key] === undefined ? row : stronger(rows[key], row)
         })
@@ -5572,6 +6796,41 @@ __cddLocal.load({
       return Math.max(0, Number(source.end) - Number(source.start) + 1)
     }
 
+    /** 这一步抓下来的那几行（ReadFileLine[]）。没有就不是 read，交给现抓那条路。 */
+    function capturedLines(row) {
+      return Array.isArray(row.lines) && row.lines.length > 0 ? row.lines : null
+    }
+
+    /**
+     * 位置展开看的源码：**那一步抓下来的那份**。
+     *
+     * 位置记的是"当时看到的代码"，所以这里优先画 step 带回来的原文；只有拿不到
+     * 原文时（edit、老记录）才退回现抓的当前源码，并说明那是现在的文件。
+     */
+    function StepSnippet(props) {
+      var row = props.row
+      var lines = capturedLines(row)
+      if (lines === null) return h(SourceSnippet, { id: row.id, current: true })
+      var first = Number.isInteger(lines[0].number) ? lines[0].number : 1
+      var last = Number.isInteger(lines[lines.length - 1].number) ? lines[lines.length - 1].number : first + lines.length - 1
+      return h('div', { className: 'cddl-trace-source', 'data-cdd-step-source': row.pid || row.key }, [
+        h('div', { key: 'when', className: 'cddl-trace-path' },
+          '第 ' + row.turn + ' 轮第 ' + row.step + ' 步抓到的 · ' + first + '–' + last + ' · ' + lines.length + ' 行'),
+        h('pre', {
+          key: 'code',
+          'data-cdd-source-start': first,
+          'data-cdd-source-end': last,
+          'data-cdd-source-lines': lines.length,
+        }, lines.map(function (line, i) {
+          var n = Number.isInteger(line.number) ? line.number : first + i
+          return h('div', { key: n }, [
+            h('span', { key: 'n' }, n),
+            h('code', { key: 'c' }, line.text === '' ? ' ' : line.text),
+          ])
+        })),
+      ])
+    }
+
     function SourceSnippet(props) {
       var source = (shared.sourceCache || {})[props.id]
       if (source === undefined) return h('div', { className: 'cddl-trace-loading' }, '读取源码…')
@@ -5584,7 +6843,8 @@ __cddLocal.load({
       var count = sourceLineCount(source)
       return h('div', { className: 'cddl-trace-source' }, [
         h('div', { key: 'path', className: 'cddl-trace-path', title: source.file },
-          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'),
+          source.file + ':' + source.start + '–' + source.end + ' · ' + count + ' 行'
+          + (props.current === true ? ' · 现在的文件' : '')),
         h('pre', {
           key: 'code',
           'data-cdd-source-id': source.id || props.id,
@@ -5601,8 +6861,8 @@ __cddLocal.load({
     }
 
     function locateInGraph(ctx, engine, id) {
-      // 先把图面板开出来，再定位：面板没开的话，定位完了也没人看得见。
-      openDockBesideChat(ctx)
+      // 只切到「CDD Lens」这一页，不动布局：要追的节点不能因为跳转反而更难找。
+      jumpToGraph()
       if (shared.graph.nodes[id] !== undefined) return engine.reveal(id)
       return engine.anchor(id).then(function (anchor) {
         if (anchor === null || anchor === undefined) return false
@@ -5615,9 +6875,22 @@ __cddLocal.load({
       var node = row.id === null ? undefined : shared.graph.nodes[row.id]
       var anchor = node === undefined ? null : node
       var label = anchor === null ? (row.id === null ? row.file : row.id.split('::').pop()) : anchor.symbol
+      // 位置和现在的关系，三态：ok 没变 · stale 这份代码之后改过 · unknown 判不了
+      // （抓的时候没抓住 hash，或者这个 anchor 现在查不到）。判不了就标「未知」，
+      // 不借「没过期」的名字——那是编。
+      var position = positionStateOf(row)
+      var expired = position === 'stale'
+      // 落不到 anchor 的行（只有文件名）不是「位置」，没有可判的 hash —— 给它打「未知」
+      // 等于给每一条这样的行都挂一个永远为真的标签，是噪音。只有真的指向某个 anchor
+      // 的行才谈得上判不判得了。
+      var unknown = position === 'unknown' && row.id !== null && row.id !== undefined
+      // 只读到一部分（窗口切在函数中间）。不完整不是"没碰到"，仍然是一条位置。
+      var partial = partialOf(row)
       return h('article', {
-        className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : ''),
+        className: 'cddl-trace-anchor' + stateClass(row) + (props.expanded ? ' is-open' : '') + (expired ? ' cddl-trace-expired' : ''),
         'data-cdd-anchor-id': row.id || '',
+        'data-cdd-position-id': row.pid || row.key,
+        'data-cdd-position-stale': position,
       }, [
         h('button', {
           key: 'main', className: 'cddl-trace-anchor-main',
@@ -5627,6 +6900,9 @@ __cddLocal.load({
           h('span', { key: 'chev', className: 'cddl-trace-chevron' }, props.expanded ? '▾' : '▸'),
           h('span', { key: 'dot', className: 'cddl-trace-dot' }),
           h('span', { key: 'label', className: 'cddl-trace-label', title: row.id || row.file }, label),
+          expired ? h('span', { key: 'expired', className: 'cddl-trace-expired-tag', title: '第 ' + row.turn + ' 轮看的那份代码之后改过了' }, '过期') : null,
+          unknown ? h('span', { key: 'unknown', className: 'cddl-trace-unknown-tag', title: '判不了过期：抓的时候没抓住 hash，或者这个 anchor 现在查不到' }, '未知') : null,
+          partial ? h('span', { key: 'partial', className: 'cddl-trace-partial-tag', title: '这次只读到 ' + row.coverage.span + '/' + row.coverage.total + ' 行' }, '部分') : null,
           h('span', { key: 'state', className: 'cddl-trace-state' }, verbOf(row)),
         ]),
         props.expanded ? h('div', { key: 'detail', className: 'cddl-trace-detail' }, [
@@ -5635,7 +6911,7 @@ __cddLocal.load({
               h('span', { key: 'why' }, row.reason || '未匹配到 Anchor'),
               h('button', { key: 'insert', onClick: function () { insertPath(row.file) } }, '插入路径'),
             ])
-            : h(SourceSnippet, { key: 'source', id: row.id }),
+            : h(StepSnippet, { key: 'source', row: row }),
           row.id !== null ? h('button', {
             key: 'locate', className: 'cddl-trace-locate',
             'data-locate-anchor-id': row.id,
@@ -5647,6 +6923,9 @@ __cddLocal.load({
 
     /** Fixed right column; history is never filtered by compaction/fade. */
     function TrajectorySidebar(props) {
+      // hosted：住在 dsh-plugin-rightbar 的「轨迹」标签里。位置、宽度、收起都归 rightbar，
+      // 这里不再 fixed、不写 --cddl-trajectory-width/top，也不画自己的拖宽手柄和收起按钮。
+      var hosted = props.hosted === true
       useShared()
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
       var rows = stepsOf()
@@ -5672,16 +6951,27 @@ __cddLocal.load({
 
       // Expanded rows survive reloads. Their in-memory source cache does not,
       // so restore the data as well as the chevron instead of leaving a
-      // permanent empty "读取源码…" panel after refresh.
+      // permanent empty "读取源码…" panel after refresh. A row that carries its
+      // own captured text needs no fetch: that copy is what it shows.
       useEffect(function () {
         rows.forEach(function (row) {
-          if (row.id !== null && expanded[row.key] === true && (shared.sourceCache || {})[row.id] === undefined) {
-            engine.source(row.id)
-          }
+          if (row.id === null || expanded[row.key] !== true) return
+          if (capturedLines(row) !== null) return
+          if ((shared.sourceCache || {})[row.id] === undefined) engine.source(row.id)
         })
       }, [rows.length, Object.keys(expanded).join('|')])
 
+      // 判过期要"现在的 hash"。轨迹里的 anchor 多半不在图上，这个 hash 得去问 host；
+      // 不问就只能一直标「未知」，而假装"没过期"更糟。
+      //
+      // 依赖里必须带索引戳：索引重建后行的 id 一个没变，只看 id 这个 effect 就不再跑，
+      // 缓存又被清空了 —— 结果是改过的代码一直显示「没过期」。
       useEffect(function () {
+        engine.ensureAnchors(rows.map(function (row) { return row.id }))
+      }, [rows.map(function (row) { return row.id || '' }).join('|'), shared.anchorCacheStamp])
+
+      useEffect(function () {
+        if (hosted) return undefined
         document.documentElement.style.setProperty('--cddl-trajectory-width', width + 'px')
         try { window.localStorage.setItem(WIDTH_KEY, String(width)) } catch (e) { /* optional */ }
         return function () { document.documentElement.style.removeProperty('--cddl-trajectory-width') }
@@ -5691,6 +6981,7 @@ __cddLocal.load({
       // Follow Chat's real scroll-area top so DSH's complete session header
       // remains visible even if the host changes its header height.
       useEffect(function () {
+        if (hosted) return undefined
         var frame = null
         var syncTop = function () {
           frame = null
@@ -5755,7 +7046,8 @@ __cddLocal.load({
         if (next[row.key]) delete next[row.key]
         else {
           next[row.key] = true
-          if (row.id !== null) engine.source(row.id)
+          // 有那一步原文的，画的本来就是它，不必再去抓当前文件。
+          if (row.id !== null && capturedLines(row) === null) engine.source(row.id)
         }
         saveExpanded(next)
         setExpanded(next)
@@ -5779,11 +7071,13 @@ __cddLocal.load({
       }
 
       return h('aside', {
-        className: 'cddl-trajectory' + (collapsed ? ' is-collapsed' : ''),
-        style: { width: width + 'px' },
+        className: 'cddl-trajectory' + (hosted ? ' is-hosted' : (collapsed ? ' is-collapsed' : '')),
+        style: hosted ? undefined : { width: width + 'px' },
         'data-cdd-trajectory': 'persistent',
+        // 两个插件都挂这条侧栏、叠在同一个位置：谁的图开着显示谁（代码窗口在它里面），另一条藏起来，见 styles/graph.js。
+        'data-cdd-view': shared.viewMounted > 0 ? 'open' : 'closed',
       }, [
-        h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
+        hosted ? null : h('div', { key: 'resize', className: 'cddl-trajectory-resize', title: '拖动改变轨迹栏宽度', onPointerDown: resize }),
         // The source lives here, not over the graph. This edge is one place
         // with several tenants; reading a function should cost the graph
         // nothing, and the graph is the thing you came to look at.
@@ -5796,7 +7090,7 @@ __cddLocal.load({
             h('strong', { key: 'strong' }, '轨迹'),
             h('span', { key: 'count' }, turns.length + ' 轮 · ' + rows.length + ' Anchor 记录'),
           ]),
-          h('button', {
+          hosted ? null : h('button', {
             key: 'collapse', className: 'cddl-trajectory-toggle',
             'aria-expanded': collapsed ? 'false' : 'true',
             'aria-label': collapsed ? '展开代码轨迹' : '收起代码轨迹',
@@ -5862,7 +7156,10 @@ __cddLocal.load({
   },
 })
 
-// dsh-cdd-lens — Reaching the Chat tab and opening the dock beside it.
+// dsh-cdd-lens — 切到会话里的某个页（Chat / CDD Lens）。
+//
+// 这里只做一件事：把宿主会话区的某个页切出来。不开悬浮窗、不关宿主的详情面板、
+// 不动任何布局 —— 逻辑图已经不悬浮了，它就是会话里的一页。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -5875,216 +7172,37 @@ __cddLocal.load({
     var publish = __state_store.publish
     var shared = __state_store.shared
 
-    // ---- the floating panel (shell.overlay) --------------------------------
+    var LENS_TAB = 'CDD Lens'
 
-    function activateChatTab() {
+    /** 点开会话区里名字叫 name 的那一页；没找到就什么都不做。 */
+    function activateTab(name) {
       var candidates = document.querySelectorAll('[role="tab"], button')
       for (var i = 0; i < candidates.length; i += 1) {
-        if (String(candidates[i].textContent || '').trim() !== '对话') continue
+        if (String(candidates[i].textContent || '').trim() !== name) continue
         candidates[i].click()
         return true
       }
       return false
     }
 
-    function openDockBesideChat(ctx) {
-      try {
-        var layoutService = ctx.get('layout')
-        if (layoutService) layoutService.closeDetails()
-      } catch (e) { /* optional host service */ }
-      shared.dockOpen = true
+    function activateChatTab() {
+      return activateTab('对话')
+    }
+
+    /**
+     * 跳到逻辑图：切到「CDD Lens」这一页，并把页内视图切成逻辑图。
+     *
+     * 只切页，不动布局。以前这里会关掉宿主的详情面板、强行开一个悬浮的 dock、再切
+     * 宿主 tab——人只是想从轨迹这一行跳到图上那个节点，结果整页翻一遍，要追的节点
+     * 反而更难找。
+     */
+    function jumpToGraph() {
       shared.wantGraph = (shared.wantGraph || 0) + 1
       publish()
-      window.requestAnimationFrame(activateChatTab)
+      activateTab(LENS_TAB)
     }
 
-    module.exports = { activateChatTab, openDockBesideChat }
-    return module.exports
-  },
-})
-
-// dsh-cdd-lens — The floating panel in shell.overlay.
-//
-// One module of the browser half. The parts are concatenated in dependency
-// order into lib/client.js by scripts/build.js; each registers itself with
-// the loader and reaches the others through `require`.
-__cddLocal.load({
-  id: 'dsh-cdd-lens/shell/panel',
-  factory: (require) => {
-    var module = { exports: {} }
-    var React = require('react')
-    var h = React.createElement
-    var useState = React.useState
-    var useEffect = React.useEffect
-    var useCallback = React.useCallback
-    var useMemo = React.useMemo
-    var useRef = React.useRef
-    var __runtime_api = require('dsh-cdd-lens/runtime/api')
-    var BUILD = __runtime_api.BUILD
-    var api = __runtime_api.api
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var shared = __state_store.shared
-    var useRightInset = __state_store.useRightInset
-    var useShared = __state_store.useShared
-    var __state_persist = require('dsh-cdd-lens/state/persist')
-    var usePlacement = __state_persist.usePlacement
-    var __engine_engine = require('dsh-cdd-lens/engine/engine')
-    var makeEngine = __engine_engine.makeEngine
-    var __session_trace = require('dsh-cdd-lens/session/trace')
-    var useConversationTrace = __session_trace.useConversationTrace
-    var __view_record = require('dsh-cdd-lens/view/record')
-    var degenerate = __view_record.degenerate
-    var __view_stream = require('dsh-cdd-lens/view/stream')
-    var Stream = __view_stream.Stream
-    var __view_tree = require('dsh-cdd-lens/view/tree')
-    var Tree = __view_tree.Tree
-    var __view_outline = require('dsh-cdd-lens/view/outline')
-    var Draw = __view_outline.Draw
-    var Outline = __view_outline.Outline
-    var __view_panels = require('dsh-cdd-lens/view/panels')
-    var History = __view_panels.History
-    var Legend = __view_panels.Legend
-    var Search = __view_panels.Search
-    var Source = __view_panels.Source
-    var Unresolved = __view_panels.Unresolved
-    var __view_need_ndex = require('dsh-cdd-lens/view/needIndex')
-    var NeedIndex = __view_need_ndex.NeedIndex
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
-
-    function LensPanel(props) {
-      var ctx = props.ctx
-      useShared()
-      var engine = useMemo(function () { return makeEngine(ctx) }, [])
-      var open = useState(true)
-      var tab = useState('graph')
-      var health = useState(null)
-      var rootRef = useRef(null)
-      var rightInset = useRightInset(rootRef)
-      var placement = usePlacement()
-
-      // focus() bumps this; following it puts the graph on screen the moment a
-      // function is picked in the directory.
-      var wanted = shared.wantGraph || 0
-      var seenWant = useRef(wanted)
-      useEffect(function () {
-        if (wanted !== seenWant.current) { seenWant.current = wanted; tab[1]('graph') }
-      }, [wanted])
-      var wantedFloat = shared.wantFloat || 0
-      var seenFloat = useRef(wantedFloat)
-      useEffect(function () {
-        if (wantedFloat !== seenFloat.current) {
-          seenFloat.current = wantedFloat
-          open[1](true)
-          tab[1]('graph')
-        }
-      }, [wantedFloat])
-
-      useEffect(function () {
-        engine.context()
-        api('/health', {}).then(function (body) { health[1]({ ok: true, body: body }) })
-          .catch(function (e) { health[1]({ ok: false, error: String(e.message) }) })
-      }, [])
-      useConversationTrace(ctx, engine)
-
-      if (!open[0]) {
-        return h('div', { className: 'cddl-root', ref: rootRef, style: { right: rightInset + 'px' } },
-          h('button', { className: 'cddl-pill', onClick: function () { open[1](true) } },
-            ['CDD Lens', shared.turn > 0 ? h('span', { key: 't', className: 'cddl-pilln' }, Object.keys(shared.trace).length) : null]))
-      }
-
-      var context = shared.context
-      var body
-      if (context === undefined) body = h('div', { className: 'cddl-empty' }, '连接中…')
-      else if (!context.indexed) body = h(NeedIndex, { engine: engine })
-      else if (tab[0] === 'outline') body = h(Outline, { engine: engine })
-      else if (tab[0] === 'draw') body = h(Draw, { engine: engine })
-      // The rail belongs beside the conversation, not inside the spread-out tab:
-      // watching the anchors arrive is something you do WHILE the agent runs,
-      // and that tab replaces the chat it is meant to accompany.
-      else if (tab[0] === 'steps') body = h(Stream, { engine: engine })
-      else body = h(Tree, { engine: engine })
-
-      var stamp = health[0]
-      var mismatch = stamp !== null && stamp.ok && (stamp.body.build !== BUILD || !stamp.body.clientBundleMatchesBuild)
-
-      return h('div', {
-        className: 'cddl-root', ref: rootRef,
-        style: {
-          right: (rightInset + placement.place.dx) + 'px',
-          bottom: (16 + placement.place.dy) + 'px',
-        },
-      },
-        h('div', { className: 'cddl-card', style: { width: placement.place.w + 'px' } }, [
-          h('div', {
-            className: 'cddl-grip', key: 'g', title: '拖这里改宽度',
-            onPointerDown: placement.onResizeDown,
-          }),
-          h('div', {
-            className: 'cddl-head', key: 'h',
-            title: '按住标题拖动面板；双击回到右下角',
-            onPointerDown: placement.onMoveDown,
-            onDoubleClick: placement.reset,
-          }, [
-            h('span', { className: 'cddl-title', key: 't' }, 'CDD Lens'),
-            h('span', { className: 'cddl-meta', key: 'm', title: context ? context.root : '' },
-              context && context.stats
-                ? (context.stats.anchors + ' anchor · ' + context.stats.files + ' 文件')
-                : (stamp === null ? '…' : (stamp.ok ? '' : stamp.error))),
-            degenerate(context)
-              ? h('span', {
-                key: 'q', className: 'cddl-bad',
-                title: '这个工程的索引里 ' + context.stats.anchors + ' 个 anchor 只派生出 '
-                  + context.stats.edges + ' 条边。多半是扫进了 node_modules / .venv 之类，'
-                  + '调用图画不出来。给这个目录加 .codedendrite_ignore 再重建。',
-              }, '索引可疑')
-              : null,
-            mismatch ? h('span', { key: 'w', className: 'cddl-bad', title: '构建戳对不上：' + stamp.body.build + ' vs ' + BUILD }, '版本不符') : null,
-            h('span', { className: 'cddl-spacer', key: 's' }),
-            h('button', {
-              key: 'dock', className: 'cddl-btn', title: '把逻辑图放到 Chat 右侧',
-              onPointerDown: function (e) { e.stopPropagation() },
-              onClick: function () { openDockBesideChat(ctx) },
-            }, '并排 ⤢'),
-            h('button', {
-              key: 'r', className: 'cddl-btn', title: '重建索引（增量）',
-              onPointerDown: function (e) { e.stopPropagation() },
-              onClick: function () { engine.reindex() },
-            }, shared.reindexing ? '建索引…' : '↻'),
-            h('button', {
-              key: 'x', className: 'cddl-btn',
-              onPointerDown: function (e) { e.stopPropagation() },
-              onClick: function () { open[1](false) },
-            }, '—'),
-          ]),
-          h('div', { className: 'cddl-tabs', key: 'tb' }, [
-            h('button', {
-              key: 'g', className: tab[0] === 'graph' ? 'on' : '',
-              onClick: function () { tab[1]('graph') },
-            }, '逻辑图'),
-            h('button', {
-              key: 'o', className: tab[0] === 'outline' ? 'on' : '',
-              onClick: function () { tab[1]('outline') },
-            }, '目录'),
-            h('button', {
-              key: 'd', className: tab[0] === 'draw' ? 'on' : '',
-              onClick: function () { tab[1]('draw') },
-            }, 'cdd draw'),
-            h('button', {
-              key: 's', className: tab[0] === 'steps' ? 'on' : '',
-              title: '按顺序看这次会话碰过什么',
-              onClick: function () { tab[1]('steps') },
-            }, '进度'),
-          ]),
-          h(Search, { key: 'q', engine: engine }),
-          h('div', { key: 'b', className: 'cddl-body' }, [body, h(Unresolved, { key: 'u' })]),
-          h(Legend, { key: 'l' }),
-          h(Source, { key: 's', engine: engine }),
-          h(History, { key: 'y' }),
-        ]))
-    }
-
-    module.exports = { LensPanel }
+    module.exports = { LENS_TAB, activateTab, activateChatTab, jumpToGraph }
     return module.exports
   },
 })
@@ -6184,20 +7302,48 @@ __cddLocal.load({
         return layout(shared.graph, undefined, availWidth[0])
       }, [shared.revision, layoutRevision[0], availWidth[0]])
 
+      // 量浏览器里真画出来的卡片高度：和排版用的高度差 1px 以上就记下来、重排一次（只在真的变了时，不会来回跳）。
+      // 按 CSS 估的高度估小了（按钮换行、名字折行），卡片会撑出文件框、压到下一个框。
+      useEffect(function () {
+        var el = canvasRef.current
+        if (el === null || typeof el.querySelectorAll !== 'function') return
+        var byId = {}
+        model.nodes.forEach(function (p) { byId[p.id] = p })
+        shared.cardHeights = shared.cardHeights || {}
+        var changed = 0
+        el.querySelectorAll('.cddl-node-shell[data-node-id]').forEach(function (shell) {
+          var p = byId[shell.getAttribute('data-node-id')]
+          var h = shell.offsetHeight
+          if (p === undefined || !(h > 0) || Math.abs(h - p.h) <= 1) return
+          var known = shared.cardHeights[p.id]
+          if (known && known.h === h && Math.abs(known.w - p.w) < 1) return
+          shared.cardHeights[p.id] = { w: p.w, h: h }
+          changed += 1
+        })
+        if (changed === 0) return
+        require('dsh-cdd-lens/runtime/debug').note('layout', '量到 ' + changed + ' 张卡片实际高度和估的不一样，按实际高度重排文件框')
+        shared.cardHeightsRev = (shared.cardHeightsRev || 0) + 1
+        publish()
+      }, [model])
+
       var setZoom = function (value) {
         zoom[1](Math.max(.35, Math.min(1.8, Math.round(value * 100) / 100)))
       }
-      /** 这个节点现在看得见吗：只在看不见时才动视口，免得展开时画面乱跳。 */
+      /**
+       * 这个节点现在看得见吗：只在看不见时才动视口。
+       *
+       * **露出一部分就算看得见。** 以前要求整张卡片完整落在视口里、四周还留 12px：卡片露出
+       * 一半——用户正点着它的展开按钮——也被当成"看不见"，视口居中过去，整张图一跳。
+       * 用户正在看、正在点的东西，视口一像素都不该动。完全不在视野里，才把它带过来。
+       */
       var onScreen = function (el, id, m, scale) {
         if (el === null) return true
         var target = m.nodes.filter(function (p) { return p.id === id })[0]
         if (target === undefined) return false
-        var pad = 12
         var left = target.x * scale, top = target.y * scale
         var right = (target.x + target.w) * scale, bottom = (target.y + target.h) * scale
-        return left >= el.scrollLeft + pad && top >= el.scrollTop + pad
-          && right <= el.scrollLeft + el.clientWidth - pad
-          && bottom <= el.scrollTop + el.clientHeight - pad
+        return right > el.scrollLeft && left < el.scrollLeft + el.clientWidth
+          && bottom > el.scrollTop && top < el.scrollTop + el.clientHeight
       }
       var centerOn = function (id, scale) {
         var el = canvasRef.current
@@ -6234,7 +7380,12 @@ __cddLocal.load({
           if (viewportRequest.mode === 'fit') {
             var readable = Math.max(zoom[0], 1)
             if (zoom[0] !== readable) setZoom(readable)
-            window.requestAnimationFrame(function () { centerOn(viewportRequest.id, readable) })
+            window.requestAnimationFrame(function () {
+              // 没选中任何节点：停在左上角，第一个文件框就在眼前；选中了才居中到它。
+              var el = canvasRef.current
+              if ((shared.selected === null || shared.selected === undefined) && el !== null) { el.scrollLeft = 0; el.scrollTop = 0 }
+              else centerOn(viewportRequest.id, readable)
+            })
           } else if (viewportRequest.mode === 'ensure') {
             if (!onScreen(canvasRef.current, viewportRequest.id, model, zoom[0])) centerOn(viewportRequest.id, zoom[0])
           } else centerOn(viewportRequest.id, zoom[0])
@@ -6281,6 +7432,21 @@ __cddLocal.load({
     var __view_wire_layer = require('dsh-cdd-lens/view/wireLayer')
     var WireLayer = __view_wire_layer.WireLayer
 
+    /** 框头右上：超过 5 个的框显示「5/40 个节点 +35」或「40 个节点 −」，点了切换折叠（计算单元 fold.js 决定画谁）。 */
+    function foldBadge(box, engine) {
+      var key = (box.frame === 'side' ? 'side:' : 'tree:') + box.file
+      var fold = shared.screen && shared.screen.folds ? shared.screen.folds[key] : undefined
+      if (fold === undefined) return h('span', { key: 'count' }, box.count + ' 个节点')
+      return h('span', { key: 'count', className: 'cddl-foldwrap' }, [
+        (fold.open ? fold.total : fold.shown + '/' + fold.total) + ' 个节点 ',
+        h('button', {
+          key: 'fold', className: 'cddl-fold', 'data-fold': key,
+          title: fold.open ? '折叠：只留层级高的和 pin 的' : '展开这个文件的全部 ' + fold.total + ' 个节点',
+          onClick: function (event) { event.stopPropagation(); engine.toggleFile(key) },
+        }, fold.open ? '−' : '+' + fold.hidden),
+      ])
+    }
+
     function renderCanvas(props, view) {
       var context = view.context
       var engine = view.engine
@@ -6316,24 +7482,26 @@ __cddLocal.load({
             transform: 'scale(' + zoom[0] + ')', transformOrigin: '0 0',
           },
         }, [
-          h(WireLayer, { key: 'w', model: model, engine: engine }),
+          // 文件框先画、线后画：线压在框的底色上面，不被框盖住。
           h('div', { key: 'f', className: 'cddl-fileboxes' },
             (model.files || []).map(function (box) {
               return h('div', {
-                key: box.file,
+                // 同一个文件可能在树里和旁边各有一个框：键带上是哪一段。
+                key: box.frame + ':' + box.file,
                 // A flow column guide is not a container: it gets the quiet
                 // frame, and the box keeps the loud one for what holds files.
-                className: 'cddl-filebox' + (box.frame === 'flow' ? ' cddl-flowbox' : ''),
+                className: 'cddl-filebox' + (box.frame === 'flow' ? ' cddl-flowbox' : '') + (box.frame === 'side' ? ' cddl-sidebox' : ''),
                 'data-file': box.file,
                 style: {
                   left: box.x + 'px', top: box.y + 'px',
                   width: box.w + 'px', height: box.h + 'px',
                 },
               }, [
-                h('strong', { key: 'name', title: box.file }, box.file),
-                h('span', { key: 'count' }, box.count + ' anchors'),
+                h('strong', { key: 'name', title: box.file }, box.label || box.file),
+                foldBadge(box, engine),
               ])
             })),
+          h(WireLayer, { key: 'w', model: model, engine: engine }),
           h('div', { key: 'r', className: 'cddl-rowlabels' },
             model.rows.map(function (row, i) {
               return h('div', {
@@ -6357,11 +7525,11 @@ __cddLocal.load({
         ]))
       }
 
-      // 调试栏挂在画布外面、上面：它是个诊断窄栏，不该跟着画布缩放平移。
-      // 关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
+      // 调试栏默默放在最底下、跟着内容走（用户：「log默默放最底层就好不要浮在上面占屏幕位置」）。
+      // 它不跟着画布缩放；关掉调试时 DebugBar 返回 null，DOM 里什么也不多。
       return h('div', { className: 'cddl-stage-inner' }, [
-        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
         h('div', { key: 'cv', className: 'cddl-canvasbody' }, canvas),
+        h(DebugBar, { key: 'dbg', build: require('dsh-cdd-lens/runtime/api').BUILD }),
       ])
     }
 
@@ -6390,10 +7558,10 @@ __cddLocal.load({
     var shared = __state_store.shared
     var __state_persist = require('dsh-cdd-lens/state/persist')
     var clearNodePositions = __state_persist.clearNodePositions
+    var __layout_stable = require('dsh-cdd-lens/layout/stable')
+    var forgetHeldLayout = __layout_stable.forget
     var __view_panels = require('dsh-cdd-lens/view/panels')
     var Search = __view_panels.Search
-    var __shell_chat_eat = require('dsh-cdd-lens/shell/chatSeat')
-    var openDockBesideChat = __shell_chat_eat.openDockBesideChat
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
 
@@ -6432,6 +7600,25 @@ __cddLocal.load({
         }))
     }
 
+    var KEEP_INPUTS = {
+      editKeep: { label: 'edit 保留 ', fallback: 7, title: '每个节点自己的计时器：edit 一次加 N 轮，每过一轮减 1，到 0 就不再算 edit 过的节点' },
+      readKeep: { label: 'read 保留 ', fallback: 3, title: '看过的节点第一次留 N 轮，再看一次加 1 轮，每过一轮减 1，到 0 就不显示' },
+    }
+
+    /** 保留几轮的数字框。@param field - 'editKeep'（edit 一次加 N 轮）| 'readKeep'（第一次看留 N 轮，再看 +1）。 */
+    function keepInput(engine, field) {
+      var spec = KEEP_INPUTS[field]
+      var keep = engine.view()[field] || spec.fallback
+      return h('label', { key: field, className: 'cddl-meta cddl-editkeep', title: spec.title }, [
+        spec.label,
+        h('input', {
+          key: 'n', type: 'number', min: 1, max: 99, step: 1, value: keep, 'data-keep': field, style: { width: '44px' },
+          onChange: function (event) { engine.setKeep(field, event.target.value) },
+        }),
+        ' 轮',
+      ])
+    }
+
     function relationSelector(engine) {
       var rels = engine.view().rels
       return h('div', { key: 'rel', className: 'cddl-seg cddl-relations', 'aria-label': '关系开关' },
@@ -6465,6 +7652,8 @@ __cddLocal.load({
           h('button', { key: 'd', className: tab[0] === 'draw' ? 'on' : '', onClick: clicked('cdd draw', function () { tab[1]('draw') }) }, 'cdd draw'),
         ]),
         tab[0] !== 'graph' ? null : treeSelector(engine),
+        tab[0] !== 'graph' ? null : keepInput(engine, 'editKeep'),
+        tab[0] !== 'graph' ? null : keepInput(engine, 'readKeep'),
         h(Search, { key: 'q', engine: engine }),
         relationSelector(engine),
         h('span', { key: 'm', className: 'cddl-meta', title: context ? context.root : '' },
@@ -6480,6 +7669,10 @@ __cddLocal.load({
           key: 'l', className: 'cddl-btn',
           onClick: clicked('恢复自动布局', function () {
             clearNodePositions()
+            // 用户自己要求重排：忘掉"上次画在哪"，整体重新装箱。平时卡片保位不动（layout/stable.js）。
+            forgetHeldLayout()
+            // 框的先后也按交流重新算一遍。
+            shared.boxOrder = null
             layoutRevision[1](function (n) { return n + 1 })
             publish()
           }),
@@ -6488,10 +7681,7 @@ __cddLocal.load({
           key: 'a', className: 'cddl-btn', title: '缩小到能看见全图（会看不清字）',
           onClick: clicked('适配', function () { fit(shared.selected || shared.graph.rootId, .35) }),
         }, '适配'),
-        props.docked ? null : h('button', {
-          key: 'float', className: 'cddl-btn',
-          onClick: clicked('并排 Chat', function () { openDockBesideChat(ctx) }),
-        }, '并排 Chat ⤢'),
+        // 「并排 Chat」没了：它开的是悬浮的逻辑图，而悬浮的只许有轨迹栏一个。
         h('button', {
           key: 'r', className: 'cddl-btn',
           onClick: function () { engine.reindex() },
@@ -6599,6 +7789,8 @@ __cddLocal.load({
     var Source = __view_panels.Source
     var __view_hscroll = require('dsh-cdd-lens/view/hscroll')
     var HScroll = __view_hscroll.HScroll
+    var __view_focus_lock = require('dsh-cdd-lens/view/focusLock')
+    var useFocusLock = __view_focus_lock.useFocusLock
     var __shell_view_tate = require('dsh-cdd-lens/shell/viewState')
     var useViewState = __shell_view_tate.useViewState
     var __shell_view_anvas = require('dsh-cdd-lens/shell/viewCanvas')
@@ -6623,6 +7815,8 @@ __cddLocal.load({
       var canvasRef = view.canvasRef
       var viewRef = view.viewRef
       var reserve = view.reserve
+      // 重排之后把正在看的那张卡片钉回原处：布局爱怎么算怎么算，屏幕上它不动。
+      useFocusLock(canvasRef)
       var canvas = renderCanvas(props, view)
 
       return h('div', {
@@ -6692,7 +7886,11 @@ __cddLocal.load({
   },
 })
 
-// dsh-cdd-lens — The dock beside Chat and the overlay that seats both views.
+// dsh-cdd-lens — 悬浮层：常驻的数据主人 + 轨迹栏。
+//
+// **这个插件里能悬浮的有且只有轨迹栏。** 逻辑图不悬浮，它住在会话里的「CDD Lens」
+// 页，和 Chat 并列。悬浮的图盖在页面上，一开一关整页的东西都换位置，正在追的那个
+// 节点就丢了 —— 这正是「焦点不能丢」里第一条。
 //
 // One module of the browser half. The parts are concatenated in dependency
 // order into lib/client.js by scripts/build.js; each registers itself with
@@ -6703,104 +7901,52 @@ __cddLocal.load({
     var module = { exports: {} }
     var React = require('react')
     var h = React.createElement
-    var useState = React.useState
     var useEffect = React.useEffect
-    var useCallback = React.useCallback
     var useMemo = React.useMemo
-    var useRef = React.useRef
-    var __state_store = require('dsh-cdd-lens/state/store')
-    var publish = __state_store.publish
-    var shared = __state_store.shared
-    var useShared = __state_store.useShared
     var __engine_engine = require('dsh-cdd-lens/engine/engine')
     var makeEngine = __engine_engine.makeEngine
     var __session_trace = require('dsh-cdd-lens/session/trace')
     var useConversationTrace = __session_trace.useConversationTrace
-    var __shell_graph_iew = require('dsh-cdd-lens/shell/graphView')
-    var LensView = __shell_graph_iew.LensView
     var __view_stream = require('dsh-cdd-lens/view/stream')
     var TrajectorySidebar = __view_stream.TrajectorySidebar
 
-    var DOCK_WIDTH_KEY = 'cdd-lens.dock-width'
+    // 轨迹栏是否已被 dsh-plugin-rightbar 托管。rightbar 是可选的：没装就永远 false，
+    // 轨迹栏照旧自己浮着；装了，entry.js 的 inject 把它置 true，浮动的那条就不画。
+    var hostedState = { value: false, listeners: new Set() }
+    function setTrajectoryHosted(value) {
+      hostedState.value = value === true
+      hostedState.listeners.forEach(function (fn) { fn() })
+    }
+    function subscribeHosted(fn) {
+      hostedState.listeners.add(fn)
+      return function () { hostedState.listeners.delete(fn) }
+    }
+    function readHosted() { return hostedState.value }
 
     /** Always-on data owner with no visible panel. */
     function LensRuntime(props) {
       var engine = useMemo(function () { return makeEngine(props.ctx) }, [])
-      useEffect(function () { engine.context() }, [])
+      useEffect(function () {
+        engine.context()
+        // 索引可能在页面外面被重建（有人跑了 cdd update / rebuild）。不定期问一声，
+        // 页面就一直用着上一版 anchor：改过的代码在轨迹里永远显示「没过期」。
+        // 放在这个常驻组件里 —— 别的面板不一定挂载，挂在那儿等于没挂。
+        var poll = setInterval(function () { engine.context() }, 10000)
+        return function () { clearInterval(poll) }
+      }, [])
       useConversationTrace(props.ctx, engine)
       return null
     }
 
-    function loadDockWidth() {
-      try {
-        var value = Number(window.localStorage.getItem(DOCK_WIDTH_KEY))
-        if (isFinite(value) && value >= 420) return value
-      } catch (e) { /* ignore */ }
-      return Math.max(520, Math.min(760, Math.round(window.innerWidth * .48)))
-    }
-
-    function LensDock(props) {
-      useShared()
-      var widthState = useState(loadDockWidth)
-      var width = widthState[0]
-      var setWidth = widthState[1]
-      var drag = useRef(null)
-
-      useEffect(function () {
-        document.documentElement.style.setProperty('--cddl-dock-width', width + 'px')
-        try { window.localStorage.setItem(DOCK_WIDTH_KEY, String(width)) } catch (e) { /* ignore */ }
-        return function () { document.documentElement.style.removeProperty('--cddl-dock-width') }
-      }, [width])
-
-      if (!shared.dockOpen) return null
-
-      var resize = function (event) {
-        if (event.button !== undefined && event.button !== 0) return
-        event.preventDefault()
-        event.stopPropagation()
-        drag.current = { x: event.clientX, width: width }
-        var move = function (e) {
-          if (drag.current === null) return
-          var next = drag.current.width + (drag.current.x - e.clientX)
-          setWidth(Math.max(420, Math.min(window.innerWidth * .78, next)))
-        }
-        var up = function () {
-          drag.current = null
-          window.removeEventListener('pointermove', move)
-          window.removeEventListener('pointerup', up)
-        }
-        window.addEventListener('pointermove', move)
-        window.addEventListener('pointerup', up)
-      }
-
-      return h('section', {
-        className: 'cddl-dock cddl-dock-open',
-        style: { width: width + 'px' },
-        'data-cdd-dock': '',
-      }, [
-        h('div', { key: 'resize', className: 'cddl-dock-resize', onPointerDown: resize, title: '拖动改变宽度' }),
-        h('header', { key: 'head', className: 'cddl-dock-head' }, [
-          h('strong', { key: 'title' }, 'CDD Lens'),
-          h('span', { key: 'mode', className: 'cddl-meta' }, shared.edgeFocus ? '链路聚焦（临时）' : '用户布局'),
-          h('span', { key: 'space', className: 'cddl-spacer' }),
-          h('button', {
-            key: 'close', className: 'cddl-btn',
-            onClick: function () { shared.dockOpen = false; publish() },
-          }, '收起'),
-        ]),
-        h(LensView, { key: 'view', ctx: props.ctx, docked: true }),
-      ])
-    }
-
     function LensOverlay(props) {
+      var hosted = React.useSyncExternalStore(subscribeHosted, readHosted, readHosted)
       return h(React.Fragment, null, [
         h(LensRuntime, { key: 'runtime', ctx: props.ctx }),
-        h(LensDock, { key: 'dock', ctx: props.ctx }),
-        h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
+        hosted ? null : h(TrajectorySidebar, { key: 'trajectory', ctx: props.ctx }),
       ])
     }
 
-    module.exports = { DOCK_WIDTH_KEY, loadDockWidth, LensRuntime, LensDock, LensOverlay }
+    module.exports = { LensRuntime, LensOverlay, setTrajectoryHosted }
     return module.exports
   },
 })
@@ -6823,7 +7969,7 @@ __cddLocal.load({
       '.cddl-root{position:absolute;right:16px;bottom:16px;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:400}',
       'body:has(.cddl-view) .cddl-root,body:has(.cddl-trajectory) .cddl-root{display:none}',
       // Header stays above the rail, but below DSH's workbench overlay layer.
-      'body:has(.cddl-trajectory) header:has([role="tablist"]){position:relative;z-index:var(--cddl-header-layer,19);width:calc(100% + var(--cddl-trajectory-width,360px))}',
+      'body:has(.cddl-trajectory:not(.is-hosted)) header:has([role="tablist"]){position:relative;z-index:var(--cddl-header-layer,19);width:calc(100% + var(--cddl-trajectory-width,360px))}',
       // Nothing reserves room for the trajectory column any more. Pushing
       // #root aside squeezed the graph — the thing you opened this for —
       // and on any tab where the column did not paint, the reserved band
@@ -6938,6 +8084,9 @@ __cddLocal.load({
       '.cddl-unres h4{margin:0 0 5px;font-size:10.5px;color:var(--dsw-alias-label-caption);font-weight:500}',
       '.cddl-unrow{display:flex;align-items:center;gap:7px;padding:1px 0;opacity:.75}',
       '.cddl-hrow{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dsw-alias-label-tertiary);padding:1px 0}',
+      '.cddl-hrow.cddl-expired{color:var(--dsw-alias-label-secondary)}',
+      '.cddl-hist-tag{font-size:8px;line-height:1;padding:2px 4px;border-radius:3px;white-space:nowrap;color:var(--dsw-alias-state-warn-primary);border:1px solid color-mix(in srgb,var(--dsw-alias-state-warn-primary) 45%,transparent)}',
+      '.cddl-hist-tag.cddl-hist-part{color:var(--dsw-alias-label-dimmed);border-color:var(--dsw-alias-border-l3)}',
       '.cddl-agent{font-family:var(--ds-font-family-code,monospace);color:var(--dsw-alias-state-business-primary)}',
       '.cddl-reason{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary)}',
       '.cddl-t{font-family:var(--ds-font-family-code,monospace);font-size:10px;color:var(--dsw-alias-label-caption);width:26px;flex:none}',
@@ -6988,14 +8137,23 @@ __cddLocal.load({
     var Boundary = makeBoundary(React)
     var __shell_dock = require('dsh-cdd-lens/shell/dock')
     var LensOverlay = __shell_dock.LensOverlay
+    var setTrajectoryHosted = __shell_dock.setTrajectoryHosted
+    var __view_stream = require('dsh-cdd-lens/view/stream')
+    var TrajectorySidebar = __view_stream.TrajectorySidebar
     var __styles_shell = require('dsh-cdd-lens/styles/shell')
     var SHELL_CSS = __styles_shell.SHELL_CSS
     var __styles_graph = require('dsh-cdd-lens/styles/graph')
     var GRAPH_CSS = __styles_graph.GRAPH_CSS
+    var __runtime_api = require('dsh-cdd-lens/runtime/api')
+    var api = __runtime_api.api
+    var BUILD = __runtime_api.BUILD
 
     var CSS = SHELL_CSS.concat(GRAPH_CSS).join('')
 
     function apply(ctx) {
+      // 第一件事：告诉 host「apply 真的跑了，跑的是这一版」。/health 的 client 块靠它，
+      // 面板不出现时一眼分得清是没 apply，还是 apply 了但画不出来。回报失败不挡面板。
+      api('/applied', { build: BUILD }).catch(function () {})
       var slots = ctx.get('slots')
       if (slots === undefined) return
 
@@ -7022,6 +8180,19 @@ __cddLocal.load({
       slots.inject('shell.overlay', function () {
         return slots.register({ name: 'shell.overlay', id: 'cdd-lens', order: 50 },
           function () { return h(LensOverlay, { ctx: ctx }) })
+      })
+
+      // 可选：装了 dsh-plugin-rightbar 就把轨迹栏挂成它的「轨迹」标签。没装时 rightbar.tab
+      // 永远不会被声明，这个 inject 永远不触发，轨迹栏照旧自己浮着；rightbar 卸载时
+      // disposer 把托管标记放回去，浮动的轨迹栏自动回来。不是安装依赖。
+      slots.inject('rightbar.tab', function () {
+        var dispose = slots.register({ name: 'rightbar.tab', id: 'cdd-trajectory', order: 10, label: '轨迹' },
+          function () {
+            var rail = h(TrajectorySidebar, { ctx: ctx, hosted: true })
+            return Boundary === null ? rail : h(Boundary, null, rail)
+          })
+        setTrajectoryHosted(true)
+        return function () { dispose(); setTrajectoryHosted(false) }
       })
 
       slots.inject('conversation.view', function () {

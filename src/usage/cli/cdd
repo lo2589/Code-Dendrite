@@ -83,17 +83,6 @@ def run_script(script: Path, args: list[str]) -> int:
     return subprocess.run(command, cwd=REPO_ROOT, env=python_env(), check=False).returncode
 
 
-def unavailable(command: str, why: str) -> int:
-    """A subcommand whose backend is not in this tree.
-
-    Kept as a named refusal rather than a dead module string: a missing
-    `tools.CodeDendrite.evaluation.*` reports "No module named 'tools'", which
-    points at the old layout instead of at the actual answer.
-    """
-    print(f"{command} 不可用：{why}", file=sys.stderr)
-    return 3
-
-
 def open_output(path: Path, no_open: bool = False) -> int:
     if no_open:
         print(f"已生成，未自动打开：{path}")
@@ -1037,7 +1026,9 @@ def main(argv: list[str] | None = None) -> int:
             [target_arg, "--path-policy-check", args.path],
         )
     if args.command == "eval":
-        return unavailable("cdd eval", 'evaluation/ 评测流水线未随八桶重构迁入本树（迁移映射表列为不迁移，要跑得先把 evaluation/ 迁进来）')
+        return run_module("usage.evaluation", [
+            args.evaluation_command, str(Path(args.report).expanduser().resolve()),
+        ])
     if args.command == "replay":
         command = [
             str(Path(args.tasks).expanduser().resolve()),
@@ -1047,7 +1038,7 @@ def main(argv: list[str] | None = None) -> int:
             command.extend(["--output", str(Path(args.output).expanduser().resolve())])
         if args.snapshot_dir:
             command.extend(["--snapshot-dir", str(Path(args.snapshot_dir).expanduser().resolve())])
-        return unavailable("cdd replay", 'evaluation/ 评测流水线未随八桶重构迁入本树（迁移映射表列为不迁移，要跑得先把 evaluation/ 迁进来）')
+        return run_module("usage.evaluation", ["replay", *command])
     if args.command == "snapshot":
         command = [
             target_arg,
@@ -1057,7 +1048,7 @@ def main(argv: list[str] | None = None) -> int:
         ]
         if args.base_commit:
             command.extend(["--base-commit", args.base_commit])
-        return unavailable("cdd snapshot", 'evaluation/ 评测流水线未随八桶重构迁入本树（迁移映射表列为不迁移，要跑得先把 evaluation/ 迁进来）')
+        return run_module("usage.evaluation", ["snapshot", *command])
     if args.command == "action":
         command = [args.action_command, args.session_id, target_arg]
         if args.action_command == "done":

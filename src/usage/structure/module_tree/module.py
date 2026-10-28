@@ -153,12 +153,64 @@ def load_module_tree(root: str = ".") -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
+def _available_modules(root: str) -> list[dict]:
+    """Expose one query contract for both generations of module evidence.
+
+    The phase-1 tree intentionally accepts only strong fan-out entries. Small
+    repositories can have a useful V2 capability module without any phase-1
+    entries; the human-facing queries must still be able to navigate it.
+    """
+    classic = load_module_tree(root).get("semantic_modules", [])
+    if classic:
+        return classic
+
+    index_dir = Path(root) / ".codedendrite"
+    v2_path = index_dir / "module_tree_v2.json"
+    inputs = [index_dir / "anchors.json", index_dir / "relations.json"]
+    stale = not v2_path.exists() or any(
+        path.exists() and path.stat().st_mtime_ns > v2_path.stat().st_mtime_ns
+        for path in inputs
+    )
+    if stale:
+        from usage.structure.module_tree_v2 import generate_module_tree_v2, save_module_tree_v2
+        v2 = generate_module_tree_v2(root)
+        save_module_tree_v2(v2, root)
+    else:
+        v2 = json.loads(v2_path.read_text(encoding="utf-8"))
+
+    v2_modules = v2.get("modules", [])
+    file_owners: dict[str, set[str]] = defaultdict(set)
+    for module in v2_modules:
+        for file_name in module.get("files", []):
+            file_owners[file_name].add(module["id"])
+
+    anchors = load_anchors(root)
+    result = []
+    for module in v2_modules:
+        members = set(module.get("functions", [])) | set(module.get("entrypoints", []))
+        members.update(module.get("evidence", {}).get("classes", []))
+        for anchor_id, anchor in anchors.items():
+            if file_owners.get(anchor.file) == {module["id"]}:
+                members.add(anchor_id)
+        result.append({
+            "id": module["id"],
+            "name": module.get("name", ""),
+            "responsibility": module.get("what", ""),
+            "entry_functions": [
+                {"symbol_id": symbol_id} for symbol_id in module.get("entrypoints", [])
+            ],
+            "member_symbols": sorted(members),
+            "source": "module_tree_v2",
+            "confidence": module.get("confidence", ""),
+        })
+    return result
+
 def find_module_for_symbol(symbol_id_or_name: str, root: str = ".") -> dict | None:
     target = _normalize_symbol_id(symbol_id_or_name)
-    tree = load_module_tree(root)
     best_match = None
     best_score = -1
-    for module in tree.get("semantic_modules", []):
+    for module in _available_modules(root):
         score = 0
         for symbol_id in module.get("member_symbols", []):
             if symbol_id == target:
@@ -267,8 +319,7 @@ def generate_module_tree(root: str = ".") -> dict:
     return data
 
 def get_module(module_id_or_name: str, root: str = ".") -> dict | None:
-    tree = load_module_tree(root)
-    modules = tree.get("semantic_modules", [])
+    modules = _available_modules(root)
     for module in modules:
         if module.get("id") == module_id_or_name or module.get("name") == module_id_or_name:
             return module
@@ -289,10 +340,9 @@ def load_summary_cache(root: str = ".") -> dict:
         return json.load(f)
 
 def query_modules(query: str, root: str = ".", limit: int = 5) -> list[dict]:
-    tree = load_module_tree(root)
     terms = [item for item in query.lower().split() if item]
     scored = []
-    for module in tree.get("semantic_modules", []):
+    for module in _available_modules(root):
         haystacks = [
             str(module.get("id", "")),
             str(module.get("name", "")),
