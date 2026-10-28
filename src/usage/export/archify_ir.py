@@ -11,6 +11,7 @@ from pathlib import PurePosixPath
 
 MAX_COLS = 12
 MAX_SOURCES = 3
+NODE_H = 60
 
 
 def _int(value, default=0):
@@ -70,6 +71,11 @@ def group_by_file(anchors, seen, edges):
     return files, links
 
 
+def _node_width(label):
+    """节点要放得下文件名：archify 量标签约 6.6px/字，默认 120px 放不下 get_downward_chain.py。"""
+    return max(120, int(len(label) * 7) + 28)
+
+
 def _sources(anchors, symbols):
     out = []
     for aid in symbols[:MAX_SOURCES]:
@@ -103,6 +109,7 @@ def _components(anchors, files, root_file):
             "sublabel": (name.parent.name or "repo root")[:24],
             "tag": "{} fn{}".format(count, "" if count == 1 else "s"),
             "sources": _sources(anchors, info["symbols"]),
+            "size": [_node_width(name.name), NODE_H],
             "row": rows[col],
             "col": col,
         })
@@ -169,7 +176,8 @@ def build_architecture_ir(anchors, root_id, depth, output_name, repository=None)
         "diagram_type": "architecture",
         "meta": meta,
         "layout": {"mode": "grid", "origin": [40, 110], "cols": cols,
-                   "gapX": _gap_for(conns), "gapY": 44, "cellW": 168, "cellH": 64},
+                   "gapX": _gap_for(conns), "gapY": 44,
+                   "cellW": max(168, max(c["size"][0] for c in comps) + 16), "cellH": 64},
         "components": comps,
         "connections": conns,
     }

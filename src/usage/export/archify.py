@@ -45,8 +45,11 @@ def _report_failure(stdout, stderr):
         print((stderr or stdout).strip()[:2000])
         return
     for diag in receipt.get("diagnostics", [])[:12]:
-        print("  [{}] {} {}".format(diag.get("code"), json.dumps(diag.get("subject"), ensure_ascii=False),
-                                    json.dumps(diag.get("evidence"), ensure_ascii=False)[:200]))
+        print("  [{}] {}".format(diag.get("code"), (diag.get("message") or "")[:300]))
+        if diag.get("evidence"):
+            print("      evidence: " + json.dumps(diag["evidence"], ensure_ascii=False)[:200])
+        if diag.get("supportedFixes"):
+            print("      fixes: " + ", ".join(diag["supportedFixes"]))
     if not receipt.get("diagnostics"):
         print(json.dumps(receipt, ensure_ascii=False)[:2000])
 
