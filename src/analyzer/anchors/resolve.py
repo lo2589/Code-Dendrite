@@ -213,6 +213,26 @@ def _resolve_js_factory_member(target: str, raw_callee: dict, anchors: dict,
             return candidate
     return None
 
+def _is_builtin_noise(target: str, raw_callee, anchors: dict, caller_file: str | None) -> bool:
+    """这个调用目标是不是内置噪声（print、d.items()、s.split() 这类）。
+
+    噪声表按名字拦，但名字会撞：用户在本文件里自己定义了 ``items()``、``get()``，
+    裸名调用它就是真调用；``self.update()`` / ``cls.get()`` 调的是自己类里的方法。
+    以前这两种一律当噪声丢掉——同文件 ``def items(): ...`` 再 ``items()``，边就没了。
+    只有本文件里找不到同名定义、也不是调自己类的方法，才算噪声。
+    """
+    if target not in BUILTIN_NOISE:
+        return False
+    kind = raw_callee.get("call_kind") if isinstance(raw_callee, dict) else None
+    if kind == "attribute":
+        receiver = str(raw_callee.get("receiver") or "")
+        return receiver not in {"self", "cls"}
+    if kind == "registry" or not caller_file:
+        return True
+    own = "{}::{}".format(caller_file.replace("\\", "/"), target)
+    return own not in anchors
+
+
 def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
                      unique_leaf_ids: dict | None = None,
                      caller_file: str | None = None,
@@ -225,7 +245,7 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
     # super::method_name → MRO-aware 解析
     if target.startswith("super::") and caller_anchor is not None:
         return _resolve_super_call(target[len("super::"):], caller_anchor, anchors)
-    if target in BUILTIN_NOISE:
+    if _is_builtin_noise(target, raw_callee, anchors, caller_file):
         return None
     # Persisted call sites already contain canonical anchor IDs.  Accept them
     # before re-evaluating lexical call kind so incremental refresh is
