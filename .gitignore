@@ -19,10 +19,12 @@ lens/output/playwright/
 !/assets/**
 
 # ── 文档不进仓 ────────────────────────────────────────────────
-# 唯一进仓的文档是根 README；云端禁止任何其他文本类文件。
+# 进仓的文档只有根 README 和 agent skill（npx skills add 从仓库里装 skills/*/SKILL.md）；
+# 云端禁止任何其他文本类文件。
 # 注意：pattern 后面不能跟行尾注释，会连注释一起当 pattern。
 *.md
 !/README.md
+!/skills/*/SKILL.md
 *.txt
 
 # lens 设计稿是本地产物，不进仓
