@@ -29,6 +29,26 @@ def _anchor(anchor_id, symbol, file, line, symbol_type):
 
 
 class QueryCoverageTests(unittest.TestCase):
+    def test_callers_excludes_dataflow_neighbors(self):
+        anchors = {
+            name: _anchor(f"{name}.py::{name}", name, f"{name}.py", 1, "function")
+            for name in ("discount", "total_due", "tax", "route")
+        }
+        records = {item["id"]: item for item in anchors.values()}
+        (self.root / ".codedendrite" / "anchors.json").write_text(
+            json.dumps(records), encoding="utf-8"
+        )
+        (self.root / ".codedendrite" / "relations.json").write_text(
+            json.dumps({"edges": [
+                {"from_id": "total_due.py::total_due", "to_id": "discount.py::discount", "edge_type": "call"},
+                {"from_id": "route.py::route", "to_id": "discount.py::discount", "edge_type": "dispatch"},
+                {"from_id": "tax.py::tax", "to_id": "discount.py::discount", "edge_type": "dataflow"},
+            ]}), encoding="utf-8"
+        )
+        chain = get_upward_chain("discount.py::discount", str(self.root))
+        self.assertEqual({row["symbol"] for row in chain if row["depth"] == 1},
+                         {"total_due", "route"})
+
     def test_upward_chain_keeps_same_named_callers_from_distinct_files(self):
         anchors = {
             "target.py::parse_args": _anchor(

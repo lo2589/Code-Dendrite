@@ -70,7 +70,7 @@ def get_upward_chain(
     # 供 visit() 判定基础节点用。
     caller_ids: dict = {}
     for edge in edges:
-        if edge.get("edge_type") not in ("call", "dataflow"):
+        if edge.get("edge_type") not in ("call", "dispatch"):
             continue
         to_id = edge.get("to_id", "").replace("\\", "/")
         from_id = edge.get("from_id", "").replace("\\", "/")
@@ -106,7 +106,7 @@ def get_upward_chain(
         seen: set = set()
         result = []
         for edge in edges:
-            if edge.get("edge_type") not in ("call", "dataflow"):
+            if edge.get("edge_type") not in ("call", "dispatch"):
                 continue
             if edge.get("to_id", "").replace("\\", "/") != norm_id:
                 continue
