@@ -6,7 +6,7 @@ English | [简体中文](README.zh-CN.md)
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/hero-cdd-archify-dark.png" />
-    <img src="assets/hero-cdd-archify-light.png" alt="cdd archify output: build_jump_packet traced across 7 files, every edge a call found by static analysis, every node linked to its source lines" width="960" />
+    <img src="assets/hero-cdd-archify-light.png" alt="cdd archify output: mcp/server.py::call_tool traced across 4 files, every edge a call found by static analysis, every node linked to its source lines" width="960" />
   </picture>
 </p>
 
@@ -17,7 +17,7 @@ English | [简体中文](README.zh-CN.md)
   <a href="#install-in-one-line"><img src="https://img.shields.io/badge/skills_for-Claude_Code_%7C_Codex_%7C_Cursor_%7C_OpenCode-7C3AED?style=flat-square" alt="Agent skills for Claude Code, Codex, Cursor and OpenCode" /></a>
 </p>
 
-The picture above is `cdd archify src/usage/jump_packet.py::build_jump_packet` run on this repository. CodeDendrite parsed the code, followed the calls from that function, grouped them by file and handed the result to [archify](https://github.com/tt-a1i/archify) to draw. Nobody placed an arrow by hand: each one is a call the index found, labelled with the function it calls. Each `SRC` marker opens the exact lines at the pinned commit.
+The picture above is `cdd archify mcp/server.py::call_tool` run on this repository. It is the MCP server's entry point: the same 24 functions as the [55-line chain below](#call-chain), grouped by the 4 files they live in, and drawn by [archify](https://github.com/tt-a1i/archify). Nobody placed an arrow by hand: each one is a call the index found, labelled with the function it calls. Each `SRC` marker opens the exact lines at the pinned commit.
 
 <a id="install-in-one-line"></a>
 
@@ -121,6 +121,8 @@ The project that `--root` points to must have been indexed with `cdd rebuild`.
 Dependency direction: `scanner` → `analyzer` → `api` → `usage` / `view`. `scanner` and `analyzer` import nothing above them. One reverse dependency remains: `api/query/cmd_chain.py` imports `view.relations`, `view.timeline`, `view.code_map` and `usage.profiles.yaml_profile` inside functions (4 imports). Modules that used to sit in the wrong layer have moved, so `scan_project`, `debug_workflow`, `generate_module_tree`, `smart_analyze` and the navigator (`start`, `jump`, …) are imported from `usage`, and `generate_mermaid_for_project` from `view.html.graph`, not from `api`.
 
 ---
+
+<a id="call-chain"></a>
 
 ## From entry point to implementation
 

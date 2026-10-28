@@ -6,7 +6,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/hero-cdd-archify-dark.png" />
-    <img src="assets/hero-cdd-archify-light.png" alt="cdd archify 输出：build_jump_packet 跨 7 个文件的调用链，每条边都来自静态分析，每个节点都链接到源码行" width="960" />
+    <img src="assets/hero-cdd-archify-light.png" alt="cdd archify 输出：mcp/server.py::call_tool 跨 4 个文件的调用链，每条边都来自静态分析，每个节点都链接到源码行" width="960" />
   </picture>
 </p>
 
@@ -17,7 +17,7 @@
   <a href="#一行安装然后交给-agent"><img src="https://img.shields.io/badge/skills_for-Claude_Code_%7C_Codex_%7C_Cursor_%7C_OpenCode-7C3AED?style=flat-square" alt="支持 Claude Code、Codex、Cursor、OpenCode 的 agent skill" /></a>
 </p>
 
-上面这张图是在本仓库上运行 `cdd archify src/usage/jump_packet.py::build_jump_packet` 的结果：CodeDendrite 解析代码，从这个函数顺着调用往下走，按文件聚合，交给 [archify](https://github.com/tt-a1i/archify) 绘制。没有一条箭头是手画的，每一条都是索引找到的调用，标签是被调用的函数名；点 `SRC` 标记能打开钉在该 commit 上的源码行。
+上面这张图是在本仓库上运行 `cdd archify mcp/server.py::call_tool` 的结果。它是 MCP 服务的入口，和[下文那条 55 行 chain](#call-chain) 是同样的 24 个函数，按所在的 4 个文件聚合，交给 [archify](https://github.com/tt-a1i/archify) 绘制。没有一条箭头是手画的，每一条都是索引找到的调用，标签是被调用的函数名；点 `SRC` 标记能打开钉在该 commit 上的源码行。
 
 ### 一行安装，然后交给 agent
 
@@ -119,6 +119,8 @@ pip install '.[test]'         # 跑测试需要 pytest
 依赖方向：`scanner` → `analyzer` → `api` → `usage` / `view`。`scanner`、`analyzer` 不 import 任何上层。剩一处反向依赖：`api/query/cmd_chain.py` 在函数里 import 了 `view.relations`、`view.timeline`、`view.code_map` 和 `usage.profiles.yaml_profile`（共 4 处）。放错层的模块已经挪走，所以 `scan_project`、`debug_workflow`、`generate_module_tree`、`smart_analyze` 和导航器（`start`、`jump` …）从 `usage` 导入，`generate_mermaid_for_project` 从 `view.html.graph` 导入，不再从 `api` 导入。
 
 ---
+
+<a id="call-chain"></a>
 
 ## 入口 → 打穿
 
