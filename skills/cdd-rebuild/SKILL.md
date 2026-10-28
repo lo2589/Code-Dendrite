@@ -55,7 +55,6 @@ With the MCP server configured, `cd_impact <symbol>` gives the blast radius in o
 ```bash
 cdd update <root> --files <moved files...>      # incremental re-index
 cdd chain <key entry> <root> --depth 8          # spot-check that key paths still connect
-cdd archify <key entry> <root>                  # optional: a diagram of the path, to compare before / after
 ```
 
 Moving a large batch and verifying once means that when something breaks you cannot tell which move did it. **Small steps, re-index each time.**

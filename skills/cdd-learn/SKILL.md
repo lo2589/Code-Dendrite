@@ -1,6 +1,6 @@
 ---
 name: cdd-learn
-description: Teach a user a codebase layer by layer, from the whole-project map down to how data moves inside one function, using CodeDendrite's `cdd` CLI and its HTML views. Use when (1) the user says "walk me through this project", "help me understand this repo", 帮我看懂这个项目, 给我讲讲, (2) they want the implementation of one module or feature explained, (3) they need to trace where a value comes from and where it goes (dataflow), (4) onboarding a new teammate, (5) they want something to look at (code map, call timeline, relation graph, diagram).
+description: Teach a user a codebase layer by layer, from the whole-project map down to how data moves inside one function, using CodeDendrite's `cdd` CLI and its HTML views. Use when (1) the user says "walk me through this project", "help me understand this repo", 帮我看懂这个项目, 给我讲讲, (2) they want the implementation of one module or feature explained, (3) they need to trace where a value comes from and where it goes (dataflow), (4) onboarding a new teammate, (5) they want something to look at (code map, call timeline, relation graph).
 ---
 
 # cdd-learn: guided, layer-by-layer learning
@@ -15,7 +15,7 @@ Setup is the same as cdd-understand: `pip install git+https://github.com/lo2589/
 |------|-----------|------|
 | L0 whole | What pieces is this made of? | `map`, `summary`, `tree build` |
 | L1 module | What does this module do, who does it talk to? | `modules`, `module`, `graph` |
-| L2 path | How does this feature go from entry to result? | `chain`, `timeline`, `archify` |
+| L2 path | How does this feature go from entry to result? | `chain`, `timeline` |
 | L3 detail | How does data move through this code? | dataflow Python API |
 
 Go in order and do not jump straight to L3. At every layer give the conclusion first, then the detail.
@@ -45,7 +45,6 @@ cdd graph <root> --focus <core symbol> --radius 2   # the module's relations, as
 ```bash
 cdd chain <entry> <root> --depth 12      # full call chain, down to the implementation
 cdd timeline <entry> <root> --depth 8    # call timeline HTML: best for "what runs when"
-cdd archify <entry> <root>               # interactive diagram, one node per file, edges are real calls
 ```
 
 Narrate it as: entry → what each step does (one line) → where it crosses a file, process or transport (HTTP, worker: edges marked `dispatch` in relations.json) → what comes out.

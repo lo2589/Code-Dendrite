@@ -4,35 +4,24 @@
 <h3 align="center">代码导航：图上的每一条边，都是代码里真实存在的调用。</h3>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-cdd-archify-dark.png" />
-    <img src="assets/hero-cdd-archify-light.png" alt="cdd archify 输出：mcp/server.py::call_tool 跨 4 个文件的调用链，每条边都来自静态分析，每个节点都链接到源码行" width="960" />
-  </picture>
-</p>
-
-<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/python-%E2%89%A53.10-3776AB?style=flat-square" alt="Python 3.10+" />
   <img src="https://img.shields.io/badge/core-standard_library_only-64748b?style=flat-square" alt="核心只用标准库" />
   <a href="#一行安装然后交给-agent"><img src="https://img.shields.io/badge/skills_for-Claude_Code_%7C_Codex_%7C_Cursor_%7C_OpenCode-7C3AED?style=flat-square" alt="支持 Claude Code、Codex、Cursor、OpenCode 的 agent skill" /></a>
 </p>
 
-上面这张图是在本仓库上运行 `cdd archify mcp/server.py::call_tool` 的结果。它是 MCP 服务的入口，和[下文那条 55 行 chain](#call-chain) 是同样的 24 个函数，按所在的 4 个文件聚合，交给 [archify](https://github.com/tt-a1i/archify) 绘制。没有一条箭头是手画的，每一条都是索引找到的调用，标签是被调用的函数名；点 `SRC` 标记能打开钉在该 commit 上的源码行。
-
 ### 一行安装，然后交给 agent
 
 ```bash
-npx skills add lo2589/Code-Dendrite        # 4 个 agent skill：understand · learn · rebuild · diagram
+npx skills add lo2589/Code-Dendrite        # 3 个 agent skill：understand · learn · rebuild
 pip install git+https://github.com/lo2589/Code-Dendrite   # cdd 命令（Python ≥ 3.10，无依赖）
 ```
 
 然后对 agent 说：
 
 ```text
-Use cdd-diagram to show how <你的入口函数> works in this repo.
+Use cdd-understand to show me how <你的入口函数> works in this repo.
 ```
-
-要画图的话，再装一次渲染器：`npx skills add tt-a1i/archify -g`。
 
 ## CLI 演示：rg 与 cdd 同屏对比
 

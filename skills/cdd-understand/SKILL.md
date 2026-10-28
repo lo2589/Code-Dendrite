@@ -60,7 +60,6 @@ With the MCP server configured (README, "MCP server"), the same answers come fro
 ```bash
 cdd graph <root> --focus <file>::<symbol> --radius 2   # relation graph around a symbol
 cdd timeline <file>::<symbol> <root> --depth 5         # call timeline
-cdd archify <file>::<symbol> <root>                    # interactive diagram via archify (see cdd-diagram)
 ```
 
 ## Notes
