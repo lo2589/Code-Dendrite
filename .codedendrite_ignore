@@ -10,4 +10,7 @@ lens/output/
 lens/design/
 lens-pcb/lib/
 lens-pcb/design/
+# gitignore 了的本地旧分支（lens 的重复拷贝）和 playwright 输出：不是仓库源码
+lens-v2/
+output/
 src/tests/fixtures/lang_matrix/.codedendrite/
