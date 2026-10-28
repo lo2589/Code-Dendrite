@@ -392,7 +392,7 @@ def _write_anchors(root: Path, anchors: dict) -> None:
             json.dump(table, f, ensure_ascii=False, indent=2)
 
 def check_all_anchors(root):
-    from usage.repair.anchor_repair import check_all_anchors as _check_all_anchors
+    from analyzer.repair.anchor_repair import check_all_anchors as _check_all_anchors
     return _check_all_anchors(root)
 
 def create_anchor(anchor_id, file, symbol=None, line_start=None, line_end=None,

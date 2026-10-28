@@ -13,7 +13,7 @@ anchorMemory — Anchor 情节记忆系统
   - 写入权重分层：人类 > 测试 > AI 多次一致 > 单次AI推断
 
 用法：
-    from usage.repair.anchor_memory import AnchorMemory
+    from analyzer.repair.anchor_memory import AnchorMemory
 
     mem = AnchorMemory(project_root="/path/to/project")
     mem.observe("validate_user", "admin用户跳过IP检查", source="ai", confidence=0.7)
@@ -22,7 +22,7 @@ anchorMemory — Anchor 情节记忆系统
     print(info.confidence)  # 随观察次数提升
 """
 
-from usage.repair.anchor_memory.memory import AnchorMemory
+from analyzer.repair.anchor_memory.memory import AnchorMemory
 from analyzer.shared.legacy.anchorMemory.types import MemoryEntry, Milestone, Observation, RiskLevel
 
 __all__ = ["AnchorMemory", "MemoryEntry", "Milestone", "Observation", "RiskLevel"]

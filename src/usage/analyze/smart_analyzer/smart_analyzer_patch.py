@@ -72,7 +72,7 @@ class SmartCodeAnalyzerV2:
     @property
     def memory(self):
         if self._memory is None:
-            from usage.repair.anchor_memory import AnchorMemory
+            from analyzer.repair.anchor_memory import AnchorMemory
             self._memory = AnchorMemory(str(self.project_root))
         return self._memory
 
@@ -395,7 +395,7 @@ class SmartCodeAnalyzerV2:
 
         # 尝试触发 anchorRepair
         try:
-            from usage.repair.anchor_repair import check_all_anchors
+            from analyzer.repair.anchor_repair import check_all_anchors
             stale = check_all_anchors(str(self.project_root))
             return {"affected_anchors": len(affected), "stale_anchors": len(stale)}
         except ImportError:

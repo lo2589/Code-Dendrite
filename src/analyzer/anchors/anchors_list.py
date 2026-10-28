@@ -64,7 +64,7 @@ def get_anchor(symbol: str, root=".") -> Optional[Anchor]:
     return candidates[0] if len(candidates) == 1 else None
 
 def list_all_symbols(root, extensions=(".py",), exclude_dirs=None):
-    from usage.repair.deep_drift import _list_all_symbols
+    from analyzer.repair.deep_drift import _list_all_symbols
     return _list_all_symbols(root, extensions, exclude_dirs)
 
 def list_anchors(root="."):

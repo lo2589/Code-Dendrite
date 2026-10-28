@@ -35,7 +35,7 @@ from analyzer.identity.engine import (
 # Git helpers
 # ─────────────────────────────────────────────
 
-from usage.repair.deep_drift.list_all_symbols import AnchorDriftDetail, _build_action_items, _generate_narrative, _render_markdown, fuzzy_find_symbol, git_diff_file, git_log_files, git_show_deleted
+from analyzer.repair.deep_drift.list_all_symbols import AnchorDriftDetail, _build_action_items, _generate_narrative, _render_markdown, fuzzy_find_symbol, git_diff_file, git_log_files, git_show_deleted
 
 def deep_drift_report(
     root: str = ".",

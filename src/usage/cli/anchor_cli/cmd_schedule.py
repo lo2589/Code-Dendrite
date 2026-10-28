@@ -47,7 +47,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from usage.repair.deep_drift import _list_all_symbols, git_log_files, deep_drift_report
+    from analyzer.repair.deep_drift import _list_all_symbols, git_log_files, deep_drift_report
     from analyzer.identity.engine import list_anchors, create_anchor, check_drift_v2
     HAS_CORE = True
 except ImportError as e:

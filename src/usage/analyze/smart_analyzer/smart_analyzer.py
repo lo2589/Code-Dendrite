@@ -421,7 +421,7 @@ class SmartCodeAnalyzer:
         
         # 检查锚点
         try:
-            from usage.repair.anchor_repair import check_all_anchors
+            from analyzer.repair.anchor_repair import check_all_anchors
             anchor_statuses = check_all_anchors(str(self.root))
             result.anchors_count = len(anchor_statuses)
             

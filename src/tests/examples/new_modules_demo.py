@@ -102,7 +102,7 @@ print("📦 模块 3: anchorMemory（情节记忆）")
 print("=" * 80)
 
 try:
-    from usage.repair.anchor_memory.memory import AnchorMemory, record_observation
+    from analyzer.repair.anchor_memory.memory import AnchorMemory, record_observation
     
     print("\n✅ 导入成功")
     print("\n📖 使用方式:")

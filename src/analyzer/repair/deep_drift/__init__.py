@@ -35,7 +35,7 @@ from analyzer.identity.engine import (
 # Git helpers
 # ─────────────────────────────────────────────
 
-from usage.repair.deep_drift.list_all_symbols import AnchorDriftDetail, _DEFAULT_EXCLUDE_DIRS, _NARRATIVE_PROMPT, _build_action_items, git_log_files, _generate_narrative, _list_all_symbols, _render_markdown, git_show_deleted, git_diff_file, fuzzy_find_symbol
-from usage.repair.deep_drift.deep_drift_report import deep_drift_report
+from analyzer.repair.deep_drift.list_all_symbols import AnchorDriftDetail, _DEFAULT_EXCLUDE_DIRS, _NARRATIVE_PROMPT, _build_action_items, git_log_files, _generate_narrative, _list_all_symbols, _render_markdown, git_show_deleted, git_diff_file, fuzzy_find_symbol
+from analyzer.repair.deep_drift.deep_drift_report import deep_drift_report
 
 __all__ = ['AnchorDriftDetail', '_DEFAULT_EXCLUDE_DIRS', '_NARRATIVE_PROMPT', '_build_action_items', 'git_log_files', '_generate_narrative', '_list_all_symbols', '_render_markdown', 'git_show_deleted', 'git_diff_file', 'fuzzy_find_symbol', 'deep_drift_report']

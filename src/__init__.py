@@ -44,7 +44,7 @@ except ImportError:
     pass
 
 try:
-    from usage.repair.anchor_memory import AnchorMemory, Observation  # noqa: F401,E402
+    from analyzer.repair.anchor_memory import AnchorMemory, Observation  # noqa: F401,E402
     __all__ += ["AnchorMemory", "Observation"]
 except ImportError:
     pass

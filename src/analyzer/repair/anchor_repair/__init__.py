@@ -16,9 +16,9 @@ L2_AnchorRepair - 锚点批量修复系统
 """
 
 from analyzer.shared.legacy.anchorRepair.types import AnchorStatusType, AnchorStatus, RepairResult, SyncResult
-from usage.repair.anchor_repair.repair import repair_anchors, on_files_changed, find_affected_anchors
-from usage.repair.anchor_repair.batch_check import check_anchor, check_anchors_batch, check_all_anchors
-from usage.repair.anchor_repair.database import AnchorDatabase
+from analyzer.repair.anchor_repair.repair import repair_anchors, on_files_changed, find_affected_anchors
+from analyzer.repair.anchor_repair.batch_check import check_anchor, check_anchors_batch, check_all_anchors
+from analyzer.repair.anchor_repair.database import AnchorDatabase
 
 __all__ = [
     'AnchorStatusType',

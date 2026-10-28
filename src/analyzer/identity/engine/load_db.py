@@ -398,7 +398,7 @@ def generate_all_anchors(
             "errors": [失败详情列表],
         }
     """
-    from usage.repair.deep_drift import _list_all_symbols, _DEFAULT_EXCLUDE_DIRS
+    from analyzer.repair.deep_drift import _list_all_symbols, _DEFAULT_EXCLUDE_DIRS
 
     rp = Path(root)
     skip_set = set(exclude_dirs) if exclude_dirs else _DEFAULT_EXCLUDE_DIRS.copy()
