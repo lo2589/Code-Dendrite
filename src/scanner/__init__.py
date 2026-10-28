@@ -27,7 +27,7 @@ scanner - 语言扫描器
     drift = query.check_file_drift("file.py")
 """
 
-from analyzer.shared.legacy.codeGenome.types import (
+from scanner.shared.genome_types import (
     CodeAnchor,
     AnchorIndex,
     AnchorCategory,

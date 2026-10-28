@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import asdict
 
-from analyzer.shared.legacy.codeGenome.types import CodeAnchor, AnchorIndex
+from scanner.shared.genome_types import CodeAnchor, AnchorIndex
 
 
 class AnchorDatabase:

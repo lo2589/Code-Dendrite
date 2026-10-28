@@ -7,7 +7,7 @@ codeGenome/api.py - 查询接口
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from analyzer.shared.legacy.codeGenome.types import CodeAnchor, AnchorIndex
+from scanner.shared.genome_types import CodeAnchor, AnchorIndex
 from scanner.language.python.genome import extract_python_file, extract_python_directory, PythonExtractor
 from scanner.language.cpp.genome import extract_cpp_file, extract_cpp_directory
 from scanner.store.database import AnchorDatabase, ProjectGenome

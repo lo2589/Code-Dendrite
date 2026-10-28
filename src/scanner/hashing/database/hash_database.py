@@ -264,9 +264,9 @@ class HashDatabase:
         import os
         from pathlib import Path
         try:
-            from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+            from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
         except ImportError:
-            from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+            from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
 
         root_path = Path(root)
         ignore = CodeDendriteIgnore(root)
@@ -299,9 +299,9 @@ class HashDatabase:
             过期文件的相对路径列表
         """
         try:
-            from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+            from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
         except ImportError:
-            from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+            from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
 
         ignore = CodeDendriteIgnore(str(self.root))
         stale = []

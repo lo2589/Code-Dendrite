@@ -10,7 +10,7 @@ import ast
 from pathlib import Path
 from typing import List, Optional
 
-from analyzer.shared.legacy.inheritance.types import ClassInfo, MethodInfo, ImportInfo, PythonFileInfo
+from scanner.shared.inheritance_types import ClassInfo, MethodInfo, ImportInfo, PythonFileInfo
 
 from scanner.language.python.ast_parser.parse import _check_has_super, _parse_method, _parse_class, _parse_type_annotation, extract_parameter_types, extract_return_type, get_decorators, parse_python_file, parse_symbol, get_method_info, has_abstract_decorator, has_override_decorator
 from scanner.language.python.ast_parser.parse_generic_bases import parse_generic_bases

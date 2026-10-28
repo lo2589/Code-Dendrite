@@ -10,7 +10,7 @@ import ast
 from pathlib import Path
 from typing import List, Optional
 
-from analyzer.shared.legacy.inheritance.types import ClassInfo, MethodInfo, ImportInfo, PythonFileInfo
+from scanner.shared.inheritance_types import ClassInfo, MethodInfo, ImportInfo, PythonFileInfo
 
 def parse_generic_bases(bases_text: str) -> List[str]:
     """

@@ -7,6 +7,7 @@ import ast
 import os
 from typing import List, Dict, Set, Optional, Any
 from dataclasses import dataclass, field
+from scanner.shared.walk_exclude import keep_dir
 
 
 @dataclass
@@ -83,7 +84,7 @@ class PythonParser:
             include_patterns = ['*.py']
 
         for root, dirs, files in os.walk(dir_path):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['__pycache__', 'venv', 'env', 'node_modules']]
+            dirs[:] = [d for d in dirs if keep_dir(d)]  # 以前漏了 build/：pip install 留下的源码拷贝被扫进索引
 
             for file in files:
                 if any(file.endswith(ext.replace('*', '')) for ext in include_patterns):

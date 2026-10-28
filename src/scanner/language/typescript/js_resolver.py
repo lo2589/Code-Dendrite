@@ -12,6 +12,7 @@ to one repository would fix one repository.
 """
 
 from __future__ import annotations
+from scanner.shared.walk_exclude import keep_dir
 
 import json
 import os
@@ -87,8 +88,7 @@ class JsResolver:
             return self._packages
         found: Dict[str, Tuple[str, dict]] = {}
         for base, dirs, files in os.walk(self.root):
-            dirs[:] = [d for d in dirs
-                       if d not in {"node_modules", ".git", "dist", "build", "__pycache__"}]
+            dirs[:] = [d for d in dirs if keep_dir(d)]  # 唯一一份跳过名单，见 scanner/shared/walk_exclude.py
             if "package.json" not in files:
                 continue
             data = _read_json(os.path.join(base, "package.json"))

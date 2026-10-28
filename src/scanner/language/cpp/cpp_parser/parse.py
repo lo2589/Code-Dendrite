@@ -23,7 +23,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Dict, Set, Tuple
 
-from analyzer.shared.legacy.cpp_inheritance.types import (
+from scanner.shared.cpp_inheritance_types import (
     CppClassInfo, CppMethodInfo, CppFileInfo,
     CppIncludeInfo, CppNamespaceInfo
 )

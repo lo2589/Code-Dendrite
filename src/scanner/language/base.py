@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Dict, Set, Optional
 import os
+from scanner.shared.walk_exclude import keep_dir
 
 
 @dataclass
@@ -155,7 +156,7 @@ class BaseAnalyzer(ABC):
         """扫描项目中的所有文件"""
         files = []
         for root, dirs, filenames in os.walk(self.root_path):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['__pycache__', 'node_modules', 'venv', '.venv', 'build', 'dist']]
+            dirs[:] = [d for d in dirs if keep_dir(d)]  # 唯一一份跳过名单，见 scanner/shared/walk_exclude.py
             for filename in filenames:
                 file_path = os.path.join(root, filename)
                 if self.is_supported_file(file_path):

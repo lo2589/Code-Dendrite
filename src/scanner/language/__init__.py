@@ -17,6 +17,7 @@ from scanner.language.html.analyzer import HtmlAnalyzer
 from scanner.structure import ProjectStructureAnalyzer, analyze_project_structure
 from scanner.language.pipeline import ParsedAnchor, parse_paths, walk_source_paths
 from scanner.language.registry import LanguageSpec, language_for_path, supported_extensions
+from scanner.shared.walk_exclude import keep_dir
 
 __all__ = [
     'BaseAnalyzer',
@@ -120,7 +121,7 @@ def get_analyzer(root_path: str, language: str = None) -> BaseAnalyzer:
     import os
     for root, dirs, files in os.walk(root_path):
         # 排除隐藏目录和常见忽略目录
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', 'vendor', 'target', 'build', 'dist', '__pycache__')]
+        dirs[:] = [d for d in dirs if keep_dir(d)]  # 唯一一份跳过名单，见 scanner/shared/walk_exclude.py
         
         for f in files:
             ext = os.path.splitext(f)[1].lower()

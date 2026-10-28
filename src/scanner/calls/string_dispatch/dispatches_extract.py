@@ -132,9 +132,9 @@ def find_string_dispatches(root: str, only_files: Optional[List[str]] = None) ->
         dispatch edge dict 列表
     """
     try:
-        from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+        from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
     except ImportError:
-        from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+        from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
 
     ignore = CodeDendriteIgnore(root)
     root_path = Path(root)

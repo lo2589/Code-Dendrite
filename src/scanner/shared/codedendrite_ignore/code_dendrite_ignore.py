@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Set, Optional
 
 from scanner.shared.codedendrite_ignore.glob_match import _glob_match
+from scanner.shared.walk_exclude import is_build_artifact
 
 class CodeDendriteIgnore:
     """
@@ -124,8 +125,13 @@ sandbox_test/hook_test_*/
             # 如果不在项目目录下，不扫描
             return False
         
-        # 检查是否在 scan_exclude 中
+        # 构建 / 依赖产物先挡掉，不看项目配置：pip install 留下的 build/lib/ 是整份源码的
+        # 拷贝，扫进来同一个模块就有两份，跨文件的边全断（实测 chain 55 行 → 15 行）。
         rel_norm = rel_path.replace("\\", "/")
+        if is_build_artifact(rel_norm):
+            return False
+
+        # 检查是否在 scan_exclude 中
         for pattern in self.scan_exclude:
             normalized = pattern.replace("\\", "/")
             if _glob_match(rel_norm, normalized):

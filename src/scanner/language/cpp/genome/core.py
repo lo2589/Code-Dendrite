@@ -20,9 +20,9 @@ import hashlib
 from pathlib import Path
 from typing import List, Optional, Dict, Tuple
 
-from analyzer.shared.legacy.codeGenome.types import CodeAnchor, AnchorIndex, AnchorCategory
-from analyzer.shared.legacy.codeGenome.identity import asset_anchor_id, canonical_file_id, symbol_anchor_id
-from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+from scanner.shared.genome_types import CodeAnchor, AnchorIndex, AnchorCategory
+from scanner.shared.genome_identity import asset_anchor_id, canonical_file_id, symbol_anchor_id
+from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
 
 class CppExtractor:
     """

@@ -26,13 +26,13 @@ except Exception:
 from pathlib import Path
 from typing import List, Optional, Dict, Set
 
-from analyzer.shared.legacy.codeGenome.types import (
+from scanner.shared.genome_types import (
     CodeAnchor, AnchorIndex, AnchorCategory,
     ImportInfo, ClassInfo, FunctionInfo, TopLevelBlock
 )
 from scanner.project.config_detector import ConfigDetector
-from analyzer.shared.legacy.codeGenome.identity import asset_anchor_id, canonical_file_id, symbol_anchor_id
-from analyzer.shared.codedendrite_ignore import CodeDendriteIgnore
+from scanner.shared.genome_identity import asset_anchor_id, canonical_file_id, symbol_anchor_id
+from scanner.shared.codedendrite_ignore import CodeDendriteIgnore
 import re as _re
 
 from scanner.language.python.genome.core import PythonExtractor
