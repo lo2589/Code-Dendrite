@@ -84,28 +84,26 @@ def _project_summary() -> str:
 def tool_context(query: str, level: str = "l2") -> str:
     """Task context packet for a symbol / keyword."""
     from usage.packets.task_context_packet import (
-        resolve_task_anchor, build_level0, build_level1, build_level2, build_anchor_packet,
+        resolve_task_anchor, build_level0, build_level1, build_level2,
     )
     anchors = _anchors()
     relations = _relations()
     module_tree = _module_tree()
 
+    lv = level.lower()
+    if lv == "l0":
+        result = build_level0(ROOT, module_tree, anchors)
+        return json.dumps(result, ensure_ascii=False, indent=2)
     matches = resolve_task_anchor(query, anchors)
     if not matches:
         return f"No anchor found for: {query}"
-
-    lv = level.lower()
-    if lv == "l0":
-        result = build_level0(ROOT, module_tree)
-        return json.dumps(result, ensure_ascii=False, indent=2)
     if lv == "l1":
-        anchor_id, anchor_obj, _ = matches[0]
-        result = build_level1(anchor_id, anchor_obj, anchors, relations, module_tree)
+        result = build_level1(matches, module_tree, anchors, relations)
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     # default l2
-    anchor_id, anchor_obj, _ = matches[0]
-    result = build_level2(anchor_id, anchor_obj, anchors, relations, module_tree)
+    area_info = build_level1(matches, module_tree, anchors, relations)
+    result = build_level2(matches, area_info, anchors, relations, module_tree)
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 

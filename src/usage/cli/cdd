@@ -1015,6 +1015,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_module("usage.cli", command)
     if args.command == "status":
         return show_status(target)
+    if args.command == "peek":
+        return peek_file(target, args.file)
     if args.command == "ignore":
         if args.ignore_command == "init":
             return init_ignore(target)
@@ -1067,8 +1069,6 @@ def main(argv: list[str] | None = None) -> int:
 
     require_index(target)
 
-    if args.command == "peek":
-        return peek_file(target, args.file)
     if args.command == "outline":
         command = [target_arg, "--anchor-outline"]
         if args.output:

@@ -390,14 +390,14 @@ if __name__ == "__main__":
         focus = None
         root = "."
         radius = 2
-        positional = [a for a in sys.argv[2:] if not a.startswith("--")]
-        if positional:
-            focus = positional[0]
-        for i, a in enumerate(sys.argv):
-            if a == "--radius" and i + 1 < len(sys.argv):
-                radius = int(sys.argv[i + 1])
-            if a == "--root" and i + 1 < len(sys.argv):
-                root = sys.argv[i + 1]
+        args = iter(sys.argv[2:])
+        for arg in args:
+            if arg == "--radius":
+                radius = int(next(args))
+            elif arg == "--root":
+                root = next(args)
+            elif not arg.startswith("--") and focus is None:
+                focus = arg
         cmd_graph(focus, root, radius)
     elif cmd == "timeline" and len(sys.argv) >= 3:
         entry = sys.argv[2]

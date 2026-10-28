@@ -15,6 +15,21 @@ def _write(path: Path, text: str) -> None:
 
 
 class AnchorIdentityTests(unittest.TestCase):
+    def test_direct_constructor_chain_resolves_method(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp_path = Path(raw_tmp)
+            _write(
+                tmp_path / "app.py",
+                "class Order:\n"
+                "    def pay(self):\n"
+                "        return 1\n\n"
+                "def checkout():\n"
+                "    return Order().pay()\n",
+            )
+            generate_all_anchors(str(tmp_path))
+            anchors = load_anchors(str(tmp_path))
+            assert "app.py::Order.pay" in anchors["app.py::checkout"].callees
+
     def test_bare_register_class_connects_constructor_and_typed_method(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
             tmp_path = Path(raw_tmp)

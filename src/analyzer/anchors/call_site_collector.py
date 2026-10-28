@@ -149,9 +149,15 @@ class _CallSiteCollector(ast.NodeVisitor):
         elif isinstance(node.func, ast.Attribute):
             site["call_kind"] = "attribute"
             site["receiver"] = self._expr(node.func.value)
-            receiver_types = sorted(self.variable_types.get(site["receiver"], set()))
+            receiver_types = set(self.variable_types.get(site["receiver"], set()))
+            # A direct constructor chain, e.g. Order(amount).pay(), has the
+            # same receiver type as ``order = Order(amount); order.pay()``.
+            if isinstance(node.func.value, ast.Call):
+                constructor = _call_name(node.func.value.func)
+                if constructor:
+                    receiver_types.add(constructor)
             if receiver_types:
-                site["receiver_types"] = receiver_types
+                site["receiver_types"] = sorted(receiver_types)
             import_ref = self.import_aliases.get(site["receiver"])
             if import_ref:
                 site["import_ref"] = dict(import_ref)
