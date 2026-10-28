@@ -2,6 +2,12 @@ English | [简体中文](README.zh-CN.md)
 
 # CodeDendrite: causal code navigation from static analysis
 
+## CLI demo: rg vs cdd
+
+![Animated side-by-side CLI comparison: locating a function, opening its source, and tracing calls with rg and cdd](output/usability-comparison-2026-10-12/comparison.gif)
+
+The same coding task is shown side by side: `rg` on the left and `cdd` on the right. The animation plays directly in this README.
+
 **Static analysis instead of vector search.**
 
 Retrieval finds code that *looks alike*. Navigation needs code that is *connected*. A function that calls yours looks nothing like yours in text — which is exactly where similarity search is bound to fail on call-chain questions. CodeDendrite doesn't guess at similarity: it parses a repository into a graph of causal edges and lets you walk along them.
