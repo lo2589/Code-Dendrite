@@ -5,8 +5,8 @@ Exposes CodeDendrite's code analysis as MCP tools for Claude Code / Cursor.
 Usage (add to .mcp.json):
   {
     "codedendrite": {
-      "command": "python",
-      "args": ["/path/to/CodeDendrite/mcp/server.py", "--root", "."]
+      "command": "cdd-mcp",
+      "args": ["--root", "."]
     }
   }
 """
@@ -314,5 +314,9 @@ async def _main():
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 
-if __name__ == "__main__":
+def main() -> None:
     asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    main()

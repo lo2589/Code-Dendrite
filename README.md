@@ -41,7 +41,7 @@ Retrieval finds code that *looks alike*. Navigation needs code that is *connecte
 
 | Item | Value |
 |---|---|
-| Layout | Five layers under `src/`; `mcp/` and `skills/` sit next to `src/` |
+| Layout | Five layers under `src/`; `src/cdd_mcp/` is the MCP server; `skills/` sits next to `src/` |
 | Requirements | Python ≥ 3.10; the core uses the standard library only |
 | Parsing | Python through the standard-library `ast` module; every other language through lightweight, dependency-free pattern-matching adapters, so their symbols and call edges are heuristic. Depth per language: [language support matrix](#language-support-matrix) |
 | Index | Not committed to git. After cloning, run `cdd rebuild` first; see counts with `cdd count` / `cdd status` |
@@ -80,8 +80,8 @@ pip install '.[test]'         # running the tests needs pytest
 ```json
 {
   "codedendrite": {
-    "command": "python3",
-    "args": ["/path/to/Code-Dendrite/mcp/server.py", "--root", "/path/to/project"]
+    "command": "cdd-mcp",
+    "args": ["--root", "/path/to/project"]
   }
 }
 ```
@@ -103,7 +103,7 @@ The project that `--root` points to must have been indexed with `cdd rebuild`.
 | `src/view/` | **Visualization**: `browser/`, `code_map/`, `relations/`, `timeline/`, `module_tree/`, `pipeline/`, `html/` |
 | `lens/` | DSH plugin `dsh-cdd-lens`: a session trajectory sidebar + an interactive anchor graph (a node package, independent of `src/`) |
 | `lens-pcb/` | A parallel branch of lens (PCB-style layout) with its own build stamp |
-| `mcp/` | MCP server: exposes the layers above as tools |
+| `src/cdd_mcp/` | MCP server: exposes the layers above as tools |
 | `skills/` | Three agent skills: `cdd-understand` (understand a project), `cdd-rebuild` (topology refactoring), `cdd-learn` (layer-by-layer guided learning) |
 | `src/tests/` | Tests and fixtures |
 
@@ -115,17 +115,17 @@ Dependency direction: `scanner` → `analyzer` → `api` → `usage` / `view`. `
 
 ## From entry point to implementation
 
-The entry point is `mcp/server.py::call_tool`. Once the index is built, one command drills it down to the implementation layer:
+The entry point is `src/cdd_mcp/server.py::call_tool`. Once the index is built, one command drills it down to the implementation layer:
 
 ```bash
-python3 src/usage/cli/cdd chain "mcp/server.py::call_tool" --depth 5
+python3 src/usage/cli/cdd chain "src/cdd_mcp/server.py::call_tool" --depth 5
 ```
 
 The chain crosses three layers: mcp → usage → analyzer. The output is a **tree expansion**: a function called from several places is printed once at each place, so "lines" and "distinct functions" are two different numbers:
 
 | Layer | Lines | Distinct functions |
 |---|---:|---:|
-| `mcp/` | 15 | 10 |
+| `src/cdd_mcp/` | 15 | 10 |
 | `src/usage/` | 36 | 13 |
 | `src/analyzer/` | 4 | 1 |
 | Total | **55** | **24** |
@@ -133,14 +133,14 @@ The chain crosses three layers: mcp → usage → analyzer. The output is a **tr
 The most repeated function is `_anchor_attr` (14 times). Full output (all 55 lines):
 
 ```
-Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
+Chain from 'src/cdd_mcp/server.py::call_tool' (55 entries, direction=down):
 
-[0] call_tool  mcp/server.py:294
-  [1] tool_context  mcp/server.py:84
-    [2] _anchors  mcp/server.py:47
+[0] call_tool  src/cdd_mcp/server.py:294
+  [1] tool_context  src/cdd_mcp/server.py:84
+    [2] _anchors  src/cdd_mcp/server.py:47
       [3] load_anchors  src/analyzer/anchors/core_load.py:33
-    [2] _relations  mcp/server.py:54
-    [2] _module_tree  mcp/server.py:62
+    [2] _relations  src/cdd_mcp/server.py:54
+    [2] _module_tree  src/cdd_mcp/server.py:62
     [2] resolve_task_anchor  src/usage/packets/task_context_packet/anchor.py:113
       [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
       [3] _bounded_matches  src/usage/packets/task_context_packet/anchor.py:78
@@ -160,10 +160,10 @@ Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
         [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
       [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
       [3] _find_anchor_module  src/usage/packets/task_context_packet/plugin.py:123
-  [1] tool_symbol  mcp/server.py:112
-    [2] _anchors  mcp/server.py:47
+  [1] tool_symbol  src/cdd_mcp/server.py:112
+    [2] _anchors  src/cdd_mcp/server.py:47
       [3] load_anchors  src/analyzer/anchors/core_load.py:33
-    [2] _relations  mcp/server.py:54
+    [2] _relations  src/cdd_mcp/server.py:54
     [2] resolve_task_anchor  src/usage/packets/task_context_packet/anchor.py:113
       [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
       [3] _bounded_matches  src/usage/packets/task_context_packet/anchor.py:78
@@ -174,8 +174,8 @@ Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
     [2] build_anchor_packet  src/usage/packets/task_context_packet/anchor.py:622
       [3] _build_edge_indexes  src/usage/packets/task_context_packet/anchor.py:250
       [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
-  [1] tool_search  mcp/server.py:126
-    [2] _anchors  mcp/server.py:47
+  [1] tool_search  src/cdd_mcp/server.py:126
+    [2] _anchors  src/cdd_mcp/server.py:47
       [3] load_anchors  src/analyzer/anchors/core_load.py:33
     [2] resolve_task_anchor  src/usage/packets/task_context_packet/anchor.py:113
       [3] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
@@ -184,12 +184,12 @@ Chain from 'mcp/server.py::call_tool' (55 entries, direction=down):
       [3] _match_sort_key  src/usage/packets/task_context_packet/anchor.py:68
         [4] _anchor_attr  src/usage/packets/task_context_packet/anchor.py:54
         [4] _is_test_file  src/usage/packets/task_context_packet/plugin.py:119
-  [1] tool_impact  mcp/server.py:150
-    [2] _relations  mcp/server.py:54
-    [2] _anchors  mcp/server.py:47
+  [1] tool_impact  src/cdd_mcp/server.py:150
+    [2] _relations  src/cdd_mcp/server.py:54
+    [2] _anchors  src/cdd_mcp/server.py:47
       [3] load_anchors  src/analyzer/anchors/core_load.py:33
-  [1] tool_modules  mcp/server.py:194
-    [2] _project_summary  mcp/server.py:73
+  [1] tool_modules  src/cdd_mcp/server.py:194
+    [2] _project_summary  src/cdd_mcp/server.py:73
 ```
 
 **This chain is computed from the index, not copied by hand**: the numbers above come from the index as of 2026-09-14. Running the same command should give the same starting point and the same set of files; line counts, function counts and line numbers change with the code.

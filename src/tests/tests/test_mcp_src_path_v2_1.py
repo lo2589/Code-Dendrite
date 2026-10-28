@@ -1,4 +1,4 @@
-"""mcp/server.py 自己把 src/ 放上 sys.path：不设 PYTHONPATH 也能导入各层包。"""
+"""cdd_mcp/server.py 自己把 src/ 放上 sys.path：不设 PYTHONPATH 也能导入各层包。"""
 import ast
 import os
 import subprocess
@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-SERVER = REPO / "mcp" / "server.py"
+SERVER = REPO / "src" / "cdd_mcp" / "server.py"
 
 
 def _imports_mcp(node: ast.stmt) -> bool:
