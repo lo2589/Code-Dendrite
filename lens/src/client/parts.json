@@ -816,7 +816,7 @@
     },
     {
       "file": "entry.js",
-      "lines": 66,
+      "lines": 81,
       "exports": [
         "apply"
       ],
@@ -832,6 +832,10 @@
         ],
         "styles/shell.js": [
           "SHELL_CSS"
+        ],
+        "runtime/api.js": [
+          "BUILD",
+          "api"
         ]
       }
     },

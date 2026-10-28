@@ -4,7 +4,7 @@
 // Parts register into the bundle's own table; the host module table only
 // receives the entry "dsh-cdd-lens" (hot reload re-executes the bundle safely).
 //
-// build: V1_59_POSITION_STATE_UNKNOWN_001
+// build: V1_60_APPLY_HANDSHAKE_001
 // parts: 46
 
 ;(function () {
@@ -24,7 +24,7 @@ __cddLocal.load({
     // Inlined from build.json. The host greps this file for the stamp it read
     // from disk, so a drift shows up in /health as clientBundleMatchesBuild:false
     // rather than as mysterious behaviour.
-    var BUILD = 'V1_59_POSITION_STATE_UNKNOWN_001'
+    var BUILD = 'V1_60_APPLY_HANDSHAKE_001'
     var ROUTE = '/plugins/cdd-lens'
     var __runtime_debug = require('dsh-cdd-lens/runtime/debug')
     var note = __runtime_debug.note
@@ -7809,10 +7809,16 @@ __cddLocal.load({
     var SHELL_CSS = __styles_shell.SHELL_CSS
     var __styles_graph = require('dsh-cdd-lens/styles/graph')
     var GRAPH_CSS = __styles_graph.GRAPH_CSS
+    var __runtime_api = require('dsh-cdd-lens/runtime/api')
+    var api = __runtime_api.api
+    var BUILD = __runtime_api.BUILD
 
     var CSS = SHELL_CSS.concat(GRAPH_CSS).join('')
 
     function apply(ctx) {
+      // 第一件事：告诉 host「apply 真的跑了，跑的是这一版」。/health 的 client 块靠它，
+      // 面板不出现时一眼分得清是没 apply，还是 apply 了但画不出来。回报失败不挡面板。
+      api('/applied', { build: BUILD }).catch(function () {})
       var slots = ctx.get('slots')
       if (slots === undefined) return
 

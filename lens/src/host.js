@@ -23,6 +23,7 @@ const path = require('node:path')
 const childProcess = require('node:child_process')
 const { IndexStore } = require('./index_store.js')
 const { collect, merge } = require('./session_trace.js')
+const { makeHandshake } = require('./handshake.js')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..')
 
@@ -346,6 +347,13 @@ module.exports = {
 
     // ---- version handshake ------------------------------------------------
 
+    // clientBundleMatchesBuild 只证明磁盘上的 bundle 是新的；client 才证明页面真的 apply 了它。
+    const handshake = makeHandshake(declaredBuild)
+    register('/applied', (_req, res, q) => {
+      handshake.applied(q.build)
+      json(res, 200, { ok: true })
+    })
+
     register('/health', (_req, res) => {
       const build = declaredBuild()
       json(res, 200, {
@@ -354,6 +362,7 @@ module.exports = {
         packageRoot: PACKAGE_ROOT,
         build,
         clientBundleMatchesBuild: clientCarriesBuild(build),
+        client: handshake.report(),
         startedAt: STARTED_AT,
       })
     })

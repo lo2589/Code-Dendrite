@@ -25,10 +25,16 @@ window.__ModuleLoader__.load({
     var SHELL_CSS = __styles_shell.SHELL_CSS
     var __styles_graph = require('dsh-cdd-lens/styles/graph')
     var GRAPH_CSS = __styles_graph.GRAPH_CSS
+    var __runtime_api = require('dsh-cdd-lens/runtime/api')
+    var api = __runtime_api.api
+    var BUILD = __runtime_api.BUILD
 
     var CSS = SHELL_CSS.concat(GRAPH_CSS).join('')
 
     function apply(ctx) {
+      // 第一件事：告诉 host「apply 真的跑了，跑的是这一版」。/health 的 client 块靠它，
+      // 面板不出现时一眼分得清是没 apply，还是 apply 了但画不出来。回报失败不挡面板。
+      api('/applied', { build: BUILD }).catch(function () {})
       var slots = ctx.get('slots')
       if (slots === undefined) return
 
