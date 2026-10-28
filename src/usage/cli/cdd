@@ -927,6 +927,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_root(summary)
     summary.add_argument("--full", action="store_true", help="显示包含 anchor 数量的完整版")
 
+    archify = sub.add_parser("archify", help="把调用链导出成 archify 交互图（边来自静态分析）")
+    archify.add_argument("symbol")
+    add_root(archify)
+    archify.add_argument("--depth", type=int, default=6)
+    archify.add_argument("--no-render", action="store_true", help="只写 IR，不调 archify")
+
     timeline = sub.add_parser("timeline", help="生成调用链时间线 HTML")
     timeline.add_argument("symbol")
     add_root(timeline)
@@ -1213,6 +1219,11 @@ def main(argv: list[str] | None = None) -> int:
             "api.query",
             ["map", "full" if args.full else "compact", target_arg],
         )
+    if args.command == "archify":
+        command = [args.symbol, target_arg, "--depth", str(args.depth)]
+        if args.no_render:
+            command.append("--no-render")
+        return run_module("usage.export.archify", command)
     if args.command == "timeline":
         command = [
             "timeline",
