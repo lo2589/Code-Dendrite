@@ -30,6 +30,7 @@ import time as _time
 _ANCHOR_DBG = bool(os.environ.get("CD_ANCHOR_LOG"))
 
 from analyzer.anchors.subscript_string import BUILTIN_NOISE
+from analyzer.anchors.language_family import can_call_by_name
 from analyzer.anchors.build_effective_methods_table import _build_leaf_symbol_ids, _build_unique_class_ids, _build_unique_symbol_ids, _call_target, _extract_module_call_sites, _registration_entries, _resolve_super_call
 
 _JS_LANGUAGES = {"javascript", "typescript", "js", "ts", "jsx", "tsx"}
@@ -336,7 +337,11 @@ def _resolve_call_id(raw_callee, anchors: dict, unique_symbol_ids: dict,
         candidate = "{}::{}".format(caller_file.replace("\\", "/"), target)
         if candidate in anchors:
             return candidate
-    return unique_symbol_ids.get(target) or (unique_leaf_ids or {}).get(target)
+    fallback = unique_symbol_ids.get(target) or (unique_leaf_ids or {}).get(target)
+    if fallback and caller_anchor is not None and not can_call_by_name(
+            getattr(caller_anchor, "language", ""), getattr(anchors.get(fallback), "language", "")):
+        return None
+    return fallback
 
 
 def _resolve_rust_cfg_variant_ids(raw_callee, caller_anchor, anchors: dict,
