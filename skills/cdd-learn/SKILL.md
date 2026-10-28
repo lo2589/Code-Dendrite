@@ -1,6 +1,6 @@
 ---
 name: cdd-learn
-description: Teach a user a codebase layer by layer, from the whole-project map down to how data moves inside one function, using CodeDendrite's `cdd` CLI and its HTML views. Use when (1) the user says "walk me through this project", "help me understand this repo", 帮我看懂这个项目, 给我讲讲, (2) they want the implementation of one module or feature explained, (3) they need to trace where a value comes from and where it goes (dataflow), (4) onboarding a new teammate, (5) they want something to look at: code map, call timeline, relation graph, diagram.
+description: Teach a user a codebase layer by layer, from the whole-project map down to how data moves inside one function, using CodeDendrite's `cdd` CLI and its HTML views. Use when (1) the user says "walk me through this project", "help me understand this repo", 帮我看懂这个项目, 给我讲讲, (2) they want the implementation of one module or feature explained, (3) they need to trace where a value comes from and where it goes (dataflow), (4) onboarding a new teammate, (5) they want something to look at (code map, call timeline, relation graph, diagram).
 ---
 
 # cdd-learn: guided, layer-by-layer learning
