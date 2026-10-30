@@ -240,6 +240,32 @@ python3 src/usage/cli/cdd modules <关键词>        # 语义模块
 
 ---
 
+## AML Coding 记忆服务 0.2（`src/usage/aml_coding`）
+
+为 [Agent Memory Leaderboard](https://agentmemoryleaderboard.ai) Coding 赛道提供 Add/Search 接口。只用 `text-embedding-v4` 一个模型：不调 LLM，不用 rerank，不克隆仓库。
+
+**Add**：输入 `request_id, user_id, session_id, messages[{role, content, timestamp?}]`，每个请求是一个已解决的编码任务。处理步骤：
+
+1. 对整段轨迹算指纹。其他 `user_id` 已经存过的同一段轨迹，只记一行引用。
+2. 解析事件：issue、思考、工具调用及其结果。被拆成多条消息的结果会拼回原样。
+3. 按时间顺序回放文件：`Read` 记下带行号的内容，`Edit` 按 `old_string → new_string` 修改并记下改动落在哪一行，`Write` 整体替换文件。
+4. 用 Python `ast` 抽取 anchor（`文件::类.方法` 及其行范围）和同一文件内的调用边。只读过片段的文件改用 `def`/`class` 行兜底。
+5. 把本次任务的 read / edit / test / 带类名或路径的 mention 事件挂到对应的 anchor 上。
+6. 每个被碰过的 anchor 生成一个单元，包含代码、调用和被调用关系、本次任务的 diff，每个单元不超过约 1,500 tokens。其余内容切成 100 词的块，步长 80。
+7. 只给普通块算向量，然后在一个事务里写入。
+
+写入落盘后才返回 200。同一个 `request_id`、相同内容重复提交时幂等，内容不同则返回 409。上限：每段轨迹回放出的代码不超过 2 MB、anchor 不超过 2,000 个；磁盘剩余不足 3 GB 时返回 503。
+
+**Search**：输入 `query, user_id, top_k`。只在这个 `user_id` 引用过的轨迹里检索，分三路：符号和路径精确命中（权重 3）、BM25（全部单元）、向量（只查普通块），三路按加权倒数排名融合。每个 anchor 只出现一次。其他任务碰过同一个符号时只附一个指针：最新的排在前面，不附对方的代码，最多占预算的 20%。每次最多返回 `top_k` 条、约 12k tokens，格式为 `{"data": [{id, content, score, created_at}]}`。只返回证据，不生成答案。
+
+```bash
+mkdir -p ~/.config/cdd-aml && (umask 077; cat > ~/.config/cdd-aml/dashscope.key)   # 百炼密钥
+cd src && python3 -m usage.aml_coding serve --data ~/cdd-aml-data --key-file <存 AML 接口密钥的文件> --port 8014
+python3 -m usage.aml_coding stats --data ~/cdd-aml-data    # 调用次数、向量 token 数、花费
+```
+
+---
+
 ## 测试
 
 ```bash

@@ -280,6 +280,32 @@ Anchors go down to **module-level `def`s and class methods** only. A `def` neste
 
 ---
 
+## AML Coding memory 0.2 (`src/usage/aml_coding`)
+
+An Add/Search service for the [Agent Memory Leaderboard](https://agentmemoryleaderboard.ai) Coding track. Its only model is `text-embedding-v4`: it makes no LLM calls and uses no reranker, and it never clones a repository.
+
+**Add** receives `request_id, user_id, session_id, messages[{role, content, timestamp?}]`, one solved coding task per request. It processes the task in these steps:
+
+1. Fingerprint the trajectory. A trajectory already stored for another `user_id` costs only a reference row.
+2. Parse the messages into events: the issue, thinking, tool calls and their results. Results that were split across messages are glued back together.
+3. Replay the files in time order. `Read` records the numbered lines, `Edit` applies `old_string → new_string` and records where it landed, and `Write` replaces the file.
+4. Extract anchors (`file::Class.method` with line spans) with Python `ast`, together with same-file call edges. Files that were only read in pieces fall back to `def`/`class` lines.
+5. Link the task's `read` / `edit` / `test` / qualified `mention` events to those anchors.
+6. Build one unit per touched anchor, holding the code, its calls and callers, and the task's diff (at most about 1,500 tokens). Everything else becomes 100-word chunks with a stride of 80.
+7. Embed only the plain chunks, then write everything in one transaction.
+
+Add answers 200 only after the write is durable. The same `request_id` with the same body is a no-op; with a different body it returns 409. Caps: 2 MB of replayed code and 2,000 anchors per trajectory, and 503 when less than 3 GB of disk is free.
+
+**Search** receives `query, user_id, top_k`. It searches only inside the trajectories that this `user_id` references, through three routes: exact symbol and path hits (weight 3), BM25 over all units, and vector similarity over the plain chunks. The routes are fused by weighted reciprocal rank. Each anchor appears once. Other tasks that touched the same symbol are listed as pointers only: newest first, without their code, and using at most 20% of the budget. A reply holds at most `top_k` items and about 12k tokens, as `{"data": [{id, content, score, created_at}]}`. It returns evidence only and never a generated answer.
+
+```bash
+mkdir -p ~/.config/cdd-aml && (umask 077; cat > ~/.config/cdd-aml/dashscope.key)   # Model Studio key
+cd src && python3 -m usage.aml_coding serve --data ~/cdd-aml-data --key-file <file with the AML API key> --port 8014
+python3 -m usage.aml_coding stats --data ~/cdd-aml-data    # calls, embedding tokens, cost
+```
+
+---
+
 ## Tests
 
 ```bash
