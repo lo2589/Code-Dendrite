@@ -304,6 +304,8 @@ cd src && python3 -m usage.aml_coding serve --data ~/cdd-aml-data --key-file <fi
 python3 -m usage.aml_coding stats --data ~/cdd-aml-data    # calls, embedding tokens, cost
 ```
 
+Origin: the service is the author's own original work and is built on CodeDendrite's anchor model. No third-party code is reused. The only runtime dependency is numpy, and the only model called is `text-embedding-v4`.
+
 ---
 
 ## Tests

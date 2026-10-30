@@ -264,6 +264,8 @@ cd src && python3 -m usage.aml_coding serve --data ~/cdd-aml-data --key-file <�
 python3 -m usage.aml_coding stats --data ~/cdd-aml-data    # 调用次数、向量 token 数、花费
 ```
 
+来源：该服务是作者本人的原创作品，基于 CodeDendrite 自己的 anchor 模型，未复用任何第三方代码。运行时只依赖 numpy，只调用 `text-embedding-v4` 一个模型。
+
 ---
 
 ## 测试
